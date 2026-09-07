@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">B SPACE app icon</title>
+  <desc id="desc">Dark navy rounded-square app icon with a white B monogram and teal parking-space accent.</desc>
+  <defs>
+    <linearGradient id="bg" x1="64" y1="48" x2="448" y2="464" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0B1220"/>
+      <stop offset="1" stop-color="#142238"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="320" y1="108" x2="424" y2="206" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#75E2D3"/>
+      <stop offset="1" stop-color="#13B8A2"/>
+    </linearGradient>
+    <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="16" stdDeviation="18" flood-color="#06101E" flood-opacity="0.26"/>
+    </filter>
+  </defs>
+
+  <rect x="20" y="20" width="472" height="472" rx="112" fill="url(#bg)"/>
+  <circle cx="374" cy="138" r="58" fill="url(#accent)" opacity="0.95"/>
+  <circle cx="374" cy="138" r="83" fill="#7BE4D5" opacity="0.10"/>
+
+  <g filter="url(#softShadow)">
+    <path d="M139 124h119c70 0 112 34 112 87 0 33-16 59-45 73 39 14 61 44 61 83 0 62-48 101-125 101H139V124Zm111 137c37 0 57-15 57-43 0-27-20-41-57-41h-48v84h48Zm8 154c42 0 64-17 64-49 0-31-22-47-64-47h-56v96h56Z" fill="#FFFFFF"/>
+  </g>
+
+  <g opacity="0.96">
+    <path d="M323 356h85" stroke="#75E2D3" stroke-width="18" stroke-linecap="round"/>
+    <path d="M347 324v64" stroke="#75E2D3" stroke-width="18" stroke-linecap="round"/>
+  </g>
+</svg>

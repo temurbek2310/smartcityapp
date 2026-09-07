@@ -1,0 +1,343 @@
+'use client'
+
+import { LoadingScreen } from '@/components/ui/loading-screen'
+import { useApp } from '@/context/app-context'
+import {
+	CarFront,
+	Check,
+	MapPinned,
+	QrCode,
+	ShieldCheck,
+	Smartphone,
+} from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { useEffect, useMemo, useState } from 'react'
+import { z } from 'zod'
+
+const profileSchema = z.object({
+	name: z.string().trim().min(2, 'Ismni kiriting'),
+	phone: z.string().regex(/^\+998\d{9}$/, '+998 bilan 9 ta raqam kiriting'),
+	vehiclePlate: z.string().trim().min(5, 'Avtomobil raqamini kiriting').max(12),
+})
+
+const slides = [
+	{
+		icon: MapPinned,
+		title: 'Parkingni tez toping',
+		text: "Uzbekistan bo'ylab B SPACE parkinglari, narx va bo'sh joylarni bitta joyda ko'ring.",
+	},
+	{
+		icon: QrCode,
+		title: 'Bron va QR',
+		text: 'Joyni oldindan bron qiling, QR orqali kirishni simulyatsiya qiling va sessiyani boshqaring.',
+	},
+	{
+		icon: ShieldCheck,
+		title: 'Bir oqimda yakunlang',
+		text: "Taymer, vaqtni uzaytirish, chiqish, mock payment va chek — MVP oqimi to'liq ishlaydi.",
+	},
+]
+
+function formatUzPhone(value: string) {
+	const digits = value.replace(/\D/g, '').slice(0, 9)
+
+	const operator = digits.slice(0, 2)
+	const first = digits.slice(2, 5)
+	const second = digits.slice(5, 7)
+	const third = digits.slice(7, 9)
+
+	return [operator, first, second, third].filter(Boolean).join(' ')
+}
+
+function normalizeUzPhone(digits: string) {
+	return `+998${digits}`
+}
+
+export default function WelcomePage() {
+	const router = useRouter()
+	const next = '/home'
+	const { hydrated, onboardingDone, user, completeOnboarding, login } = useApp()
+	const [slide, setSlide] = useState(0)
+	const [step, setStep] = useState<'phone' | 'otp' | 'profile'>('phone')
+	const [phoneDigits, setPhoneDigits] = useState('')
+	const [otp, setOtp] = useState('')
+	const [name, setName] = useState('')
+	const [vehiclePlate, setVehiclePlate] = useState('01 A 777 AA')
+	const [error, setError] = useState('')
+
+	useEffect(() => {
+		if (hydrated && user) router.replace(next)
+	}, [hydrated, user, router, next])
+	const current = slides[slide]
+	const Icon = current.icon
+	const title = useMemo(
+		() =>
+			step === 'phone'
+				? 'Telefon raqam'
+				: step === 'otp'
+					? 'SMS kod'
+					: 'Profil',
+		[step],
+	)
+
+	if (!hydrated || user) return <LoadingScreen />
+
+	if (!onboardingDone) {
+		return (
+			<div className='min-h-dvh bg-slate-950 px-6 py-8 text-white'>
+				<div className='mx-auto flex min-h-[calc(100dvh-4rem)] max-w-md flex-col'>
+					<div className='flex items-center gap-3'>
+						<span className='grid size-11 place-items-center rounded-2xl bg-white font-black text-slate-950'>
+							B
+						</span>
+						<strong>B SPACE</strong>
+					</div>
+					<div className='flex flex-1 flex-col justify-center'>
+						<div className='grid size-24 place-items-center rounded-[2rem] bg-white/10'>
+							<Icon className='size-11' />
+						</div>
+						<p className='mt-8 text-xs font-bold uppercase tracking-[.25em] text-sky-300'>
+							MVP · Uzbekistan
+						</p>
+						<h1 className='mt-3 text-4xl font-black tracking-tight'>
+							{current.title}
+						</h1>
+						<p className='mt-4 max-w-sm text-base leading-7 text-slate-300'>
+							{current.text}
+						</p>
+					</div>
+					<div className='flex gap-2'>
+						{slides.map((_, index) => (
+							<span
+								key={index}
+								className={`h-1.5 rounded-full transition-all ${index === slide ? 'w-10 bg-white' : 'w-4 bg-white/25'}`}
+							/>
+						))}
+					</div>
+					<button
+						onClick={() =>
+							slide < slides.length - 1
+								? setSlide(slide + 1)
+								: completeOnboarding()
+						}
+						className='mt-6 h-14 rounded-2xl bg-white font-bold text-slate-950'
+					>
+						{slide < slides.length - 1 ? 'Keyingi' : 'Boshlash'}
+					</button>
+				</div>
+			</div>
+		)
+	}
+
+	function submitPhone() {
+		setError('')
+
+		if (phoneDigits.length !== 9) {
+			setError('Telefon raqamni to‘liq kiriting.')
+			return
+		}
+
+		setStep('otp')
+	}
+
+	function submitOtp() {
+		setError('')
+		if (otp !== '123456') {
+			setError('Demo kod: 123456')
+			return
+		}
+		setStep('profile')
+	}
+
+	function submitProfile() {
+		setError('')
+		const parsed = profileSchema.safeParse({
+			name,
+			phone: normalizeUzPhone(phoneDigits),
+			vehiclePlate,
+		})
+		if (!parsed.success) {
+			setError(parsed.error.issues[0]?.message ?? "Ma'lumotlarni tekshiring")
+			return
+		}
+		login(parsed.data)
+		router.replace(next)
+	}
+
+	return (
+		<div className='min-h-dvh bg-slate-100 px-5 py-8'>
+			<div className='mx-auto max-w-md'>
+				<div className='flex items-center gap-3'>
+					<span className='grid size-11 place-items-center rounded-2xl bg-slate-950 font-black text-white'>
+						B
+					</span>
+					<div>
+						<strong className='block'>B SPACE</strong>
+						<span className='text-xs text-slate-500'>Demo authentication</span>
+					</div>
+				</div>
+				<section className='mt-10 rounded-[2rem] bg-white p-6 shadow-sm'>
+					<div className='grid size-12 place-items-center rounded-2xl bg-slate-100'>
+						<Smartphone className='size-6' />
+					</div>
+					<p className='mt-6 text-xs font-bold uppercase tracking-[.2em] text-slate-400'>
+						{title}
+					</p>
+					<h1 className='mt-2 text-3xl font-black text-slate-950'>Kirish</h1>
+
+					{step === 'phone' && (
+						<form
+							className='mt-6'
+							onSubmit={e => {
+								e.preventDefault()
+								submitPhone()
+							}}
+						>
+							<label htmlFor='phone' className='text-sm font-semibold'>
+								Telefon
+							</label>
+
+							<div className='mt-2 flex h-14 items-center rounded-2xl border border-slate-200 bg-white transition focus-within:border-slate-950'>
+								<div className='flex h-full items-center border-r border-slate-200 px-4 text-lg font-semibold text-slate-950'>
+									+998
+								</div>
+
+								<input
+									id='phone'
+									type='tel'
+									inputMode='numeric'
+									autoComplete='tel-national'
+									autoFocus
+									value={formatUzPhone(phoneDigits)}
+									onChange={e => {
+										const digits = e.target.value.replace(/\D/g, '').slice(0, 9)
+
+										setPhoneDigits(digits)
+										setError('')
+									}}
+									className='h-full min-w-0 flex-1 bg-transparent px-4 text-lg font-medium tracking-wide outline-none'
+									placeholder='90 123 45 67'
+								/>
+							</div>
+
+							<button
+								type='submit'
+								disabled={phoneDigits.length !== 9}
+								className='mt-4 h-13 w-full rounded-2xl bg-slate-950 font-bold text-white disabled:cursor-not-allowed disabled:opacity-40'
+							>
+								OTP yuborish
+							</button>
+						</form>
+					)}
+
+					{step === 'otp' && (
+						<form
+							className='mt-6'
+							onSubmit={e => {
+								e.preventDefault()
+								submitOtp()
+							}}
+						>
+							<div className='rounded-2xl bg-sky-50 p-4 text-sm text-sky-800'>
+								<strong>Demo rejim:</strong> haqiqiy SMS yuborilmaydi. Kod{' '}
+								<strong>123456</strong>.
+							</div>
+
+							<label htmlFor='otp' className='mt-5 block text-sm font-semibold'>
+								6 xonali kod
+							</label>
+
+							<input
+								id='otp'
+								type='text'
+								inputMode='numeric'
+								autoComplete='one-time-code'
+								autoFocus
+								value={otp}
+								onChange={e => {
+									setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))
+									setError('')
+								}}
+								className='mt-2 h-13 w-full rounded-2xl border border-slate-200 px-4 text-center text-2xl font-black tracking-[.35em] outline-none focus:border-slate-950'
+								placeholder='123456'
+							/>
+
+							<button
+								type='submit'
+								disabled={otp.length !== 6}
+								className='mt-4 h-13 w-full rounded-2xl bg-slate-950 font-bold text-white disabled:cursor-not-allowed disabled:opacity-40'
+							>
+								Tasdiqlash
+							</button>
+						</form>
+					)}
+
+					{step === 'profile' && (
+						<form
+							className='mt-6 space-y-4'
+							onSubmit={e => {
+								e.preventDefault()
+								submitProfile()
+							}}
+						>
+							<div>
+								<label htmlFor='name' className='text-sm font-semibold'>
+									Ism
+								</label>
+
+								<input
+									id='name'
+									value={name}
+									autoFocus
+									autoComplete='name'
+									onChange={e => {
+										setName(e.target.value)
+										setError('')
+									}}
+									className='mt-2 h-13 w-full rounded-2xl border border-slate-200 px-4 outline-none focus:border-slate-950'
+									placeholder='Ali'
+								/>
+							</div>
+
+							<div>
+								<label htmlFor='vehiclePlate' className='text-sm font-semibold'>
+									Avtomobil davlat raqami
+								</label>
+
+								<div className='relative mt-2'>
+									<CarFront className='absolute left-4 top-1/2 size-5 -translate-y-1/2 text-slate-400' />
+
+									<input
+										id='vehiclePlate'
+										value={vehiclePlate}
+										onChange={e => {
+											setVehiclePlate(e.target.value.toUpperCase())
+											setError('')
+										}}
+										className='h-13 w-full rounded-2xl border border-slate-200 pl-12 pr-4 font-bold outline-none focus:border-slate-950'
+									/>
+								</div>
+							</div>
+
+							<button
+								type='submit'
+								className='h-13 w-full rounded-2xl bg-slate-950 font-bold text-white'
+							>
+								<span className='inline-flex items-center gap-2'>
+									<Check className='size-5' />
+									Profilni yaratish
+								</span>
+							</button>
+						</form>
+					)}
+
+					{error && (
+						<p className='mt-4 rounded-xl bg-rose-50 p-3 text-sm font-medium text-rose-700'>
+							{error}
+						</p>
+					)}
+				</section>
+			</div>
+		</div>
+	)
+}

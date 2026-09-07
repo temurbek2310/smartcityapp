@@ -1,0 +1,25 @@
+@import "tailwindcss";
+
+:root {
+  --background: #e2e8f0;
+  --foreground: #0f172a;
+}
+
+* { box-sizing: border-box; }
+html { background: var(--background); }
+body {
+  margin: 0;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
+button, a, input, select { -webkit-tap-highlight-color: transparent; }
+button, a { touch-action: manipulation; }
+.maplibregl-map { font-family: Arial, Helvetica, sans-serif; }
+.maplibregl-ctrl-bottom-left, .maplibregl-ctrl-bottom-right { font-size: 9px; }
+
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-slide-up { animation: slide-up .25s ease-out; }
