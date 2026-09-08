@@ -14,12 +14,17 @@ export default function SessionPage() {
 	const { reservations, extendReservation, exitReservation } = useApp()
 	const reservation = reservations.find(item => item.id === params.id)
 	const parking = reservation ? getParking(reservation.parkingId) : undefined
-	const [now, setNow] = useState(Date.now())
+	const [now, setNow] = useState<number | null>(null)
 	const [showExitQr, setShowExitQr] = useState(false)
 
 	useEffect(() => {
-		const t = window.setInterval(() => setNow(Date.now()), 1000)
-		return () => window.clearInterval(t)
+		const updateNow = () => setNow(Date.now())
+		const initialTimer = window.setTimeout(updateNow, 0)
+		const intervalTimer = window.setInterval(updateNow, 1000)
+		return () => {
+			window.clearTimeout(initialTimer)
+			window.clearInterval(intervalTimer)
+		}
 	}, [])
 
 	if (!reservation || !parking)
@@ -38,7 +43,7 @@ export default function SessionPage() {
 					onClick={() => router.push(`/receipt/${reservation.id}`)}
 					className='h-12 w-full rounded-2xl bg-slate-950 font-bold text-white'
 				>
-					Chekni ko'rish
+					Chekni ko‘rish
 				</button>
 			</div>
 		)
@@ -58,7 +63,7 @@ export default function SessionPage() {
 		)
 
 	const reservationId = reservation.id
-	const remaining = new Date(reservation.endAt).getTime() - now
+	const remaining = now === null ? 0 : new Date(reservation.endAt).getTime() - now
 
 	function finish() {
 		exitReservation(reservationId)
@@ -75,7 +80,7 @@ export default function SessionPage() {
 				<h1 className='mt-4 text-3xl font-black'>Parking in progress</h1>
 				<p className='mt-2 text-sm text-slate-500'>{parking.name}</p>
 			</div>
-			<section className='rounded-[2rem] bg-slate-950 p-7 text-center text-white shadow-xl shadow-slate-950/10'>
+			<section className='rounded-4xl bg-slate-950 p-7 text-center text-white shadow-xl shadow-slate-950/10'>
 				<Clock3 className='mx-auto size-7 text-sky-300' />
 				<p className='mt-4 text-xs font-bold uppercase tracking-[.2em] text-slate-400'>
 					Time remaining
@@ -117,7 +122,7 @@ export default function SessionPage() {
 					<QrIcon className='size-5' /> Exit QR ochish
 				</button>
 			) : (
-				<section className='animate-slide-up rounded-[2rem] border border-slate-200 p-6 text-center'>
+				<section className='animate-slide-up rounded-4xl border border-slate-200 p-6 text-center'>
 					<p className='text-xs font-bold uppercase tracking-[.2em] text-slate-400'>
 						Exit QR
 					</p>
@@ -125,7 +130,7 @@ export default function SessionPage() {
 						<QrImage value={`BSPACE:EXIT:${reservation.id}`} size={190} />
 					</div>
 					<p className='mt-3 text-xs text-slate-500'>
-						Gate scanner o'rniga MVP simulator ishlaydi.
+						Gate scanner o‘rniga MVP simulator ishlaydi.
 					</p>
 					<button
 						onClick={finish}

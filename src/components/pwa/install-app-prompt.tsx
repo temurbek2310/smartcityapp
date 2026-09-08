@@ -13,7 +13,9 @@ interface BeforeInstallPromptEvent extends Event {
 
 export function InstallAppPrompt() {
 	const [visible, setVisible] = useState(false)
-	const [isIOS, setIsIOS] = useState(false)
+	const isIOS =
+		typeof navigator !== 'undefined' &&
+		/iphone|ipad|ipod/i.test(navigator.userAgent)
 
 	const [installPrompt, setInstallPrompt] =
 		useState<BeforeInstallPromptEvent | null>(null)
@@ -59,13 +61,9 @@ export function InstallAppPrompt() {
 			return
 		}
 
-		const ios = /iphone|ipad|ipod/i.test(window.navigator.userAgent)
-
-		setIsIOS(ios)
-
 		// iOS has no beforeinstallprompt event, so show manual instructions there.
 		// Other platforms wait for the browser's real install event.
-		const timer = ios
+		const timer = isIOS
 			? window.setTimeout(() => {
 				setVisible(true)
 			}, 1200)
@@ -98,7 +96,7 @@ export function InstallAppPrompt() {
 
 			window.removeEventListener('appinstalled', handleInstalled)
 		}
-	}, [])
+	}, [isIOS])
 
 	function dismiss() {
 		sessionStorage.setItem('bspace-install-dismissed', 'true')
@@ -133,7 +131,7 @@ export function InstallAppPrompt() {
 	}
 
 	return (
-		<div className='fixed bottom-24 left-1/2 z-[100] w-[calc(100%-24px)] max-w-sm -translate-x-1/2'>
+		<div className='fixed bottom-24 left-1/2 z-100 w-[calc(100%-24px)] max-w-sm -translate-x-1/2'>
 			<div
 				className='
           overflow-hidden
@@ -198,7 +196,7 @@ export function InstallAppPrompt() {
                   flex h-11 w-full
                   items-center justify-center gap-2
                   rounded-2xl
-                  bg-gradient-to-r
+                  bg-linear-to-r
                   from-emerald-500
                   to-teal-500
                   px-4

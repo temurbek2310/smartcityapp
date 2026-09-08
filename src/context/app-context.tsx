@@ -90,22 +90,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<BSpaceState>(initialState);
 
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved) as Omit<BSpaceState, "hydrated">;
-        setState({ ...initialState, ...parsed, hydrated: true });
-      } else {
+    const timer = window.setTimeout(() => {
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved) as Omit<BSpaceState, "hydrated">;
+          setState({ ...initialState, ...parsed, hydrated: true });
+        } else {
+          setState((current) => ({ ...current, hydrated: true }));
+        }
+      } catch {
         setState((current) => ({ ...current, hydrated: true }));
       }
-    } catch {
-      setState((current) => ({ ...current, hydrated: true }));
-    }
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, []);
 
   useEffect(() => {
     if (!state.hydrated) return;
-    const { hydrated: _hydrated, ...persisted } = state;
+    const persisted: Omit<BSpaceState, "hydrated"> = {
+      onboardingDone: state.onboardingDone,
+      user: state.user,
+      favorites: state.favorites,
+      reservations: state.reservations,
+      notifications: state.notifications,
+    };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));
   }, [state]);
 
@@ -151,9 +161,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       });
     };
 
-    checkTimers();
+    const initialTimer = window.setTimeout(checkTimers, 0);
     const timer = window.setInterval(checkTimers, 30_000);
-    return () => window.clearInterval(timer);
+    return () => {
+      window.clearTimeout(initialTimer);
+      window.clearInterval(timer);
+    };
   }, [state.hydrated]);
 
   const completeOnboarding = useCallback(() => {
