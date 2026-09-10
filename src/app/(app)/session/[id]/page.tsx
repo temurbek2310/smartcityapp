@@ -4,6 +4,7 @@ import { QrImage } from '@/components/ui/qr-image'
 import { useApp } from '@/context/app-context'
 import { getParking } from '@/data/parkings'
 import { formatDuration, formatTime, formatUZS } from '@/lib/format'
+import { formatUzbekPlate } from '@/lib/plate'
 import { Clock3, LogOut, Plus, QrCode as QrIcon } from 'lucide-react'
 import { useParams, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
@@ -96,7 +97,7 @@ export default function SessionPage() {
 			<section className='rounded-3xl border border-slate-200 p-5'>
 				<div className='flex justify-between text-sm'>
 					<span className='text-slate-500'>Vehicle</span>
-					<strong>{reservation.vehiclePlate}</strong>
+					<strong>{formatUzbekPlate(reservation.vehiclePlate)}</strong>
 				</div>
 				<div className='mt-3 flex justify-between text-sm'>
 					<span className='text-slate-500'>Current estimate</span>

@@ -35,7 +35,6 @@ export function BottomNavigation() {
 						pathname === item.href ||
 						(item.href === '/bookings' &&
 							(pathname.startsWith('/reservation') ||
-								pathname.startsWith('/reserve') ||
 								pathname.startsWith('/session') ||
 								pathname.startsWith('/receipt')))
 					const Icon = item.icon

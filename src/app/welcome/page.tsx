@@ -3,6 +3,10 @@
 import { LoadingScreen } from '@/components/ui/loading-screen'
 import { useApp } from '@/context/app-context'
 import {
+	formatUzbekPlate,
+	normalizeUzbekPlate,
+} from '@/lib/plate'
+import {
 	CarFront,
 	Check,
 	MapPinned,
@@ -11,7 +15,13 @@ import {
 	Smartphone,
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import { useEffect, useMemo, useState } from 'react'
+import {
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+	type ChangeEvent,
+} from 'react'
 import { z } from 'zod'
 
 const profileSchema = z.object({
@@ -63,11 +73,23 @@ export default function WelcomePage() {
 	const [otp, setOtp] = useState('')
 	const [name, setName] = useState('')
 	const [vehiclePlate, setVehiclePlate] = useState('01 A 777 AA')
+	const plateInputRef = useRef<HTMLInputElement>(null)
+	const plateCaretRef = useRef<number | null>(null)
 	const [error, setError] = useState('')
 
 	useEffect(() => {
 		if (hydrated && user) router.replace(next)
 	}, [hydrated, user, router, next])
+
+	// Re-place the caret once React has written the reformatted value, so
+	// inserted spaces never push it to the end of the field.
+	useEffect(() => {
+		const input = plateInputRef.current
+		const caret = plateCaretRef.current
+		if (!input || caret === null) return
+		plateCaretRef.current = null
+		input.setSelectionRange(caret, caret)
+	}, [vehiclePlate])
 	const current = slides[slide]
 	const Icon = current.icon
 	const title = useMemo(
@@ -127,6 +149,43 @@ export default function WelcomePage() {
 				</div>
 			</div>
 		)
+	}
+
+	function handlePlateChange(event: ChangeEvent<HTMLInputElement>) {
+		const typed = event.target.value
+		const caret = event.target.selectionStart ?? typed.length
+		const previousRaw = normalizeUzbekPlate(vehiclePlate)
+
+		let raw = normalizeUzbekPlate(typed)
+		let charsBeforeCaret = normalizeUzbekPlate(typed.slice(0, caret)).length
+
+		// Backspacing onto one of the inserted spaces would otherwise delete
+		// only that space, which formatting puts straight back. Remove the
+		// plate character in front of it instead, so Backspace always moves.
+		// Exactly one character must have gone, or a paste that merely drops
+		// spaces ("01A777AA" over "01 A 777 AA") would lose a character too.
+		if (
+			vehiclePlate.length - typed.length === 1 &&
+			raw === previousRaw &&
+			charsBeforeCaret > 0
+		) {
+			raw = raw.slice(0, charsBeforeCaret - 1) + raw.slice(charsBeforeCaret)
+			charsBeforeCaret -= 1
+		}
+
+		const formatted = formatUzbekPlate(raw)
+
+		// Caret goes after the same number of plate characters it was after.
+		let position = 0
+		let seen = 0
+		while (position < formatted.length && seen < charsBeforeCaret) {
+			if (formatted[position] !== ' ') seen += 1
+			position += 1
+		}
+
+		plateCaretRef.current = position
+		setVehiclePlate(formatted)
+		setError('')
 	}
 
 	function submitPhone() {
@@ -309,11 +368,13 @@ export default function WelcomePage() {
 
 									<input
 										id='vehiclePlate'
+										ref={plateInputRef}
 										value={vehiclePlate}
-										onChange={e => {
-											setVehiclePlate(e.target.value.toUpperCase())
-											setError('')
-										}}
+										inputMode='text'
+										autoCapitalize='characters'
+										autoComplete='off'
+										spellCheck={false}
+										onChange={handlePlateChange}
 										className='h-13 w-full rounded-2xl border border-slate-200 pl-12 pr-4 font-bold outline-none focus:border-slate-950'
 									/>
 								</div>

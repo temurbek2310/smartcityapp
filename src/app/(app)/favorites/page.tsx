@@ -24,8 +24,14 @@ import {
 	type WheelEvent as ReactWheelEvent,
 } from 'react'
 
+import { ParkingBookingSheet } from '@/components/parking/parking-booking-sheet'
+import { Toast } from '@/components/ui/toast'
 import { useApp } from '@/context/app-context'
 import { PARKINGS } from '@/data/parkings'
+import { usePlaceFavorites } from '@/hooks/use-place-favorites'
+import { useToast } from '@/hooks/use-toast'
+import { parkingAvailability } from '@/lib/availability'
+import { formatUZS } from '@/lib/format'
 
 type FavoriteTab = 'places' | 'parking' | 'queues' | 'routes' | 'events'
 
@@ -109,13 +115,14 @@ export default function FavoritesPage() {
 	const params = useSearchParams()
 	const { favorites, toggleFavorite } = useApp()
 	const requestedTab = params.get('tab')
-	const bookedParkingId = params.get('booked')
 
 	const [tab, setTab] = useState<FavoriteTab>(() =>
 		isTab(requestedTab) ? requestedTab : 'places',
 	)
-	const [placeFavoriteIds, setPlaceFavoriteIds] = useState<string[]>([])
-	const [successVisible, setSuccessVisible] = useState(Boolean(bookedParkingId))
+	const placeFavorites = usePlaceFavorites()
+	const placeFavoriteIds = placeFavorites.ids
+	const [bookingParkingId, setBookingParkingId] = useState<string | null>(null)
+	const toast = useToast<string>()
 
 	useEffect(() => {
 		const timer = window.setTimeout(() => {
@@ -125,23 +132,13 @@ export default function FavoritesPage() {
 				)
 				if (isTab(requestedTab)) setTab(requestedTab)
 				else if (isTab(savedTab)) setTab(savedTab)
-
-				const rawPlaces = window.localStorage.getItem('citygoo-place-favorites')
-				const parsed = rawPlaces ? JSON.parse(rawPlaces) : []
-				setPlaceFavoriteIds(Array.isArray(parsed) ? parsed : [])
 			} catch {
-				setPlaceFavoriteIds([])
+				// The saved tab is a convenience; the default still renders.
 			}
 		}, 0)
 
 		return () => window.clearTimeout(timer)
 	}, [requestedTab])
-
-	useEffect(() => {
-		if (!successVisible) return
-		const timer = window.setTimeout(() => setSuccessVisible(false), 3200)
-		return () => window.clearTimeout(timer)
-	}, [successVisible])
 
 	const savedPlaces = useMemo(
 		() =>
@@ -172,16 +169,7 @@ export default function FavoritesPage() {
 	}
 
 	function removePlace(id: string) {
-		const next = placeFavoriteIds.filter(item => item !== id)
-		setPlaceFavoriteIds(next)
-		try {
-			window.localStorage.setItem(
-				'citygoo-place-favorites',
-				JSON.stringify(next),
-			)
-		} catch {
-			// Favorites still work when persistence is unavailable.
-		}
+		placeFavorites.remove(id)
 	}
 
 	return (
@@ -208,37 +196,13 @@ export default function FavoritesPage() {
 							</span>
 						</button>
 					</div>
-
-					{successVisible && bookedParkingId ? (
-						<div className='mt-4 flex items-center gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-3.5 py-3 shadow-sm'>
-							<span className='grid size-9 shrink-0 place-items-center rounded-[11px] bg-emerald-500 text-white'>
-								<CircleParking className='size-5' />
-							</span>
-							<div className='min-w-0 flex-1'>
-								<p className='text-[13px] font-extrabold text-emerald-900'>
-									Parking muvaffaqiyatli bron qilindi
-								</p>
-								<p className='mt-0.5 truncate text-[11px] text-emerald-700'>
-									Bron qilingan parking Sevimlilarga ham qo‘shildi.
-								</p>
-							</div>
-							<button
-								type='button'
-								onClick={() => setSuccessVisible(false)}
-								className='grid size-8 place-items-center text-emerald-700'
-								aria-label='Yopish'
-							>
-								<X className='size-4' />
-							</button>
-						</div>
-					) : null}
 				</header>
 
-				<div className='mt-3'>
+				<div className='mt-4'>
 					<FavoriteTabs tab={tab} counts={counts} onSelect={selectTab} />
 				</div>
 
-				<div className='px-4 pt-2'>
+				<div className='px-4 pt-3'>
 					{tab === 'places' ? (
 						<section className='space-y-3'>
 							{savedPlaces.length ? (
@@ -265,97 +229,83 @@ export default function FavoritesPage() {
 						<section className='space-y-3'>
 							{savedParkings.length ? (
 								savedParkings.map(parking => {
-									const justBooked = bookedParkingId === parking.id
-									const freePercent = Math.max(
-										0,
-										Math.min(
-											100,
-											Math.round(
-												(parking.availableSpaces / parking.totalSpaces) * 100,
-											),
-										),
-									)
+									const { percent: freePercent, tone } =
+										parkingAvailability(parking)
 
 									return (
 										<article
 											key={parking.id}
-											className={`overflow-hidden rounded-[20px] bg-white shadow-[0_4px_14px_rgba(16,24,40,0.07)] ring-1 ${justBooked ? 'ring-violet-300' : 'ring-[#eaecf2]'}`}
+											className='overflow-hidden rounded-[20px] bg-white shadow-[0_1px_2px_rgba(16,24,40,.04),0_4px_14px_rgba(16,24,40,.06)] ring-1 ring-[#eaecf2]'
 										>
-											{justBooked ? (
-												<div className='bg-[#6c47e0] px-3.5 py-2 text-[11px] font-extrabold text-white'>
-													Hozirgina bron qilindi
-												</div>
-											) : null}
 
 											<Link
 												href={`/parking/${parking.id}`}
-												className='flex min-h-24'
+												className='flex min-h-23'
 											>
 												<div
-													className={`grid w-23 shrink-0 place-items-center bg-linear-to-br ${parking.accent} text-white/60`}
+													className={`flex w-18 shrink-0 flex-col items-center justify-center gap-1.5 bg-linear-to-br ${parking.accent} text-white/60`}
 												>
-													<div className='text-center'>
-														<CircleParking className='mx-auto size-6' />
-														<p className='mt-1.5 text-[10px] font-bold text-white/75'>
-															{parking.totalSpaces} joy
-														</p>
-													</div>
+													<CircleParking className='size-6' />
+													<p className='text-[10px] font-bold leading-none text-white/75'>
+														{parking.totalSpaces} joy
+													</p>
 												</div>
 
-												<div className='min-w-0 flex-1 px-3.5 py-3'>
-													<div className='flex items-start justify-between gap-2'>
-														<div className='min-w-0'>
-															<h2 className='truncate text-[15px] font-extrabold'>
+												<div className='min-w-0 flex-1 px-4 py-3.5'>
+													<div className='flex items-start justify-between gap-2.5'>
+														<div className='min-w-0 flex-1'>
+															<h2 className='line-clamp-2 text-[15px] font-extrabold leading-[19px]'>
 																{parking.name}
 															</h2>
-															<p className='mt-1 truncate text-[11px] text-[#8a91a6]'>
+															<p className='mt-1 truncate text-[11px] leading-4 text-[#8a91a6]'>
 																{parking.address}
 															</p>
 														</div>
-														<span className='shrink-0 text-[10px] text-[#8a91a6]'>
+														<span className='shrink-0 text-[10.5px] leading-[19px] text-[#8a91a6]'>
 															{parking.city}
 														</span>
 													</div>
 
-													<div className='mt-2.5 flex items-center justify-between gap-3'>
+													<div className='mt-3 flex items-baseline justify-between gap-3'>
 														<span
-															className={`truncate text-[12px] font-bold ${freePercent >= 30 ? 'text-emerald-600' : freePercent >= 15 ? 'text-amber-600' : 'text-rose-500'}`}
+															className={`truncate text-[12.5px] font-bold ${tone.text}`}
 														>
 															Bo‘sh {parking.availableSpaces} /{' '}
 															{parking.totalSpaces}
 														</span>
-														<span className='shrink-0 text-[12px] font-extrabold'>
-															{parking.pricePerHour.toLocaleString('ru-RU')}{' '}
-															so‘m/s
+														<span className='shrink-0 text-[12.5px] font-extrabold text-slate-950'>
+															{formatUZS(parking.pricePerHour)}/s
 														</span>
 													</div>
 
-													<div className='mt-2 h-1.25 overflow-hidden rounded-full bg-[#eaecf2]'>
+													<div className='mt-2.5 h-[7px] overflow-hidden rounded-full bg-[#eaecf2]'>
 														<span
-															className={`block h-full rounded-full ${freePercent >= 30 ? 'bg-emerald-500' : freePercent >= 15 ? 'bg-amber-500' : 'bg-rose-500'}`}
+															className={`block h-full rounded-full transition-[width] duration-400 ${tone.bar}`}
 															style={{ width: `${freePercent}%` }}
 														/>
 													</div>
 												</div>
 											</Link>
 
-											<div className='flex gap-2 px-3 pb-3'>
+											<div className='flex items-center gap-2 px-4 pb-4'>
 												<Link
 													href={`/navigate/parking/${parking.id}`}
-													className='flex h-9 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-[10px] border border-[#e1e4ed] bg-white px-2 text-[11px] font-bold'
+													className='flex h-[34px] min-w-0 flex-1 items-center justify-center gap-[7px] whitespace-nowrap rounded-[9px] border-[1.5px] border-[#e1e4ed] bg-white px-2.5 text-[12px] font-bold active:scale-[0.975]'
 												>
-													<Navigation className='size-3.5' /> Yo‘nalish
-												</Link>
-												<Link
-													href={`/reserve/${parking.id}`}
-													className='flex h-9 min-w-0 flex-1 items-center justify-center rounded-[10px] bg-[#6c47e0] px-2 text-[11px] font-extrabold text-white'
-												>
-													Bron qilish
+													<Navigation className='size-3.5 shrink-0' />
+													Yo‘nalish
 												</Link>
 												<button
 													type='button'
+													onClick={() => setBookingParkingId(parking.id)}
+													className='flex h-[34px] min-w-0 flex-[1.15] items-center justify-center whitespace-nowrap rounded-[9px] bg-[#6c47e0] px-2.5 text-[12px] font-extrabold text-white shadow-[0_6px_16px_rgba(108,71,224,.28)] active:scale-[0.975]'
+												>
+													Bron qilish
+												</button>
+												<button
+													type='button'
 													onClick={() => toggleFavorite(parking.id)}
-													className='grid size-9 shrink-0 place-items-center rounded-[10px] border border-[#e1e4ed] bg-white text-rose-500 active:scale-[0.96]'
+													className='grid size-[34px] shrink-0 place-items-center rounded-[9px] bg-[#f7f8fc] text-rose-500 active:scale-[0.975]'
 													aria-label={`${parking.name}ni sevimlilardan olib tashlash`}
 												>
 													<X className='size-4' />
@@ -407,6 +357,14 @@ export default function FavoritesPage() {
 					) : null}
 				</div>
 			</div>
+
+			<ParkingBookingSheet
+				parkingId={bookingParkingId}
+				onClose={() => setBookingParkingId(null)}
+				onNotify={toast.show}
+			/>
+
+			<Toast open={toast.open} message={toast.payload ?? ''} />
 		</main>
 	)
 }

@@ -23,3 +23,63 @@ button, a { touch-action: manipulation; }
   to { opacity: 1; transform: translateY(0); }
 }
 .animate-slide-up { animation: slide-up .25s ease-out; }
+
+/* City Goo sheet motion: .sheet slides in over .3s cubic-bezier(.32,.72,0,1)
+   from translateY(102%), its scrim fades in over .22s. Opt-in per sheet. */
+@keyframes sheet-up {
+  from { transform: translateY(102%); }
+  to { transform: none; }
+}
+.animate-sheet-up { animation: sheet-up .3s cubic-bezier(.32, .72, 0, 1); }
+
+@keyframes scrim-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.animate-scrim-in { animation: scrim-in .22s ease; }
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-sheet-up, .animate-scrim-in { animation: none; }
+}
+
+/* City Goo toast (.toast / .toast.on) reproduced 1:1 — same ink background,
+   14px radius, 12/14 padding, 13.5px/600 text, 10px gap, --sh-lg shadow and
+   the translateY(160%) .28s cubic-bezier(.32,.72,0,1) slide with the
+   visibility delay that keeps it out of the a11y tree while hidden.
+   Two adaptations: City Goo's absolute 400px device frame becomes B SPACE's
+   centered app shell, and the home-indicator safe area is added to its
+   calc(var(--nav-h) + 14px) offset so the toast clears the bottom nav. */
+.citygo-toast {
+  position: fixed;
+  left: 16px;
+  right: 16px;
+  bottom: calc(76px + 14px + env(safe-area-inset-bottom, 0px));
+  z-index: 110;
+  margin-inline: auto;
+  max-width: 25rem;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #0f172a;
+  color: #fff;
+  border-radius: 14px;
+  padding: 12px 14px;
+  font-size: 13.5px;
+  font-weight: 600;
+  box-shadow: 0 8px 30px rgba(16, 24, 40, .16);
+  transform: translateY(160%);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: transform .28s cubic-bezier(.32, .72, 0, 1), opacity .28s ease, visibility 0s linear .28s;
+}
+.citygo-toast.is-on {
+  transform: none;
+  opacity: 1;
+  visibility: visible;
+  transition-delay: 0s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .citygo-toast { transform: none; transition: opacity .28s ease, visibility 0s linear .28s; }
+}

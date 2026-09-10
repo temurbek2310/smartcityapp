@@ -14,7 +14,6 @@ export default function robots(): MetadataRoute.Robots {
 				'/bookings',
 				'/favorites',
 				'/profile',
-				'/reserve/',
 				'/reservation/',
 				'/session/',
 				'/receipt/',
