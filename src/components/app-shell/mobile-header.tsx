@@ -12,6 +12,7 @@ const OWN_HEADER = new Set([
 	'/transport',
 	'/parking',
 	'/queues',
+	'/news',
 ])
 
 export function MobileHeader() {

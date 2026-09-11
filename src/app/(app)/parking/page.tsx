@@ -1,6 +1,14 @@
 'use client'
 
-import { ArrowUpDown, CircleParking, LocateFixed, SlidersHorizontal, Tag } from 'lucide-react'
+import {
+	ArrowUpDown,
+	CircleParking,
+	LocateFixed,
+	SlidersHorizontal,
+	Tag,
+	TriangleAlert,
+} from 'lucide-react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect, useMemo, useState } from 'react'
 
@@ -22,6 +30,7 @@ import { SearchField } from '@/components/ui/search-field'
 import { SectionHeader } from '@/components/ui/section-header'
 import { Toast } from '@/components/ui/toast'
 import { useApp } from '@/context/app-context'
+import { NEWS } from '@/data/news'
 import { PARKINGS } from '@/data/parkings'
 import { useToast } from '@/hooks/use-toast'
 import {
@@ -60,6 +69,17 @@ export default function ParkingListPage() {
 				.sort((a, b) => (a.status === 'active' ? -1 : b.status === 'active' ? 1 : 0))[0],
 		[reservations],
 	)
+
+	// A closure the user cannot see from here is the feed failing to earn its
+	// place. If one names a lot currently on screen, say so above the list.
+	const roadAlert = useMemo(() => {
+		const visible = new Set(results.map(item => item.parking.id))
+		return NEWS.find(
+			item =>
+				item.category === 'road' &&
+				item.affectedParkingIds.some(id => visible.has(id)),
+		)
+	}, [results])
 
 	const forecastParking =
 		PARKINGS.find(parking => parking.id === forecastId) ?? PARKINGS[0]
@@ -180,6 +200,25 @@ export default function ParkingListPage() {
 						</Chip>
 					))}
 				</HorizontalRail>
+
+				{roadAlert && (
+					<div className='px-4'>
+						<Link
+							href='/news?tab=roads'
+							className='flex items-start gap-3 rounded-card-lg bg-warn-bg p-3'
+						>
+							<TriangleAlert className='size-[18px] shrink-0 text-warn' />
+							<span className='min-w-0 flex-1'>
+								<span className='block text-[13px] font-bold text-ink'>
+									{roadAlert.title}
+								</span>
+								<span className='mt-0.5 block text-[11.5px] text-ink-2'>
+									{roadAlert.summary}
+								</span>
+							</span>
+						</Link>
+					</div>
+				)}
 
 				{activeReservation && (
 					<div className='px-4'>

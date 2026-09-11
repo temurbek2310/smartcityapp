@@ -9,11 +9,20 @@ export default function robots(): MetadataRoute.Robots {
 
 			allow: ['/', '/welcome'],
 
+			// Everything behind AuthGate. The list had drifted: /transport,
+			// /parking and /navigate were reachable to crawlers even though a
+			// signed-out visitor only ever sees the loading screen.
 			disallow: [
 				'/home',
 				'/bookings',
 				'/favorites',
 				'/profile',
+				'/news',
+				'/notifications',
+				'/queues',
+				'/parking',
+				'/transport',
+				'/navigate/',
 				'/reservation/',
 				'/session/',
 				'/receipt/',
