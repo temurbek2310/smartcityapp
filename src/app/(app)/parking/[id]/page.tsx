@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { notFound, useParams } from "next/navigation";
 import { useState } from "react";
 import { BatteryCharging, Bike, Camera, Car, Clock3, Droplets, Heart, MapPin, Navigation, Shield, ShieldCheck, Umbrella } from "lucide-react";
 import { ParkingBookingSheet } from "@/components/parking/parking-booking-sheet";
@@ -21,7 +21,7 @@ export default function ParkingDetailPage() {
   const { favorites, toggleFavorite } = useApp();
   const [bookingOpen, setBookingOpen] = useState(false);
   const toast = useToast<string>();
-  if (!parking) return <div className="rounded-3xl bg-rose-50 p-6 text-rose-700">Parking topilmadi.</div>;
+  if (!parking) notFound();
   const favorite = favorites.includes(parking.id);
   const alternative = PARKINGS.find((item) => item.city === parking.city && item.id !== parking.id && item.availableSpaces > 0);
 

@@ -40,6 +40,8 @@ import {
 	useParkingFilters,
 } from '@/hooks/use-parking-filters'
 import { cn } from '@/lib/cn'
+import { liveAvailabilityAll } from '@/lib/live-availability'
+import { useRefreshSignal } from '@/components/ui/pull-to-refresh'
 import { useUserLocation } from '@/lib/use-user-location'
 
 export default function ParkingListPage() {
@@ -58,7 +60,12 @@ export default function ParkingListPage() {
 		locate()
 	}, [locate])
 
-	const filters = useParkingFilters(PARKINGS, location)
+	// Pull-to-refresh moves these numbers. The jitter is a pure function of
+	// (id, tick), so a re-render never changes them — only an actual pull does.
+	const { tick } = useRefreshSignal()
+	const parkings = useMemo(() => liveAvailabilityAll(PARKINGS, tick), [tick])
+
+	const filters = useParkingFilters(parkings, location)
 	const { results } = filters
 
 	// The one booking worth pinning: whichever is live, or next to start.

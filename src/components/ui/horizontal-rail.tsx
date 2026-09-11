@@ -95,6 +95,7 @@ export function HorizontalRail({
 			onPointerMove={onPointerMove}
 			onPointerUp={stopPointer}
 			onPointerCancel={stopPointer}
+			data-no-ptr
 			onClickCapture={onClickCapture}
 			onDragStart={event => event.preventDefault()}
 			className={`flex w-full min-w-0 gap-3 overflow-x-auto overflow-y-hidden overscroll-x-contain pb-2 scrollbar-none [&::-webkit-scrollbar]:hidden ${className}`}

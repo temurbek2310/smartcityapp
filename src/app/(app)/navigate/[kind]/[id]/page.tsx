@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { notFound, useParams } from "next/navigation";
 import { ExternalLink, LocateFixed, Navigation } from "lucide-react";
 import { getParking } from "@/data/parkings";
 import { useApp } from "@/context/app-context";
@@ -18,7 +18,7 @@ export default function NavigatePage() {
   const parking = params.kind === "reservation" ? getParking(reservation?.parkingId ?? "") : getParking(params.id);
   const { location, status, locate } = useUserLocation();
   useEffect(() => { locate(); }, [locate]);
-  if (!parking) return <div>Parking topilmadi.</div>;
+  if (!parking) notFound();
   const distance = distanceKm(location, parking);
   const eta = Math.max(3, Math.round((distance / 30) * 60));
   const googleMapsHref = `https://www.google.com/maps/dir/?api=1&destination=${parking.lat},${parking.lng}`;

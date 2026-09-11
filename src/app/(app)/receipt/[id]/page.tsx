@@ -1,6 +1,6 @@
 "use client";
 
-import { useParams } from "next/navigation";
+import { notFound, useParams } from "next/navigation";
 import Link from "next/link";
 import { CheckCircle2, CreditCard, ReceiptText } from "lucide-react";
 import { useApp } from "@/context/app-context";
@@ -13,7 +13,7 @@ export default function ReceiptPage() {
   const { reservations } = useApp();
   const reservation = reservations.find((item) => item.id === params.id);
   const parking = reservation ? getParking(reservation.parkingId) : undefined;
-  if (!reservation || !parking) return <div>Chek topilmadi.</div>;
+  if (!reservation || !parking) notFound();
   const total = reservation.finalTotal ?? reservation.estimatedTotal;
   return (
     <div className="space-y-6 text-center">

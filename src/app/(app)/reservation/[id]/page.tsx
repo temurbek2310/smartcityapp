@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { notFound, useParams, useRouter } from "next/navigation";
 import { CalendarClock, CheckCircle2, Navigation, QrCode as QrIcon, X } from "lucide-react";
 import { useApp } from "@/context/app-context";
 import { getParking } from "@/data/parkings";
@@ -31,7 +31,7 @@ export default function ReservationPage() {
     [reservation, now],
   );
 
-  if (!reservation || !parking) return <div className="rounded-3xl bg-rose-50 p-6">Bron topilmadi.</div>;
+  if (!reservation || !parking) notFound();
   if (reservation.status === "active") return <div className="space-y-4"><p className="rounded-2xl bg-emerald-50 p-4 text-sm font-semibold text-emerald-800">Bu bron faol parking sessiyasiga aylangan.</p><Link href={`/session/${reservation.id}`} className="flex h-13 items-center justify-center rounded-2xl bg-slate-950 font-bold text-white">Faol sessiya</Link></div>;
   if (reservation.status === "completed") return <Link href={`/receipt/${reservation.id}`} className="flex h-13 items-center justify-center rounded-2xl bg-slate-950 font-bold text-white">Chekni ko‘rish</Link>;
 
