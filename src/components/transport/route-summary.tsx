@@ -6,6 +6,7 @@ import { useState } from 'react'
 
 import type { RouteFactRow } from '@/data/demo-transport'
 import { parkingAvailability } from '@/lib/availability'
+import { formatUZS } from '@/lib/format'
 import { TRANSPORT_MODES, type TransportMode } from '@/lib/transport'
 import type { Parking } from '@/lib/types'
 
@@ -142,7 +143,7 @@ export function RouteSummary({
 					Narx {costLabel && `· ${costLabel}`}
 				</span>
 				<span className='text-[15px] font-extrabold text-slate-950'>
-					{costUZS > 0 ? `≈ ${costUZS.toLocaleString('ru-RU')} so‘m` : 'Bepul'}
+					{costUZS > 0 ? `≈ ${formatUZS(costUZS)}` : 'Bepul'}
 				</span>
 			</div>
 			<p className='mt-1.5 px-1 text-[10.5px] text-[#8a91a6]'>

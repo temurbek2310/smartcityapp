@@ -47,7 +47,7 @@ import { usePlaceFavorites } from '@/hooks/use-place-favorites'
 import { useToast } from '@/hooks/use-toast'
 import { CITY_META } from '@/data/city-meta'
 import { PARKINGS } from '@/data/parkings'
-import { formatUZS } from '@/lib/format'
+import { formatNumber, formatUZS } from '@/lib/format'
 import { distanceKm } from '@/lib/geo'
 import { TRANSPORT_MODES, type TransportMode } from '@/lib/transport'
 import { useUserLocation, type LocationError } from '@/lib/use-user-location'
@@ -2244,7 +2244,7 @@ export default function HomePage() {
 											</p>
 											<p className='mt-1 flex items-center gap-2 text-xs text-slate-400'>
 												<Star className='size-4 fill-amber-400 text-amber-400' />{' '}
-												{place.rating} · {place.reviews.toLocaleString('ru-RU')}{' '}
+												{place.rating} · {formatNumber(place.reviews)}{' '}
 												sharh
 											</p>
 										</div>

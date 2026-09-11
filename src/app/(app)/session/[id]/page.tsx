@@ -5,6 +5,7 @@ import { useApp } from '@/context/app-context'
 import { getParking } from '@/data/parkings'
 import { formatDuration, formatTime, formatUZS } from '@/lib/format'
 import { formatUzbekPlate } from '@/lib/plate'
+import { calculateFinalTotal } from '@/lib/reservation'
 import { Clock3, LogOut, Plus, QrCode as QrIcon } from 'lucide-react'
 import { useParams, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
@@ -65,6 +66,12 @@ export default function SessionPage() {
 
 	const reservationId = reservation.id
 	const remaining = now === null ? 0 : new Date(reservation.endAt).getTime() - now
+	// Billed by the hour from entry, so it only matches estimatedTotal while
+	// the car sits inside its booked duration.
+	const runningTotal =
+		now === null
+			? reservation.estimatedTotal
+			: calculateFinalTotal(reservation, new Date(now))
 
 	function finish() {
 		exitReservation(reservationId)
@@ -101,7 +108,7 @@ export default function SessionPage() {
 				</div>
 				<div className='mt-3 flex justify-between text-sm'>
 					<span className='text-slate-500'>Current estimate</span>
-					<strong>{formatUZS(reservation.estimatedTotal)}</strong>
+					<strong>{formatUZS(runningTotal)}</strong>
 				</div>
 				<button
 					onClick={() => extendReservation(reservation.id, 1)}

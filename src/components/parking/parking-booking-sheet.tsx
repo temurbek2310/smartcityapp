@@ -9,7 +9,7 @@ import { HorizontalRail } from '@/components/ui/horizontal-rail'
 import { useApp } from '@/context/app-context'
 import { PARKINGS } from '@/data/parkings'
 import { saveBookingMeta } from '@/lib/booking-meta'
-import { formatUZS } from '@/lib/format'
+import { formatDayMonth, formatTime, formatUZS } from '@/lib/format'
 
 // The one parking booking UI in the app. It used to live inline in Home
 // and duplicated an older standalone /reserve/[id] form; both are gone and
@@ -42,15 +42,11 @@ const ARRIVAL_SLOTS = [
 
 function makeBookingDayLabels() {
 	const labels = ['Bugun', 'Ertaga']
-	const formatter = new Intl.DateTimeFormat('uz-UZ', {
-		day: 'numeric',
-		month: 'short',
-	})
 	const now = new Date()
 	for (let offset = 2; offset <= 3; offset += 1) {
 		const date = new Date(now)
 		date.setDate(now.getDate() + offset)
-		labels.push(formatter.format(date).replace('.', ''))
+		labels.push(formatDayMonth(date))
 	}
 	return labels
 }
@@ -64,10 +60,7 @@ function makeDraft(parkingId: string): ParkingBookingDraft {
 	const now = new Date()
 	now.setMinutes(now.getMinutes() + 15)
 	now.setMinutes(Math.ceil(now.getMinutes() / 15) * 15, 0, 0)
-	const nowLabel = new Intl.DateTimeFormat('uz-UZ', {
-		hour: '2-digit',
-		minute: '2-digit',
-	}).format(now)
+	const nowLabel = formatTime(now)
 
 	return {
 		parkingId,

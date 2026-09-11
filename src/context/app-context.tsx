@@ -259,13 +259,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ...current,
       reservations: current.reservations.map((reservation) => {
         if (reservation.id !== reservationId || reservation.status !== "reserved") return reservation;
-        const bookedEnd = new Date(reservation.endAt).getTime();
-        const minimumEnd = enteredAt.getTime() + reservation.durationHours * 3_600_000;
+        // The paid window runs from the moment the car is actually inside.
+        // Arriving late must not eat into it — but the previous
+        // max(bookedEnd, enteredAt + duration) also meant arriving *early*
+        // silently stretched it to the booked end, handing a 2h booking
+        // entered an hour early a 3h+ timer it had not paid for.
+        // calculateFinalTotal() meters from enteredAt, so the two agree now.
         return {
           ...reservation,
           status: "active" as const,
           enteredAt: enteredAt.toISOString(),
-          endAt: new Date(Math.max(bookedEnd, minimumEnd)).toISOString(),
+          endAt: new Date(
+            enteredAt.getTime() + reservation.durationHours * 3_600_000,
+          ).toISOString(),
         };
       }),
       notifications: [
