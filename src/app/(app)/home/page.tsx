@@ -40,6 +40,7 @@ import { BottomSheet } from '@/components/ui/bottom-sheet'
 import { Toast } from '@/components/ui/toast'
 import { HorizontalRail } from '@/components/ui/horizontal-rail'
 import { ParkingMap } from '@/components/map/parking-map'
+import { ServiceBookingSheet } from '@/components/booking/service-booking-sheet'
 import { ParkingBookingSheet } from '@/components/parking/parking-booking-sheet'
 import { useApp } from '@/context/app-context'
 import { usePlaceFavorites } from '@/hooks/use-place-favorites'
@@ -49,7 +50,7 @@ import { PARKINGS } from '@/data/parkings'
 import { EVENTS } from '@/data/events'
 import { PLACES } from '@/data/places'
 import { formatNumber, formatUZS } from '@/lib/format'
-import type { Place, PlaceCategory } from '@/lib/types'
+import type { Place, PlaceCategory, ServiceBookingKind } from '@/lib/types'
 import { distanceKm } from '@/lib/geo'
 import { TRANSPORT_MODES, type TransportMode } from '@/lib/transport'
 import { useUserLocation, type LocationError } from '@/lib/use-user-location'
@@ -64,7 +65,6 @@ type SheetState =
 	| { type: 'categories' }
 	| { type: 'nearby' }
 	| { type: 'place'; placeId: string }
-	| { type: 'service'; serviceId: string }
 	| { type: 'servicesAll' }
 	| { type: 'event'; eventId: string }
 	| { type: 'events' }
@@ -252,8 +252,6 @@ const AI_TIPS = [
 	},
 ]
 
-const BOOKING_SLOTS = ['11:30', '12:00', '12:30', '13:00', '18:00', '19:00']
-
 function locationMessage(error: LocationError) {
 	switch (error) {
 		case 'denied':
@@ -314,8 +312,10 @@ export default function HomePage() {
 	const [voiceText, setVoiceText] = useState('Gapiring…')
 	const toast = useToast<string>()
 	const [aiIndex, setAiIndex] = useState(0)
-	const [bookingSlot, setBookingSlot] = useState('12:30')
-	const [bookingCount, setBookingCount] = useState(2)
+	const [serviceBooking, setServiceBooking] = useState<{
+		kind: ServiceBookingKind
+		refId: string
+	} | null>(null)
 	const [bookingParkingId, setBookingParkingId] = useState<string | null>(
 		null,
 	)
@@ -519,15 +519,16 @@ export default function HomePage() {
 			showToast('Taksi: kelish vaqti 3–5 daqiqa · taxminiy 18 000 so‘m')
 			return
 		}
-		setBookingSlot('12:30')
-		setBookingCount(serviceId === 'queue' ? 1 : 2)
-		setSheet({ type: 'service', serviceId })
-	}
-
-	function confirmService(serviceId: string) {
-		const service = SERVICES.find(item => item.id === serviceId)
+		// table / cinema / clinic. These used to open a slot picker that ended
+		// in a toast and stored nothing, so the booking never existed.
+		const venue =
+			serviceId === 'table'
+				? 'urban-food'
+				: serviceId === 'cinema'
+					? 'cinema-magic'
+					: 'medical-plaza'
 		setSheet(null)
-		showToast(`${service?.label ?? 'Bron'} tasdiqlandi · ${bookingSlot}`)
+		setServiceBooking({ kind: serviceId as ServiceBookingKind, refId: venue })
 	}
 
 	function sharePlace(place: Place) {
@@ -2144,6 +2145,15 @@ export default function HomePage() {
 					)
 				})()}
 
+			{serviceBooking && (
+				<ServiceBookingSheet
+					kind={serviceBooking.kind}
+					refId={serviceBooking.refId}
+					onClose={() => setServiceBooking(null)}
+					onNotify={showToast}
+				/>
+			)}
+
 			<ParkingBookingSheet
 				parkingId={bookingParkingId}
 				onClose={() => setBookingParkingId(null)}
@@ -2183,82 +2193,6 @@ export default function HomePage() {
 					</div>
 				</BottomSheet>
 			)}
-
-			{sheet?.type === 'service' &&
-				(() => {
-					const service = SERVICES.find(item => item.id === sheet.serviceId)
-					if (!service) return null
-					const Icon = service.icon
-					return (
-						<BottomSheet title={service.label} onClose={() => setSheet(null)}>
-							<div className='flex items-center gap-3 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200'>
-								<span className='grid size-11 shrink-0 place-items-center rounded-xl bg-violet-50'>
-									<Icon className={`size-5 ${service.tone}`} />
-								</span>
-								<div>
-									<p className='text-sm font-black text-slate-900'>
-										{service.label}
-									</p>
-									<p className='mt-1 text-xs text-slate-400'>
-										{service.subtitle}
-									</p>
-								</div>
-							</div>
-							<div className='mt-3 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200'>
-								<p className='text-sm font-black text-slate-900'>Vaqt</p>
-								<div className='mt-3 grid grid-cols-3 gap-2'>
-									{BOOKING_SLOTS.map(slot => (
-										<button
-											key={slot}
-											type='button'
-											onClick={() => setBookingSlot(slot)}
-											className={`h-10 rounded-xl text-xs font-black ${bookingSlot === slot ? 'bg-violet-600 text-white' : 'bg-slate-100 text-slate-600'}`}
-										>
-											{slot}
-										</button>
-									))}
-								</div>
-							</div>
-							{sheet.serviceId !== 'queue' && (
-								<div className='mt-3 flex items-center justify-between rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200'>
-									<span className='text-sm font-black text-slate-900'>
-										Soni
-									</span>
-									<div className='flex items-center gap-3'>
-										<button
-											type='button'
-											onClick={() =>
-												setBookingCount(count => Math.max(1, count - 1))
-											}
-											className='grid size-9 place-items-center rounded-xl bg-slate-100 text-lg font-black'
-										>
-											−
-										</button>
-										<span className='w-6 text-center text-lg font-black'>
-											{bookingCount}
-										</span>
-										<button
-											type='button'
-											onClick={() =>
-												setBookingCount(count => Math.min(10, count + 1))
-											}
-											className='grid size-9 place-items-center rounded-xl bg-slate-100 text-lg font-black'
-										>
-											+
-										</button>
-									</div>
-								</div>
-							)}
-							<button
-								type='button'
-								onClick={() => confirmService(service.id)}
-								className='mt-4 h-12 w-full rounded-2xl bg-violet-600 text-sm font-black text-white'
-							>
-								Tasdiqlash
-							</button>
-						</BottomSheet>
-					)
-				})()}
 
 			{sheet?.type === 'event' &&
 				(() => {
