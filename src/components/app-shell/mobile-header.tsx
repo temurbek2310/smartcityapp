@@ -6,19 +6,18 @@ import { usePathname } from 'next/navigation'
 
 import { useApp } from '@/context/app-context'
 
+const OWN_HEADER = new Set(['/home', '/favorites', '/transport', '/parking'])
+
 export function MobileHeader() {
 	const pathname = usePathname()
 	const { unreadCount } = useApp()
 
-	// CITY GO Home owns its own compact city/weather/notification top bar,
-	// and /transport owns its own City Goo-style header (back/title/filter).
-	// Other B SPACE screens keep the existing branded header.
-	if (
-		pathname === '/home' ||
-		pathname === '/favorites' ||
-		pathname === '/transport'
-	)
-		return null
+
+	// Screens that draw their own top bar — Home's city/weather/bell strip,
+	// or the AppBar with back/title/action that City Goo puts on every
+	// secondary screen. Rendering the branded header above one of those
+	// stacks two headers. Add a route here when it adopts AppBar.
+	if (OWN_HEADER.has(pathname)) return null
 
 	return (
 		<header className='sticky top-0 z-40 border-b border-slate-200 bg-white/90 backdrop-blur'>

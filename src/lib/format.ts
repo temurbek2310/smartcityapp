@@ -83,7 +83,10 @@ export function formatDateTime(value: string | number | Date) {
 export function formatDistance(km: number) {
   if (!Number.isFinite(km) || km < 0) return "—";
   if (km < 1) return `${Math.round(km * 1000)} m`;
-  return `${formatNumber(Math.floor(km))},${Math.round((km % 1) * 10)} km`;
+  // Round first, then split. Rounding the fraction on its own lets it reach
+  // 10 and print "2,10 km" instead of carrying into the whole number.
+  const [whole, tenth] = (Math.round(km * 10) / 10).toFixed(1).split(".");
+  return `${formatNumber(Number(whole))},${tenth} km`;
 }
 
 export function formatDuration(ms: number) {

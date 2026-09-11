@@ -115,8 +115,11 @@ export default function FavoritesPage() {
 		placeFavorites.remove(id)
 	}
 
+	// -mx-5/-mt-6 escapes the layout's padding so the chip rail can scroll
+	// edge to edge — the same idiom parking/[id] uses for its hero. This was
+	// a nested <main>, which gave the document two landmarks.
 	return (
-		<main className='min-h-[calc(100dvh-76px)] bg-canvas pb-28 pt-5 text-slate-950'>
+		<div className='-mx-5 -mt-6 min-h-[calc(100dvh-var(--spacing-nav))] bg-canvas pb-28 pt-5 text-slate-950'>
 			<div className='mx-auto w-full max-w-md'>
 				<header className='px-4'>
 					<div className='flex items-start justify-between gap-4'>
@@ -308,7 +311,7 @@ export default function FavoritesPage() {
 			/>
 
 			<Toast open={toast.open} message={toast.payload ?? ''} />
-		</main>
+		</div>
 	)
 }
 

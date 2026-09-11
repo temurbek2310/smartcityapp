@@ -446,6 +446,10 @@ export default function HomePage() {
 			setSheet({ type: 'route', routeId: 'work' })
 			return
 		}
+		if (id === 'parking') {
+			router.push('/parking')
+			return
+		}
 		if (id === 'queues') {
 			setBookingSlot('12:30')
 			setBookingCount(1)
@@ -775,6 +779,14 @@ export default function HomePage() {
 						>
 							<Navigation className='size-4' />
 							Yo‘nalish
+						</button>
+						<button
+							type='button'
+							onClick={() => router.push('/parking')}
+							className='pointer-events-auto inline-flex h-9 items-center gap-2 rounded-xl bg-white px-3 text-xs font-black text-ink shadow-md ring-1 ring-line'
+						>
+							<CircleParking className='size-4 text-brand' />
+							Barcha parkinglar
 						</button>
 					</div>
 				</div>
