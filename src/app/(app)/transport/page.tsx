@@ -1,6 +1,7 @@
 'use client'
 
 import {
+	Bookmark,
 	Clock3,
 	CircleParking,
 	Cloud,
@@ -30,6 +31,7 @@ import { RouteTimeline, type TimelineStep } from '@/components/transport/route-t
 import { TransportHeader } from '@/components/transport/transport-header'
 import { TransportModeSelector } from '@/components/transport/transport-mode-selector'
 import { Toast } from '@/components/ui/toast'
+import { useApp } from '@/context/app-context'
 import { CITY_META } from '@/data/city-meta'
 import {
 	DEMO_ALTERNATIVE_ROUTES,
@@ -83,6 +85,7 @@ export default function TransportPage() {
 
 function TransportView() {
 	const router = useRouter()
+	const { saveRoute } = useApp()
 	const searchParams = useSearchParams()
 	const modeParam = searchParams.get('mode')
 	const parkingIdParam = searchParams.get('parkingId')
@@ -377,6 +380,23 @@ function TransportView() {
 				facts={DEMO_ROUTE_FACTS[mode]}
 				destination={destination}
 			/>
+
+			<button
+				type='button'
+				onClick={() => {
+					saveRoute({
+						title: selectedDestination?.title ?? destination.name,
+						from: originStatusLabel,
+						to: destinationValue,
+						mode,
+						parkingId: destination.id,
+					})
+					notifyBooking('Marshrut sevimlilarga saqlandi')
+				}}
+				className='flex h-11 w-full items-center justify-center gap-2 rounded-card bg-card text-[13px] font-bold text-ink shadow-card'
+			>
+				<Bookmark className='size-4 text-brand' /> Marshrutni saqlash
+			</button>
 
 			<RouteTimeline steps={timelineSteps} navigateHref={navigateHref} />
 

@@ -285,6 +285,8 @@ export default function HomePage() {
 		reservations,
 		favorites,
 		toggleFavorite,
+		favoriteEvents,
+		toggleEventFavorite,
 		unreadCount,
 	} = useApp()
 	const { location, status, error: locationError, locate } = useUserLocation()
@@ -2233,12 +2235,25 @@ export default function HomePage() {
 								</div>
 							</div>
 							<div className='mt-4 grid grid-cols-2 gap-2'>
+								{/* Was a toast that scheduled nothing. Saving the event is
+								    the thing this app can actually honour — it puts it in
+								    the Voqealar tab, which had no other source. */}
 								<button
 									type='button'
-									onClick={() => showToast('Eslatma qo‘shildi')}
-									className='h-12 rounded-2xl border border-slate-200 bg-white text-sm font-black text-slate-700'
+									onClick={() => {
+										toggleEventFavorite(event.id)
+										showToast(
+											favoriteEvents.includes(event.id)
+												? 'Sevimlilardan olib tashlandi'
+												: 'Voqea sevimlilarga saqlandi',
+										)
+									}}
+									className='flex h-12 items-center justify-center gap-2 rounded-2xl border border-line-2 bg-white text-sm font-black text-ink'
 								>
-									Eslatish
+									<Heart
+										className={`size-4 ${favoriteEvents.includes(event.id) ? 'fill-bad text-bad' : 'text-ink-3'}`}
+									/>
+									{favoriteEvents.includes(event.id) ? 'Saqlangan' : 'Saqlash'}
 								</button>
 								<button
 									type='button'

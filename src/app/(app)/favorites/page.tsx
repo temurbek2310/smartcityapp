@@ -28,6 +28,7 @@ import { useApp } from '@/context/app-context'
 import { EmptyState } from '@/components/ui/empty-state'
 import { PARKINGS } from '@/data/parkings'
 import { PLACES } from '@/data/places'
+import { EVENTS } from '@/data/events'
 import { QUEUE_ORGS } from '@/data/queue-orgs'
 import { usePlaceFavorites } from '@/hooks/use-place-favorites'
 import { useToast } from '@/hooks/use-toast'
@@ -57,8 +58,16 @@ function isTab(value: string | null): value is FavoriteTab {
 
 export default function FavoritesPage() {
 	const params = useSearchParams()
-	const { favorites, toggleFavorite, favoriteQueueOrgs, toggleQueueOrgFavorite } =
-		useApp()
+	const {
+		favorites,
+		toggleFavorite,
+		favoriteQueueOrgs,
+		toggleQueueOrgFavorite,
+		favoriteEvents,
+		toggleEventFavorite,
+		savedRoutes,
+		removeRoute,
+	} = useApp()
 	const requestedTab = params.get('tab')
 
 	const [tab, setTab] = useState<FavoriteTab>(() =>
@@ -101,12 +110,17 @@ export default function FavoritesPage() {
 		[favoriteQueueOrgs],
 	)
 
+	const savedEvents = useMemo(
+		() => EVENTS.filter(event => favoriteEvents.includes(event.id)),
+		[favoriteEvents],
+	)
+
 	const counts: Record<FavoriteTab, number> = {
 		places: savedPlaces.length,
 		parking: savedParkings.length,
 		queues: savedQueueOrgs.length,
-		routes: 0,
-		events: 0,
+		routes: savedRoutes.length,
+		events: savedEvents.length,
 	}
 
 	function selectTab(next: FavoriteTab) {
@@ -337,23 +351,104 @@ export default function FavoritesPage() {
 					) : null}
 
 					{tab === 'routes' ? (
-						<EmptyState
-							icon={Route}
-							title='Hozircha bo‘sh'
-							text='Uy, ish va tez-tez ishlatiladigan marshrutlarni shu yerda saqlash mumkin bo‘ladi.'
-							href='/home'
-							action='Topish'
-						/>
+						<section className='space-y-3'>
+							{savedRoutes.length ? (
+								savedRoutes.map(route => (
+									<article
+										key={route.id}
+										className='rounded-card-lg bg-card p-3 shadow-card'
+									>
+										<div className='flex items-start justify-between gap-3'>
+											<div className='min-w-0'>
+												<h2 className='truncate text-[15px] font-extrabold'>
+													{route.title}
+												</h2>
+												<p className='mt-1 truncate text-[11px] text-ink-3'>
+													{route.from} → {route.to}
+												</p>
+											</div>
+											<button
+												type='button'
+												aria-label='Olib tashlash'
+												onClick={() => removeRoute(route.id)}
+												className='grid size-9 shrink-0 place-items-center rounded-xl bg-card-2 text-bad'
+											>
+												<X className='size-4' />
+											</button>
+										</div>
+										<Link
+											href={`/transport?mode=${route.mode}${route.parkingId ? `&parkingId=${route.parkingId}` : ''}`}
+											className='mt-3 flex h-9 items-center justify-center gap-1.5 rounded-[10px] bg-brand text-[11.5px] font-extrabold text-white'
+										>
+											<Navigation className='size-3.5' /> Qayta qurish
+										</Link>
+									</article>
+								))
+							) : (
+								<EmptyState
+									icon={Route}
+									title='Hozircha bo‘sh'
+									text='Transport ekranida marshrut qurib, “Marshrutni saqlash” tugmasini bosing.'
+									href='/transport'
+									action='Marshrut qurish'
+								/>
+							)}
+						</section>
 					) : null}
 
 					{tab === 'events' ? (
-						<EmptyState
-							icon={Ticket}
-							title='Hozircha bo‘sh'
-							text='Saqlangan shahar voqealari shu bo‘limda ko‘rinadi.'
-							href='/home'
-							action='Topish'
-						/>
+						<section className='space-y-3'>
+							{savedEvents.length ? (
+								savedEvents.map(event => (
+									<article
+										key={event.id}
+										className='overflow-hidden rounded-card-lg bg-card shadow-card'
+									>
+										<div
+											className={`flex h-24 items-end justify-between bg-linear-to-br p-3 ${event.accent}`}
+										>
+											<span className='rounded-[7px] bg-white/90 px-2 py-1 text-[10px] font-extrabold text-ink'>
+												{event.when}, {event.time}
+											</span>
+											<span className='rounded-[7px] bg-white/90 px-2 py-1 text-[10px] font-extrabold text-ink-2'>
+												{event.category}
+											</span>
+										</div>
+										<div className='p-3'>
+											<h2 className='text-[15px] font-extrabold'>
+												{event.title}
+											</h2>
+											<p className='mt-1 text-[11px] text-ink-3'>
+												{event.place} · {event.price}
+											</p>
+											<div className='mt-3 grid grid-cols-2 gap-2'>
+												<Link
+													href={`/parking/${event.parkingId}`}
+													className='flex h-9 items-center justify-center gap-1.5 rounded-[10px] border-[1.5px] border-line-2 bg-white text-[11.5px] font-bold'
+												>
+													<CircleParking className='size-3.5' /> Parking
+												</Link>
+												<button
+													type='button'
+													onClick={() => toggleEventFavorite(event.id)}
+													className='flex h-9 items-center justify-center gap-1.5 rounded-[10px] bg-card-2 text-[11.5px] font-bold text-bad'
+												>
+													<X className='size-3.5' /> Olib tashlash
+												</button>
+											</div>
+										</div>
+									</article>
+								))
+							) : (
+								<EmptyState
+									icon={Ticket}
+									title='Hozircha bo‘sh'
+									text='Bosh sahifadagi voqealar ro‘yxatidan yurak tugmasi orqali saqlang.'
+									href='/home'
+									action='Voqealar'
+								/>
+							)}
+						</section>
 					) : null}
 				</div>
 			</div>

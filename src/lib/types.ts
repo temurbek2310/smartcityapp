@@ -56,7 +56,23 @@ export type UserProfile = {
   name: string;
   phone: string;
   vehiclePlate: string;
+  // Set at signup so the profile can say how long someone has been here.
+  // Optional because blobs written before this existed have no value, and
+  // inventing a join date would be a lie rather than a default.
+  joinedAt?: string;
+  premium?: boolean;
 };
+
+// Which notifications the user actually wants. These are real switches, not
+// decoration: the booking reminder gates the 30/10-minute timer alerts that
+// app-context generates.
+export type NotificationPrefId =
+  | "bookingReminders"
+  | "freeSpaces"
+  | "queueTurn"
+  | "roadClosures"
+  | "cityEvents"
+  | "partnerOffers";
 
 export type ReservationStatus = "reserved" | "active" | "completed" | "cancelled";
 
@@ -155,6 +171,7 @@ export type BSpaceState = {
   queueTickets: QueueTicket[];
   serviceBookings: ServiceBooking[];
   notifications: AppNotification[];
+  notificationPrefs: Record<NotificationPrefId, boolean>;
 };
 
 // A route the user chose to keep from /transport, replayed by tapping it in

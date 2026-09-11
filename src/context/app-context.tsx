@@ -12,6 +12,7 @@ import {
 import type {
   AppNotification,
   BSpaceState,
+  NotificationPrefId,
   QueueTicket,
   Reservation,
   SavedRoute,
@@ -34,6 +35,16 @@ const initialState: BSpaceState = {
   reservations: [],
   queueTickets: [],
   serviceBookings: [],
+  // Defaults mirror City Goo's: the things that affect a booking you already
+  // made are on, marketing is off.
+  notificationPrefs: {
+    bookingReminders: true,
+    freeSpaces: true,
+    queueTurn: true,
+    roadClosures: true,
+    cityEvents: false,
+    partnerOffers: false,
+  },
   notifications: [
     {
       id: "full-parking-demo",
@@ -82,6 +93,8 @@ type CreateServiceBookingInput = {
 type AppContextValue = BSpaceState & {
   completeOnboarding: () => void;
   login: (profile: UserProfile) => void;
+  updateProfile: (patch: Partial<UserProfile>) => void;
+  setNotificationPref: (id: NotificationPrefId, enabled: boolean) => void;
   logout: () => void;
   resetDemo: () => void;
   toggleFavorite: (parkingId: string) => void;
@@ -162,6 +175,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       queueTickets: state.queueTickets,
       serviceBookings: state.serviceBookings,
       notifications: state.notifications,
+      notificationPrefs: state.notificationPrefs,
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));
   }, [state]);
@@ -174,6 +188,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setState((current) => {
         let notifications = current.notifications;
         let changed = false;
+
+        if (!current.notificationPrefs.bookingReminders) return current;
 
         for (const reservation of current.reservations) {
           if (reservation.status !== "active") continue;
@@ -224,13 +240,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setState((current) => ({
       ...current,
       onboardingDone: true,
-      user: profile,
+      user: { joinedAt: new Date().toISOString(), premium: false, ...profile },
       notifications: [
         makeNotification("Xush kelibsiz", `${profile.name}, B SPACE profilingiz tayyor.`, "system"),
         ...current.notifications,
       ],
     }));
   }, []);
+
+  // Partial edits from the profile screen — plate, premium — without the
+  // caller having to rebuild the whole profile.
+  const updateProfile = useCallback((patch: Partial<UserProfile>) => {
+    setState((current) =>
+      current.user ? { ...current, user: { ...current.user, ...patch } } : current,
+    );
+  }, []);
+
+  const setNotificationPref = useCallback(
+    (id: NotificationPrefId, enabled: boolean) => {
+      setState((current) => ({
+        ...current,
+        notificationPrefs: { ...current.notificationPrefs, [id]: enabled },
+      }));
+    },
+    [],
+  );
 
   const logout = useCallback(() => {
     setState((current) => ({ ...current, user: null }));
@@ -547,6 +581,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ...state,
       completeOnboarding,
       login,
+      updateProfile,
+      setNotificationPref,
       logout,
       resetDemo,
       toggleFavorite,
@@ -573,6 +609,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       state,
       completeOnboarding,
       login,
+      updateProfile,
+      setNotificationPref,
       logout,
       resetDemo,
       toggleFavorite,
