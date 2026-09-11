@@ -1,5 +1,6 @@
 'use client'
 
+import { PLACES } from '@/data/places'
 import { useCallback, useEffect, useState } from 'react'
 
 // Saved *places* (City Goo's demo place catalog) — a separate concern from
@@ -12,6 +13,25 @@ import { useCallback, useEffect, useState } from 'react'
 // can disagree with the server-rendered markup. One hook now owns it.
 const STORAGE_KEY = 'citygoo-place-favorites'
 const DEMO_SEED = ['coffee-lab']
+
+// Home wrote the cinema as 'cinema-magic', Favorites looked for
+// 'magic-cinema'. 'cinema-magic' is what is actually sitting in users'
+// storage, so that is the id that survives.
+const RENAMED: Record<string, string> = { 'magic-cinema': 'cinema-magic' }
+
+// A saved id that no longer names a place can never be seen or removed
+// through the UI, so drop it on read rather than letting it accumulate.
+function reconcile(ids: unknown): string[] {
+	if (!Array.isArray(ids)) return []
+	const known = new Set(PLACES.map(place => place.id))
+	const out: string[] = []
+	for (const id of ids) {
+		if (typeof id !== 'string') continue
+		const canonical = RENAMED[id] ?? id
+		if (known.has(canonical) && !out.includes(canonical)) out.push(canonical)
+	}
+	return out
+}
 
 export function usePlaceFavorites() {
 	const [ids, setIds] = useState<string[]>([])
@@ -26,8 +46,10 @@ export function usePlaceFavorites() {
 					setIds(DEMO_SEED)
 					return
 				}
-				const parsed = JSON.parse(raw)
-				setIds(Array.isArray(parsed) ? parsed : [])
+				const reconciled = reconcile(JSON.parse(raw))
+				setIds(reconciled)
+				// Write the cleaned list back so the migration runs once.
+				window.localStorage.setItem(STORAGE_KEY, JSON.stringify(reconciled))
 			} catch {
 				setIds([])
 			}

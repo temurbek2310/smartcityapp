@@ -14,7 +14,6 @@ import {
 	History,
 	Hospital,
 	LocateFixed,
-	Map,
 	MapPin,
 	Mic,
 	Navigation,
@@ -47,23 +46,14 @@ import { usePlaceFavorites } from '@/hooks/use-place-favorites'
 import { useToast } from '@/hooks/use-toast'
 import { CITY_META } from '@/data/city-meta'
 import { PARKINGS } from '@/data/parkings'
+import { PLACES } from '@/data/places'
 import { formatNumber, formatUZS } from '@/lib/format'
+import type { Place, PlaceCategory } from '@/lib/types'
 import { distanceKm } from '@/lib/geo'
 import { TRANSPORT_MODES, type TransportMode } from '@/lib/transport'
 import { useUserLocation, type LocationError } from '@/lib/use-user-location'
 
 type SortMode = 'distance' | 'rating' | 'free'
-type CategoryId =
-	| 'all'
-	| 'food'
-	| 'parking'
-	| 'health'
-	| 'shops'
-	| 'fun'
-	| 'buildings'
-	| 'services'
-	| 'tourism'
-
 type SheetState =
 	| { type: 'city' }
 	| { type: 'weather' }
@@ -79,25 +69,6 @@ type SheetState =
 	| { type: 'events' }
 	| { type: 'recommendations' }
 	| null
-
-type DemoPlace = {
-	id: string
-	title: string
-	category: CategoryId
-	subtitle: string
-	rating: number
-	reviews: number
-	distanceKm: number
-	free?: number
-	total?: number
-	queue?: number
-	busy: number
-	address: string
-	phone: string
-	tags: string[]
-	accent: string
-	parkingId?: string
-}
 
 type ServiceItem = {
 	id: string
@@ -142,7 +113,7 @@ const QUICK_ROUTES = [
 ]
 
 const CATEGORIES: {
-	id: CategoryId | 'transport' | 'queues' | 'more'
+	id: PlaceCategory | 'transport' | 'queues' | 'more'
 	label: string
 	icon: LucideIcon
 	tone: string
@@ -218,170 +189,6 @@ const CATEGORIES: {
 		label: 'Yana',
 		icon: Sparkles,
 		tone: 'bg-slate-100 text-slate-600',
-	},
-]
-
-const DEMO_PLACES: DemoPlace[] = [
-	{
-		id: 'coffee-lab',
-		title: 'Coffee Lab',
-		category: 'food',
-		subtitle: 'Kafe · Yevropa oshxonasi',
-		rating: 4.8,
-		reviews: 1243,
-		distanceKm: 0.3,
-		free: 15,
-		total: 60,
-		queue: 35,
-		busy: 72,
-		address: 'Amir Temur ko‘chasi, 88',
-		phone: '+998 71 200 11 22',
-		tags: ['Wi-Fi', 'Veranda', 'Nonushta'],
-		accent: 'from-amber-700 to-slate-950',
-		parkingId: 'amir-temur',
-	},
-	{
-		id: 'urban-food',
-		title: 'Urban Food',
-		category: 'food',
-		subtitle: 'Restoran · Osiyo oshxonasi',
-		rating: 4.4,
-		reviews: 640,
-		distanceKm: 0.27,
-		free: 6,
-		total: 20,
-		queue: 15,
-		busy: 52,
-		address: 'Sayilgoh ko‘chasi, 3',
-		phone: '+998 71 201 11 22',
-		tags: ['Yetkazib berish', 'Veranda'],
-		accent: 'from-orange-800 to-slate-950',
-		parkingId: 'amir-temur',
-	},
-	{
-		id: 'plov-center',
-		title: 'Plov Center',
-		category: 'food',
-		subtitle: 'Milliy oshxona',
-		rating: 4.9,
-		reviews: 5120,
-		distanceKm: 0.48,
-		free: 20,
-		total: 60,
-		queue: 25,
-		busy: 88,
-		address: 'Iftixor ko‘chasi, 1',
-		phone: '+998 71 201 55 66',
-		tags: ['Parking', 'Banket'],
-		accent: 'from-yellow-800 to-slate-950',
-		parkingId: 'tashkent-city',
-	},
-	{
-		id: 'medical-plaza',
-		title: 'Medical Plaza',
-		category: 'health',
-		subtitle: 'Klinika · Diagnostika',
-		rating: 4.7,
-		reviews: 1120,
-		distanceKm: 0.85,
-		free: 18,
-		total: 50,
-		queue: 30,
-		busy: 66,
-		address: 'Shota Rustaveli ko‘chasi, 15',
-		phone: '+998 71 203 55 66',
-		tags: ['MRT', 'Tahlillar', 'Onlayn yozilish'],
-		accent: 'from-sky-800 to-slate-950',
-		parkingId: 'next-mall',
-	},
-	{
-		id: 'magic-city-place',
-		title: 'Magic City',
-		category: 'shops',
-		subtitle: 'Savdo va ko‘ngilochar markaz',
-		rating: 4.7,
-		reviews: 8420,
-		distanceKm: 1.2,
-		free: 85,
-		total: 250,
-		queue: 8,
-		busy: 64,
-		address: 'Bobur ko‘chasi, Toshkent',
-		phone: '+998 71 200 33 44',
-		tags: ['Parking', 'Kinoteatr', 'Food court'],
-		accent: 'from-indigo-700 to-slate-950',
-		parkingId: 'magic-city',
-	},
-	{
-		id: 'tashkent-city-bc',
-		title: 'Tashkent City BC',
-		category: 'buildings',
-		subtitle: 'A+ klass biznes markaz',
-		rating: 4.8,
-		reviews: 256,
-		distanceKm: 1.2,
-		free: 42,
-		total: 120,
-		busy: 64,
-		address: 'Islom Karimov ko‘chasi, 107',
-		phone: '+998 71 203 11 22',
-		tags: ['Ofislar', 'Kafe', 'Wi-Fi'],
-		accent: 'from-slate-700 to-indigo-950',
-		parkingId: 'tashkent-city',
-	},
-	{
-		id: 'bank-office',
-		title: 'Bank xizmatlari',
-		category: 'services',
-		subtitle: 'Bank · Valyuta ayirboshlash',
-		rating: 4.2,
-		reviews: 340,
-		distanceKm: 0.4,
-		free: 8,
-		total: 20,
-		queue: 22,
-		busy: 74,
-		address: 'Amir Temur ko‘chasi, 60',
-		phone: '+998 71 203 77 88',
-		tags: ['Valyuta', 'Bankomat'],
-		accent: 'from-slate-700 to-slate-950',
-		parkingId: 'amir-temur',
-	},
-	{
-		id: 'history-museum',
-		title: 'Tarix muzeyi',
-		category: 'tourism',
-		subtitle: 'Muzey · Ekskursiyalar',
-		rating: 4.7,
-		reviews: 2100,
-		distanceKm: 1.8,
-		free: 25,
-		total: 40,
-		queue: 10,
-		busy: 35,
-		address: 'Sayilgoh ko‘chasi, 3',
-		phone: '+998 71 204 33 44',
-		tags: ['Ekskursiya', 'Audiogid'],
-		accent: 'from-purple-800 to-slate-950',
-		parkingId: 'amir-temur',
-	},
-	{
-		id: 'cinema-magic',
-		title: 'Magic Cinema',
-		category: 'fun',
-		subtitle: 'Kinoteatr · 8 zal',
-		rating: 4.6,
-		reviews: 2800,
-		distanceKm: 1.2,
-		free: 85,
-		total: 250,
-		queue: 6,
-		busy: 48,
-		address: 'Magic City, 3-qavat',
-		phone: '+998 71 204 55 66',
-		tags: ['IMAX', 'Parking'],
-		accent: 'from-fuchsia-800 to-slate-950',
-		parkingId: 'magic-city',
 	},
 ]
 
@@ -556,7 +363,7 @@ export default function HomePage() {
 		null,
 	)
 	const [transportMode, setTransportMode] = useState<TransportMode>('car')
-	const [activeCategory, setActiveCategory] = useState<CategoryId>('all')
+	const [activeCategory, setActiveCategory] = useState<PlaceCategory>('all')
 	const [sortMode, setSortMode] = useState<SortMode>('distance')
 	const [favoriteOnly, setFavoriteOnly] = useState(false)
 	const placeFavorites = usePlaceFavorites()
@@ -621,7 +428,7 @@ export default function HomePage() {
 	)
 
 	const visiblePlaces = useMemo(() => {
-		let list = DEMO_PLACES.filter(
+		let list = PLACES.filter(
 			place => activeCategory === 'all' || place.category === activeCategory,
 		)
 		if (favoriteOnly)
@@ -697,7 +504,7 @@ export default function HomePage() {
 		}, 60)
 	}
 
-	function chooseCategory(id: CategoryId | 'transport' | 'queues' | 'more') {
+	function chooseCategory(id: PlaceCategory | 'transport' | 'queues' | 'more') {
 		if (id === 'more') {
 			setSheet({ type: 'categories' })
 			return
@@ -726,7 +533,7 @@ export default function HomePage() {
 	}
 
 	function togglePlaceFavorite(placeId: string) {
-		const place = DEMO_PLACES.find(item => item.id === placeId)
+		const place = PLACES.find(item => item.id === placeId)
 		const isFavorite = placeFavorites.has(placeId)
 
 		placeFavorites.toggle(placeId)
@@ -784,7 +591,7 @@ export default function HomePage() {
 		showToast(`${service?.label ?? 'Bron'} tasdiqlandi · ${bookingSlot}`)
 	}
 
-	function sharePlace(place: DemoPlace) {
+	function sharePlace(place: Place) {
 		if (navigator.share) {
 			void navigator
 				.share({ title: place.title, text: place.address })
@@ -813,7 +620,7 @@ export default function HomePage() {
 			)
 		: []
 	const searchPlaces = searchLower
-		? DEMO_PLACES.filter(place =>
+		? PLACES.filter(place =>
 				searchMatches(
 					`${place.title} ${place.subtitle} ${place.address} ${place.tags.join(' ')}`,
 					searchLower,
@@ -986,13 +793,6 @@ export default function HomePage() {
 								className={`size-4 ${status === 'loading' ? 'animate-pulse' : ''}`}
 							/>
 						</button>
-						<Link
-							href='/map'
-							className='grid size-9 place-items-center rounded-xl bg-white text-slate-700 shadow-md ring-1 ring-slate-200'
-							aria-label='To‘liq xarita'
-						>
-							<Map className='size-4' />
-						</Link>
 					</div>
 
 					{selectedParking && (
@@ -1043,13 +843,6 @@ export default function HomePage() {
 							<Navigation className='size-4' />
 							Yo‘nalish
 						</button>
-						<Link
-							href='/map'
-							className='pointer-events-auto inline-flex h-9 items-center gap-2 rounded-xl bg-white px-3 text-xs font-black text-slate-800 shadow-md ring-1 ring-slate-200'
-						>
-							<Map className='size-4 text-violet-600' />
-							To‘liq xarita
-						</Link>
 					</div>
 				</div>
 
@@ -2228,7 +2021,7 @@ export default function HomePage() {
 
 			{sheet?.type === 'place' &&
 				(() => {
-					const place = DEMO_PLACES.find(item => item.id === sheet.placeId)
+					const place = PLACES.find(item => item.id === sheet.placeId)
 					if (!place) return null
 					const favorite = favoritePlaceIds.includes(place.id)
 					const bars = [35, 42, 55, 68, 82, 74, 58, 40]

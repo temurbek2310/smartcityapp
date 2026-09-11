@@ -78,6 +78,14 @@ export function formatDateTime(value: string | number | Date) {
   return `${formatDate(value)}, ${formatTime(value)}`;
 }
 
+// "300 m" under a kilometre, "1,2 km" above it — uz-Latn uses a decimal
+// comma, and formatNumber() already owns the thousands separator.
+export function formatDistance(km: number) {
+  if (!Number.isFinite(km) || km < 0) return "—";
+  if (km < 1) return `${Math.round(km * 1000)} m`;
+  return `${formatNumber(Math.floor(km))},${Math.round((km % 1) * 10)} km`;
+}
+
 export function formatDuration(ms: number) {
   const safe = Math.max(0, ms);
   const totalSeconds = Math.floor(safe / 1000);

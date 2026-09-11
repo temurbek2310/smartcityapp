@@ -64,3 +64,36 @@ export type BSpaceState = {
   reservations: Reservation[];
   notifications: AppNotification[];
 };
+
+// Demo places (cafés, clinics, malls) that Home and Favorites browse. Each
+// one points at a real Parking — the place is the destination, the parking
+// is what actually gets booked.
+export type PlaceCategory =
+  | "all"
+  | "food"
+  | "parking"
+  | "health"
+  | "shops"
+  | "fun"
+  | "buildings"
+  | "services"
+  | "tourism";
+
+export type Place = {
+  id: string;
+  title: string;
+  category: PlaceCategory;
+  subtitle: string;
+  rating: number;
+  reviews: number;
+  distanceKm: number;
+  free?: number;
+  total?: number;
+  queue?: number;
+  busy: number;
+  address: string;
+  phone: string;
+  tags: string[];
+  accent: string;
+  parkingId?: string;
+};

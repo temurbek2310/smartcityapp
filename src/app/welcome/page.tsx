@@ -14,8 +14,10 @@ import {
 	ShieldCheck,
 	Smartphone,
 } from 'lucide-react'
-import { useRouter } from 'next/navigation'
+import { resolveNextPath } from '@/lib/safe-next'
+import { useRouter, useSearchParams } from 'next/navigation'
 import {
+	Suspense,
 	useEffect,
 	useMemo,
 	useRef,
@@ -63,9 +65,21 @@ function normalizeUzPhone(digits: string) {
 	return `+998${digits}`
 }
 
+// useSearchParams() opts the subtree into client-side rendering, so the
+// reader lives behind its own Suspense boundary — the pattern /transport
+// already uses.
 export default function WelcomePage() {
+	return (
+		<Suspense fallback={<LoadingScreen />}>
+			<WelcomeView />
+		</Suspense>
+	)
+}
+
+function WelcomeView() {
 	const router = useRouter()
-	const next = '/home'
+	// AuthGate sends the page the user was actually trying to reach.
+	const next = resolveNextPath(useSearchParams().get('next'))
 	const { hydrated, onboardingDone, user, completeOnboarding, login } = useApp()
 	const [slide, setSlide] = useState(0)
 	const [step, setStep] = useState<'phone' | 'otp' | 'profile'>('phone')

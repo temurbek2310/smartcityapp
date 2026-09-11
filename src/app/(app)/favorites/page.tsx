@@ -28,70 +28,14 @@ import { ParkingBookingSheet } from '@/components/parking/parking-booking-sheet'
 import { Toast } from '@/components/ui/toast'
 import { useApp } from '@/context/app-context'
 import { PARKINGS } from '@/data/parkings'
+import { PLACES } from '@/data/places'
 import { usePlaceFavorites } from '@/hooks/use-place-favorites'
 import { useToast } from '@/hooks/use-toast'
 import { parkingAvailability } from '@/lib/availability'
-import { formatUZS } from '@/lib/format'
+import { formatDistance, formatUZS } from '@/lib/format'
+import type { Place } from '@/lib/types'
 
 type FavoriteTab = 'places' | 'parking' | 'queues' | 'routes' | 'events'
-
-type SavedPlace = {
-	id: string
-	title: string
-	subtitle: string
-	rating: number
-	distance: string
-	accent: string
-	parkingId?: string
-}
-
-const SAVED_PLACE_CATALOG: SavedPlace[] = [
-	{
-		id: 'coffee-lab',
-		title: 'Coffee Lab',
-		subtitle: 'Kafe · Yevropa oshxonasi',
-		rating: 4.8,
-		distance: '300 m',
-		accent: 'from-[#493329] to-[#151922]',
-		parkingId: 'amir-temur',
-	},
-	{
-		id: 'urban-food',
-		title: 'Urban Food',
-		subtitle: 'Restoran · Osiyo oshxonasi',
-		rating: 4.4,
-		distance: '270 m',
-		accent: 'from-[#74402d] to-[#151922]',
-		parkingId: 'amir-temur',
-	},
-	{
-		id: 'plov-center',
-		title: 'Plov Center',
-		subtitle: 'Milliy oshxona',
-		rating: 4.9,
-		distance: '480 m',
-		accent: 'from-[#4a4020] to-[#151922]',
-		parkingId: 'amir-temur',
-	},
-	{
-		id: 'tashkent-city-bc',
-		title: 'Tashkent City BC',
-		subtitle: 'A+ klass biznes markaz',
-		rating: 4.8,
-		distance: '1.2 km',
-		accent: 'from-[#2c3e63] to-[#151922]',
-		parkingId: 'tashkent-city',
-	},
-	{
-		id: 'magic-cinema',
-		title: 'Magic Cinema',
-		subtitle: 'Kinoteatr · 8 zal',
-		rating: 4.6,
-		distance: '1.2 km',
-		accent: 'from-[#64177d] to-[#151922]',
-		parkingId: 'magic-city',
-	},
-]
 
 const TABS: { id: FavoriteTab; label: string }[] = [
 	{ id: 'places', label: 'Joylar' },
@@ -142,7 +86,7 @@ export default function FavoritesPage() {
 
 	const savedPlaces = useMemo(
 		() =>
-			SAVED_PLACE_CATALOG.filter(place => placeFavoriteIds.includes(place.id)),
+			PLACES.filter(place => placeFavoriteIds.includes(place.id)),
 		[placeFavoriteIds],
 	)
 
@@ -469,13 +413,13 @@ function PlaceFavoriteCard({
 	place,
 	onRemove,
 }: {
-	place: SavedPlace
+	place: Place
 	onRemove: () => void
 }) {
 	return (
 		<article className='overflow-hidden rounded-[20px] bg-white shadow-[0_4px_14px_rgba(16,24,40,0.07)] ring-1 ring-[#eaecf2]'>
 			<Link
-				href={place.parkingId ? `/parking/${place.parkingId}` : '/map'}
+				href={place.parkingId ? `/parking/${place.parkingId}` : '/home'}
 				className='flex min-h-23'
 			>
 				<div
@@ -495,7 +439,7 @@ function PlaceFavoriteCard({
 							</p>
 						</div>
 						<span className='shrink-0 text-[10px] text-[#8a91a6]'>
-							{place.distance}
+							{formatDistance(place.distanceKm)}
 						</span>
 					</div>
 
@@ -514,7 +458,7 @@ function PlaceFavoriteCard({
 			<div className='grid grid-cols-2 gap-2 px-3 pb-3'>
 				<Link
 					href={
-						place.parkingId ? `/navigate/parking/${place.parkingId}` : '/map'
+						place.parkingId ? `/navigate/parking/${place.parkingId}` : '/home'
 					}
 					className='flex h-9 items-center justify-center gap-1.5 rounded-[10px] border border-[#e1e4ed] bg-white px-2 text-[11px] font-bold'
 				>

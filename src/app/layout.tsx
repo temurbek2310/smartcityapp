@@ -3,6 +3,7 @@ import type { Metadata, Viewport } from 'next'
 import './globals.css'
 
 import { InstallAppPrompt } from '@/components/pwa/install-app-prompt'
+import { StructuredData } from '@/components/seo/structured-data'
 import { AppProvider } from '@/context/app-context'
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
@@ -145,6 +146,7 @@ export default function RootLayout({
 	return (
 		<html lang='uz'>
 			<body>
+				<StructuredData />
 				<AppProvider>
 					{children}
 
