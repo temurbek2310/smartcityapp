@@ -28,6 +28,7 @@ import { useApp } from '@/context/app-context'
 import { EmptyState } from '@/components/ui/empty-state'
 import { PARKINGS } from '@/data/parkings'
 import { PLACES } from '@/data/places'
+import { QUEUE_ORGS } from '@/data/queue-orgs'
 import { usePlaceFavorites } from '@/hooks/use-place-favorites'
 import { useToast } from '@/hooks/use-toast'
 import { parkingAvailability } from '@/lib/availability'
@@ -56,7 +57,8 @@ function isTab(value: string | null): value is FavoriteTab {
 
 export default function FavoritesPage() {
 	const params = useSearchParams()
-	const { favorites, toggleFavorite } = useApp()
+	const { favorites, toggleFavorite, favoriteQueueOrgs, toggleQueueOrgFavorite } =
+		useApp()
 	const requestedTab = params.get('tab')
 
 	const [tab, setTab] = useState<FavoriteTab>(() =>
@@ -94,10 +96,15 @@ export default function FavoritesPage() {
 		[favorites],
 	)
 
+	const savedQueueOrgs = useMemo(
+		() => QUEUE_ORGS.filter(org => favoriteQueueOrgs.includes(org.id)),
+		[favoriteQueueOrgs],
+	)
+
 	const counts: Record<FavoriteTab, number> = {
 		places: savedPlaces.length,
 		parking: savedParkings.length,
-		queues: 0,
+		queues: savedQueueOrgs.length,
 		routes: 0,
 		events: 0,
 	}
@@ -273,13 +280,60 @@ export default function FavoritesPage() {
 					) : null}
 
 					{tab === 'queues' ? (
-						<EmptyState
-							icon={Users}
-							title='Hozircha bo‘sh'
-							text='Saqlangan elektron navbatlar shu bo‘limda ko‘rinadi.'
-							href='/home'
-							action='Topish'
-						/>
+						<section className='space-y-3'>
+							{savedQueueOrgs.length ? (
+								savedQueueOrgs.map(org => (
+									<article
+										key={org.id}
+										className='flex items-center gap-3 rounded-card-lg bg-card p-3 shadow-card'
+									>
+										<Link
+											href='/queues'
+											className='flex min-w-0 flex-1 items-center gap-3'
+										>
+											<span className='grid size-12 shrink-0 place-items-center rounded-2xl bg-brand-50 text-brand'>
+												<Users className='size-5' />
+											</span>
+											<span className='min-w-0'>
+												<span className='block truncate text-[15px] font-extrabold'>
+													{org.title}
+												</span>
+												<span className='mt-0.5 block truncate text-[11px] text-ink-3'>
+													{org.address} · {org.waiting} kishi
+												</span>
+											</span>
+										</Link>
+										<span
+											className={`shrink-0 rounded-[7px] px-2 py-1 text-[10px] font-extrabold ${
+												org.waitMinutes < 15
+													? 'bg-ok-bg text-ok'
+													: org.waitMinutes < 35
+														? 'bg-warn-bg text-warn'
+														: 'bg-bad-bg text-bad'
+											}`}
+										>
+											{org.waitMinutes} daq
+										</span>
+										<button
+											type='button'
+											aria-label='Olib tashlash'
+											onClick={() => toggleQueueOrgFavorite(org.id)}
+											className='grid size-9 shrink-0 place-items-center rounded-xl bg-card-2 text-bad'
+										>
+											<X className='size-4' />
+										</button>
+									</article>
+								))
+							) : (
+								<EmptyState
+									icon={Users}
+									title='Hozircha bo‘sh'
+									text='Navbat sahifasidagi yurak tugmasi orqali tashkilotlarni saqlang.'
+									href='/queues'
+									action='Navbatlar'
+								/>
+							)}
+						</section>
 					) : null}
 
 					{tab === 'routes' ? (

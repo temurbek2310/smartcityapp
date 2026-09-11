@@ -6,7 +6,13 @@ import { usePathname } from 'next/navigation'
 
 import { useApp } from '@/context/app-context'
 
-const OWN_HEADER = new Set(['/home', '/favorites', '/transport', '/parking'])
+const OWN_HEADER = new Set([
+	'/home',
+	'/favorites',
+	'/transport',
+	'/parking',
+	'/queues',
+])
 
 export function MobileHeader() {
 	const pathname = usePathname()

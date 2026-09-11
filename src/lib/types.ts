@@ -100,7 +100,11 @@ export type QueueTicket = {
   // the pair is what the progress bar needs.
   position: number;
   initialPosition: number;
+  // Current estimate, which walks down to zero as the queue moves — and the
+  // estimate given at issue, which is what the history row reports. Without
+  // the second, a finished ticket claims you waited no time at all.
   etaMinutes: number;
+  initialEtaMinutes: number;
   windowNumber: number;
   notify: boolean;
   status: QueueTicketStatus;

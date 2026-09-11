@@ -421,6 +421,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ...input,
       id: uid("ticket"),
       initialPosition: input.position,
+      initialEtaMinutes: input.etaMinutes,
       status: "waiting",
       createdAt: new Date().toISOString(),
     };

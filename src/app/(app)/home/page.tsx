@@ -451,9 +451,7 @@ export default function HomePage() {
 			return
 		}
 		if (id === 'queues') {
-			setBookingSlot('12:30')
-			setBookingCount(1)
-			setSheet({ type: 'service', serviceId: 'queue' })
+			router.push('/queues')
 			return
 		}
 
@@ -505,6 +503,10 @@ export default function HomePage() {
 	}
 
 	function openService(serviceId: string) {
+		if (serviceId === 'queue') {
+			router.push('/queues')
+			return
+		}
 		if (serviceId === 'parking') {
 			const target = parkingResults.find(
 				({ parking }) => parking.availableSpaces > 0,
