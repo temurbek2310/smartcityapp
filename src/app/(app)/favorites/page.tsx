@@ -1,7 +1,6 @@
 'use client'
 
 import {
-	ChevronRight,
 	CircleParking,
 	Heart,
 	MapPin,
@@ -11,7 +10,6 @@ import {
 	Ticket,
 	Users,
 	X,
-	type LucideIcon,
 } from 'lucide-react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
@@ -27,6 +25,7 @@ import {
 import { ParkingBookingSheet } from '@/components/parking/parking-booking-sheet'
 import { Toast } from '@/components/ui/toast'
 import { useApp } from '@/context/app-context'
+import { EmptyState } from '@/components/ui/empty-state'
 import { PARKINGS } from '@/data/parkings'
 import { PLACES } from '@/data/places'
 import { usePlaceFavorites } from '@/hooks/use-place-favorites'
@@ -476,34 +475,3 @@ function PlaceFavoriteCard({
 	)
 }
 
-function EmptyState({
-	icon: Icon,
-	title,
-	text,
-	href,
-	action,
-}: {
-	icon: LucideIcon
-	title: string
-	text: string
-	href: string
-	action: string
-}) {
-	return (
-		<div className='mt-3 rounded-[18px] bg-white px-5 py-7 text-center shadow-[0_4px_14px_rgba(16,24,40,0.06)] ring-1 ring-[#eaecf2]'>
-			<span className='mx-auto grid size-11 place-items-center rounded-[13px] bg-[#f5f1ff] text-[#6c47e0]'>
-				<Icon className='size-5' />
-			</span>
-			<h2 className='mt-3 text-[14px] font-extrabold'>{title}</h2>
-			<p className='mx-auto mt-2 max-w-67.5 text-[12px] leading-5 text-[#8a91a6]'>
-				{text}
-			</p>
-			<Link
-				href={href}
-				className='mt-4 inline-flex h-9 items-center gap-1.5 rounded-[10px] bg-[#6c47e0] px-4 text-[12px] font-extrabold text-white'
-			>
-				{action} <ChevronRight className='size-3.5' />
-			</Link>
-		</div>
-	)
-}

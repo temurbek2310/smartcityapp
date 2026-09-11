@@ -1,5 +1,66 @@
 @import "tailwindcss";
 
+/* City Goo's :root, ported onto Tailwind 4's theme system.
+ *
+ * A token only mints utilities if its first segment names a Tailwind
+ * namespace (--color-*, --radius-*, --shadow-*, --font-*, --text-*, ...),
+ * and reusing a name Tailwind already ships silently redefines every
+ * existing use of it. City Goo's --r-lg is 18px where Tailwind's
+ * rounded-lg is 8px, so the radii and shadows below take their own names
+ * rather than re-rounding 4,500 lines of existing markup. Every colour
+ * name here is new, so nothing is overridden.
+ *
+ * Font weights are deliberately absent: City Goo uses 650 and 750, which
+ * Tailwind has no scale step for, and --font-* / --font-weight-* both mint
+ * `font-x` utilities and would collide. Use font-[750] instead. */
+@theme {
+  --color-brand: #6c47e0;
+  --color-brand-600: #5b37cc;
+  --color-brand-100: #ede7fe;
+  --color-brand-50: #f5f1ff;
+
+  --color-canvas: #f3f4f8;
+  --color-card: #ffffff;
+  --color-card-2: #f7f8fc;
+  --color-line: #eaecf2;
+  --color-line-2: #e1e4ed;
+
+  --color-ink: #0f172a;
+  --color-ink-2: #475069;
+  --color-ink-3: #8a91a6;
+
+  --color-ok: #12b76a;
+  --color-ok-bg: #e7f8f0;
+  --color-warn: #f79009;
+  --color-warn-bg: #fef4e5;
+  --color-bad: #f04438;
+  --color-bad-bg: #feecea;
+  --color-info: #2e90fa;
+  --color-info-bg: #e8f2fe;
+  /* Fourth occupancy band, between warn and bad — City Goo's loadColor(). */
+  --color-load-high: #f97316;
+  --color-star: #fdb022;
+
+  --radius-card: 14px;
+  --radius-card-lg: 18px;
+  --radius-card-xl: 24px;
+  --radius-sheet: 26px;
+
+  --shadow-card: 0 1px 2px rgb(16 24 40 / .04), 0 4px 14px rgb(16 24 40 / .06);
+  --shadow-sheet: 0 8px 30px rgb(16 24 40 / .16);
+
+  --spacing-nav: 76px;
+}
+
+/* next/font defines these on <html>, so they resolve at use site rather
+ * than being inlined — which is what `inline` is for. */
+@theme inline {
+  --font-sans: var(--font-inter), "SF Pro Display", -apple-system,
+    BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: var(--font-mono-face), ui-monospace, "SF Mono", "Roboto Mono",
+    monospace;
+}
+
 :root {
   --background: #e2e8f0;
   --foreground: #0f172a;
@@ -11,11 +72,11 @@ body {
   margin: 0;
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
 }
 button, a, input, select { -webkit-tap-highlight-color: transparent; }
 button, a { touch-action: manipulation; }
-.maplibregl-map { font-family: Arial, Helvetica, sans-serif; }
+.maplibregl-map { font-family: var(--font-sans); }
 .maplibregl-ctrl-bottom-left, .maplibregl-ctrl-bottom-right { font-size: 9px; }
 
 @keyframes slide-up {

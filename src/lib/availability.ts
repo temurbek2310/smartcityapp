@@ -39,3 +39,14 @@ export function parkingAvailability(parking: Parking): ParkingAvailability {
 
 	return { percent, full, tone }
 }
+
+// The inverse reading of the same number: how *loaded* a place is, banded
+// the way City Goo's loadColor() does. parkingAvailability() above answers
+// "can I park here" from free spaces; this answers "how busy is this hour"
+// from an occupancy percentage, and drives both forecast bar charts.
+export function occupancyTone(percent: number) {
+	if (percent < 40) return 'bg-ok'
+	if (percent < 70) return 'bg-warn'
+	if (percent < 90) return 'bg-load-high'
+	return 'bg-bad'
+}

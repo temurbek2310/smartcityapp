@@ -1,10 +1,31 @@
 import 'maplibre-gl/dist/maplibre-gl.css'
 import type { Metadata, Viewport } from 'next'
+import { Inter, JetBrains_Mono } from 'next/font/google'
 import './globals.css'
 
 import { InstallAppPrompt } from '@/components/pwa/install-app-prompt'
 import { StructuredData } from '@/components/seo/structured-data'
 import { AppProvider } from '@/context/app-context'
+
+// City Goo's typeface. next/font self-hosts the files, so there is no
+// request to Google at runtime and nothing for the service worker to miss.
+//
+// `latin` is the right subset even though the copy is Uzbek: Uzbek Latin
+// needs U+02BB (the turned comma in "soʻm", "boʻsh"), which Google includes
+// in the latin subset. Cyrillic would ship weight this app never renders.
+const inter = Inter({
+	subsets: ['latin'],
+	variable: '--font-inter',
+	display: 'swap',
+})
+
+// Reserved for the things that are read as codes rather than prose: the
+// session countdown, plates, reservation and booking ids, bay numbers.
+const mono = JetBrains_Mono({
+	subsets: ['latin'],
+	variable: '--font-mono-face',
+	display: 'swap',
+})
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
 
@@ -144,7 +165,7 @@ export default function RootLayout({
 	children: React.ReactNode
 }>) {
 	return (
-		<html lang='uz'>
+		<html lang='uz' className={`${inter.variable} ${mono.variable}`}>
 			<body>
 				<StructuredData />
 				<AppProvider>

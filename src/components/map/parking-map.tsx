@@ -195,7 +195,7 @@ export function ParkingMap({
         border: 3px solid #ffffff;
         background: ${markerColor};
         color: #ffffff;
-        font: 800 12px/1 Arial, Helvetica, sans-serif;
+        font: 800 12px/1 var(--font-sans);
         box-sizing: border-box;
         box-shadow: ${
 					selected
