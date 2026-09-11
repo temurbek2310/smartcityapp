@@ -3,15 +3,17 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useState } from "react";
-import { BatteryCharging, Camera, Car, Clock3, Heart, MapPin, Navigation, ShieldCheck, Umbrella } from "lucide-react";
+import { BatteryCharging, Bike, Camera, Car, Clock3, Droplets, Heart, MapPin, Navigation, Shield, ShieldCheck, Umbrella } from "lucide-react";
 import { ParkingBookingSheet } from "@/components/parking/parking-booking-sheet";
 import { Toast } from "@/components/ui/toast";
 import { PARKINGS, getParking } from "@/data/parkings";
 import { useApp } from "@/context/app-context";
 import { useToast } from "@/hooks/use-toast";
 import { formatUZS } from "@/lib/format";
+import type { ParkingAmenity } from "@/lib/types";
+import type { LucideIcon } from "lucide-react";
 
-const amenityIcons = { CCTV: Camera, "EV Charging": BatteryCharging, Valet: Car, Covered: Umbrella, Accessible: ShieldCheck } as const;
+const amenityIcons: Record<ParkingAmenity, LucideIcon> = { CCTV: Camera, "EV Charging": BatteryCharging, Valet: Car, Covered: Umbrella, Accessible: ShieldCheck, Security: Shield, "Bike Parking": Bike, "Car Wash": Droplets };
 
 export default function ParkingDetailPage() {
   const params = useParams<{ id: string }>();

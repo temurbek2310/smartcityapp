@@ -12,7 +12,11 @@ import {
 import type {
   AppNotification,
   BSpaceState,
+  QueueTicket,
   Reservation,
+  SavedRoute,
+  ServiceBooking,
+  ServiceBookingKind,
   UserProfile,
 } from "@/lib/types";
 import { calculateFinalTotal } from "@/lib/reservation";
@@ -24,7 +28,12 @@ const initialState: BSpaceState = {
   onboardingDone: false,
   user: null,
   favorites: [],
+  favoriteQueueOrgs: [],
+  favoriteEvents: [],
+  savedRoutes: [],
   reservations: [],
+  queueTickets: [],
+  serviceBookings: [],
   notifications: [
     {
       id: "full-parking-demo",
@@ -52,6 +61,24 @@ type CreateReservationInput = {
   pricePerHour: number;
 };
 
+type TakeQueueTicketInput = {
+  orgId: string;
+  serviceId: string;
+  number: string;
+  position: number;
+  etaMinutes: number;
+  windowNumber: number;
+  notify: boolean;
+};
+
+type CreateServiceBookingInput = {
+  kind: ServiceBookingKind;
+  refId: string;
+  title: string;
+  subtitle: string;
+  whenLabel: string;
+};
+
 type AppContextValue = BSpaceState & {
   completeOnboarding: () => void;
   login: (profile: UserProfile) => void;
@@ -66,6 +93,19 @@ type AppContextValue = BSpaceState & {
   markNotificationRead: (notificationId: string) => void;
   markAllNotificationsRead: () => void;
   unreadCount: number;
+
+  toggleQueueOrgFavorite: (orgId: string) => void;
+  toggleEventFavorite: (eventId: string) => void;
+  saveRoute: (route: Omit<SavedRoute, "id" | "createdAt">) => SavedRoute;
+  removeRoute: (routeId: string) => void;
+
+  takeQueueTicket: (input: TakeQueueTicketInput) => QueueTicket;
+  advanceQueueTicket: (ticketId: string) => void;
+  completeQueueTicket: (ticketId: string) => void;
+  cancelQueueTicket: (ticketId: string) => void;
+
+  createServiceBooking: (input: CreateServiceBookingInput) => ServiceBooking;
+  cancelServiceBooking: (bookingId: string) => void;
 };
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -94,7 +134,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       try {
         const saved = localStorage.getItem(STORAGE_KEY);
         if (saved) {
-          const parsed = JSON.parse(saved) as Omit<BSpaceState, "hydrated">;
+          const parsed = JSON.parse(saved) as Partial<Omit<BSpaceState, "hydrated">>;
+          // A blob written before the booking registry existed simply has no
+          // key for these, and the spread leaves the empty defaults in place.
           setState({ ...initialState, ...parsed, hydrated: true });
         } else {
           setState((current) => ({ ...current, hydrated: true }));
@@ -113,7 +155,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       onboardingDone: state.onboardingDone,
       user: state.user,
       favorites: state.favorites,
+      favoriteQueueOrgs: state.favoriteQueueOrgs,
+      favoriteEvents: state.favoriteEvents,
+      savedRoutes: state.savedRoutes,
       reservations: state.reservations,
+      queueTickets: state.queueTickets,
+      serviceBookings: state.serviceBookings,
       notifications: state.notifications,
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));
@@ -327,6 +374,157 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return completed;
   }, []);
 
+  // Each Favorites tab owns its own list so emptying one leaves the rest.
+  const toggleQueueOrgFavorite = useCallback((orgId: string) => {
+    setState((current) => ({
+      ...current,
+      favoriteQueueOrgs: current.favoriteQueueOrgs.includes(orgId)
+        ? current.favoriteQueueOrgs.filter((id) => id !== orgId)
+        : [...current.favoriteQueueOrgs, orgId],
+    }));
+  }, []);
+
+  const toggleEventFavorite = useCallback((eventId: string) => {
+    setState((current) => ({
+      ...current,
+      favoriteEvents: current.favoriteEvents.includes(eventId)
+        ? current.favoriteEvents.filter((id) => id !== eventId)
+        : [...current.favoriteEvents, eventId],
+    }));
+  }, []);
+
+  const saveRoute = useCallback((route: Omit<SavedRoute, "id" | "createdAt">) => {
+    const saved: SavedRoute = { ...route, id: uid("route"), createdAt: new Date().toISOString() };
+    setState((current) => ({
+      ...current,
+      // Endpoints identify a route; saving the same pair twice would give
+      // the tab two rows that replay identically.
+      savedRoutes: [
+        saved,
+        ...current.savedRoutes.filter(
+          (item) => !(item.from === route.from && item.to === route.to && item.mode === route.mode),
+        ),
+      ],
+    }));
+    return saved;
+  }, []);
+
+  const removeRoute = useCallback((routeId: string) => {
+    setState((current) => ({
+      ...current,
+      savedRoutes: current.savedRoutes.filter((route) => route.id !== routeId),
+    }));
+  }, []);
+
+  const takeQueueTicket = useCallback((input: TakeQueueTicketInput) => {
+    const ticket: QueueTicket = {
+      ...input,
+      id: uid("ticket"),
+      initialPosition: input.position,
+      status: "waiting",
+      createdAt: new Date().toISOString(),
+    };
+    setState((current) => ({
+      ...current,
+      queueTickets: [ticket, ...current.queueTickets],
+      notifications: [
+        makeNotification(
+          "Navbatga yozildingiz",
+          `Talon ${ticket.number} · taxminan ${ticket.etaMinutes} daqiqa.`,
+          "queue",
+        ),
+        ...current.notifications,
+      ],
+    }));
+    return ticket;
+  }, []);
+
+  // Demo: the queue only moves when the user asks it to. A real feed would
+  // push this instead.
+  const advanceQueueTicket = useCallback((ticketId: string) => {
+    setState((current) => {
+      let called = false;
+      const queueTickets = current.queueTickets.map((ticket) => {
+        if (ticket.id !== ticketId || ticket.status !== "waiting") return ticket;
+        const step = 1 + Math.floor(Math.random() * 2);
+        const position = Math.max(0, ticket.position - step);
+        called = position === 0;
+        return {
+          ...ticket,
+          position,
+          etaMinutes: position * 3,
+          status: called ? ("called" as const) : ticket.status,
+        };
+      });
+
+      return {
+        ...current,
+        queueTickets,
+        notifications: called
+          ? [
+              makeNotification("Navbatingiz keldi", "Ko‘rsatilgan oynaga yaqinlashing.", "queue"),
+              ...current.notifications,
+            ]
+          : current.notifications,
+      };
+    });
+  }, []);
+
+  const closeQueueTicket = useCallback(
+    (ticketId: string, status: "served" | "cancelled") => {
+      setState((current) => ({
+        ...current,
+        queueTickets: current.queueTickets.map((ticket) =>
+          ticket.id === ticketId && (ticket.status === "waiting" || ticket.status === "called")
+            ? { ...ticket, status, closedAt: new Date().toISOString() }
+            : ticket,
+        ),
+      }));
+    },
+    [],
+  );
+
+  const completeQueueTicket = useCallback(
+    (ticketId: string) => closeQueueTicket(ticketId, "served"),
+    [closeQueueTicket],
+  );
+
+  const cancelQueueTicket = useCallback(
+    (ticketId: string) => closeQueueTicket(ticketId, "cancelled"),
+    [closeQueueTicket],
+  );
+
+  const createServiceBooking = useCallback((input: CreateServiceBookingInput) => {
+    const prefix = { table: "TB", cinema: "CN", clinic: "CL", event: "EV" }[input.kind];
+    const booking: ServiceBooking = {
+      ...input,
+      id: uid("booking"),
+      code: `${prefix}-${Math.floor(1000 + Math.random() * 8999)}`,
+      status: "active",
+      createdAt: new Date().toISOString(),
+    };
+    setState((current) => ({
+      ...current,
+      serviceBookings: [booking, ...current.serviceBookings],
+      notifications: [
+        makeNotification("Bron tasdiqlandi", `${booking.title} · ${booking.code}`, "booking"),
+        ...current.notifications,
+      ],
+    }));
+    return booking;
+  }, []);
+
+  const cancelServiceBooking = useCallback((bookingId: string) => {
+    setState((current) => ({
+      ...current,
+      serviceBookings: current.serviceBookings.map((booking) =>
+        booking.id === bookingId && booking.status === "active"
+          ? { ...booking, status: "cancelled" as const }
+          : booking,
+      ),
+    }));
+  }, []);
+
   const markNotificationRead = useCallback((notificationId: string) => {
     setState((current) => ({
       ...current,
@@ -359,6 +557,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
       markNotificationRead,
       markAllNotificationsRead,
       unreadCount: state.notifications.filter((notification) => !notification.read).length,
+      toggleQueueOrgFavorite,
+      toggleEventFavorite,
+      saveRoute,
+      removeRoute,
+      takeQueueTicket,
+      advanceQueueTicket,
+      completeQueueTicket,
+      cancelQueueTicket,
+      createServiceBooking,
+      cancelServiceBooking,
     }),
     [
       state,
@@ -374,6 +582,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
       exitReservation,
       markNotificationRead,
       markAllNotificationsRead,
+      toggleQueueOrgFavorite,
+      toggleEventFavorite,
+      saveRoute,
+      removeRoute,
+      takeQueueTicket,
+      advanceQueueTicket,
+      completeQueueTicket,
+      cancelQueueTicket,
+      createServiceBooking,
+      cancelServiceBooking,
     ],
   );
 

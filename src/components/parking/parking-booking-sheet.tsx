@@ -252,7 +252,7 @@ function ParkingBookingSheetBody({
 
 	const total = parking.pricePerHour * booking.hours
 	const arrival = booking.slot === 'Hozir' ? booking.nowLabel : booking.slot
-	const hasAnpr = parking.amenities.includes('CCTV')
+	const hasAnpr = parking.plateRecognition
 
 	return (
 		<BottomSheet title='Parkingni bron qilish' onClose={onClose}>
