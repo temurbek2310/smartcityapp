@@ -26,12 +26,12 @@ export function TransportModeSelector({
 						onClick={() => onSelect(mode.id)}
 						className={`flex h-11 shrink-0 items-center gap-2 rounded-2xl px-4 text-[13.5px] font-bold transition ${
 							active
-								? 'bg-[#6c47e0] text-white shadow-[0_6px_16px_rgba(108,71,224,.28)]'
-								: 'bg-white text-slate-800 shadow-[0_1px_2px_rgba(16,24,40,.04),0_4px_14px_rgba(16,24,40,.06)]'
+								? 'bg-brand text-white shadow-[0_6px_16px_rgba(108,71,224,.28)]'
+								: 'bg-white text-slate-800 shadow-card'
 						}`}
 					>
 						<Icon className='size-4.5' />
-						{mode.label} · {minutesByMode[mode.id]} min
+						{mode.label} · {minutesByMode[mode.id]} daq
 					</button>
 				)
 			})}

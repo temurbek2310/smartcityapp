@@ -29,14 +29,14 @@ export function RouteTimeline({ steps, navigateHref }: RouteTimelineProps) {
 					href={navigateHref}
 					target='_blank'
 					rel='noreferrer'
-					className='inline-flex items-center gap-1 text-[12.5px] font-bold text-[#6c47e0]'
+					className='inline-flex items-center gap-1 text-[12.5px] font-bold text-brand'
 				>
 					Yo‘lga chiqish
 					<ExternalLink className='size-3.5' />
 				</a>
 			</div>
 
-			<div className='mt-2.5 rounded-[20px] bg-white p-3.5 shadow-[0_1px_2px_rgba(16,24,40,.04),0_4px_14px_rgba(16,24,40,.06)]'>
+			<div className='mt-2.5 rounded-[20px] bg-white p-3.5 shadow-card'>
 				{steps.map((step, index) => {
 					const Icon = step.icon
 					const isLast = index === steps.length - 1
@@ -50,7 +50,7 @@ export function RouteTimeline({ steps, navigateHref }: RouteTimelineProps) {
 									<Icon className='size-4' />
 								</span>
 								{!isLast && (
-									<span className='my-0.5 w-0.5 flex-1 bg-[#eaecf2]' />
+									<span className='my-0.5 w-0.5 flex-1 bg-line' />
 								)}
 							</div>
 
@@ -59,11 +59,11 @@ export function RouteTimeline({ steps, navigateHref }: RouteTimelineProps) {
 									<p className='text-[14px] font-extrabold text-slate-950'>
 										{step.title}
 									</p>
-									<span className='shrink-0 pt-0.5 text-[11.5px] font-semibold text-[#8a91a6]'>
+									<span className='shrink-0 pt-0.5 text-[11.5px] font-semibold text-ink-3'>
 										{step.distanceLabel}
 									</span>
 								</div>
-								<p className='mt-0.5 text-[12.5px] text-[#8a91a6]'>
+								<p className='mt-0.5 text-[12.5px] text-ink-3'>
 									{step.subtitle}
 								</p>
 								{step.note && (

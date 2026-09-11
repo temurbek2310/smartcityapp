@@ -41,15 +41,15 @@ export function AlternativeRoutes({
 							key={route.title}
 							type='button'
 							onClick={() => onSelect(index)}
-							className={`flex w-full items-start gap-3 rounded-[18px] bg-white p-3.5 text-left shadow-[0_1px_2px_rgba(16,24,40,.04),0_4px_14px_rgba(16,24,40,.06)] ring-2 ${
-								selected ? 'ring-[#6c47e0]' : 'ring-transparent'
+							className={`flex w-full items-start gap-3 rounded-[18px] bg-white p-3.5 text-left shadow-card ring-2 ${
+								selected ? 'ring-brand' : 'ring-transparent'
 							}`}
 						>
 							<span
 								className={`grid size-9 shrink-0 place-items-center rounded-[13px] text-[13px] font-black ${
 									selected
-										? 'bg-[#6c47e0] text-white'
-										: 'bg-[#f7f8fc] text-slate-500'
+										? 'bg-brand text-white'
+										: 'bg-card-2 text-slate-500'
 								}`}
 							>
 								{index + 1}
@@ -61,23 +61,23 @@ export function AlternativeRoutes({
 										{route.title}
 									</p>
 									{route.best && (
-										<span className='shrink-0 rounded-full bg-[#e7f8f0] px-2 py-0.5 text-[10px] font-extrabold text-emerald-700'>
+										<span className='shrink-0 rounded-full bg-ok-bg px-2 py-0.5 text-[10px] font-extrabold text-emerald-700'>
 											Tezroq
 										</span>
 									)}
 								</div>
 								<div className='mt-1 flex items-center gap-2 text-[12.5px]'>
-									<span className='text-[#8a91a6]'>
+									<span className='text-ink-3'>
 										{route.distanceKm.toFixed(1)} km
 									</span>
 									<span className={`font-extrabold ${TONE_TEXT[route.trafficTone]}`}>
-										{route.minutes} min
+										{route.minutes} daq
 									</span>
 								</div>
 								<p className={`mt-0.5 text-[12px] font-semibold ${TONE_TEXT[route.trafficTone]}`}>
 									{route.trafficLabel}
 								</p>
-								<p className='mt-1 text-[11.5px] text-[#8a91a6]'>{route.note}</p>
+								<p className='mt-1 text-[11.5px] text-ink-3'>{route.note}</p>
 							</div>
 						</button>
 					)

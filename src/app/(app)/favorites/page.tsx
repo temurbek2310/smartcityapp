@@ -116,7 +116,7 @@ export default function FavoritesPage() {
 	}
 
 	return (
-		<main className='min-h-[calc(100dvh-76px)] bg-[#f3f4f8] pb-28 pt-5 text-slate-950'>
+		<main className='min-h-[calc(100dvh-76px)] bg-canvas pb-28 pt-5 text-slate-950'>
 			<div className='mx-auto w-full max-w-md'>
 				<header className='px-4'>
 					<div className='flex items-start justify-between gap-4'>
@@ -124,14 +124,14 @@ export default function FavoritesPage() {
 							<h1 className='text-[25px] font-black tracking-[-0.04em]'>
 								Sevimlilar
 							</h1>
-							<p className='mt-2 text-[13px] leading-5 text-[#8a91a6]'>
+							<p className='mt-2 text-[13px] leading-5 text-ink-3'>
 								Saqlangan joylar, parkinglar va marshrutlar
 							</p>
 						</div>
 
 						<button
 							type='button'
-							className='grid size-12 shrink-0 place-items-center rounded-[15px] bg-white text-slate-700 shadow-[0_7px_22px_rgba(15,23,42,0.08)] ring-1 ring-[#eaecf2] active:scale-[0.97]'
+							className='grid size-12 shrink-0 place-items-center rounded-[15px] bg-white text-slate-700 shadow-[0_7px_22px_rgba(15,23,42,0.08)] ring-1 ring-line active:scale-[0.97]'
 							aria-label='Sevimlilar menyusi'
 						>
 							<span className='-translate-y-0.5 text-[22px] leading-none'>
@@ -178,7 +178,7 @@ export default function FavoritesPage() {
 									return (
 										<article
 											key={parking.id}
-											className='overflow-hidden rounded-[20px] bg-white shadow-[0_1px_2px_rgba(16,24,40,.04),0_4px_14px_rgba(16,24,40,.06)] ring-1 ring-[#eaecf2]'
+											className='overflow-hidden rounded-[20px] bg-white shadow-card ring-1 ring-line'
 										>
 
 											<Link
@@ -200,11 +200,11 @@ export default function FavoritesPage() {
 															<h2 className='line-clamp-2 text-[15px] font-extrabold leading-[19px]'>
 																{parking.name}
 															</h2>
-															<p className='mt-1 truncate text-[11px] leading-4 text-[#8a91a6]'>
+															<p className='mt-1 truncate text-[11px] leading-4 text-ink-3'>
 																{parking.address}
 															</p>
 														</div>
-														<span className='shrink-0 text-[10.5px] leading-[19px] text-[#8a91a6]'>
+														<span className='shrink-0 text-[10.5px] leading-[19px] text-ink-3'>
 															{parking.city}
 														</span>
 													</div>
@@ -221,7 +221,7 @@ export default function FavoritesPage() {
 														</span>
 													</div>
 
-													<div className='mt-2.5 h-[7px] overflow-hidden rounded-full bg-[#eaecf2]'>
+													<div className='mt-2.5 h-[7px] overflow-hidden rounded-full bg-line'>
 														<span
 															className={`block h-full rounded-full transition-[width] duration-400 ${tone.bar}`}
 															style={{ width: `${freePercent}%` }}
@@ -233,7 +233,7 @@ export default function FavoritesPage() {
 											<div className='flex items-center gap-2 px-4 pb-4'>
 												<Link
 													href={`/navigate/parking/${parking.id}`}
-													className='flex h-[34px] min-w-0 flex-1 items-center justify-center gap-[7px] whitespace-nowrap rounded-[9px] border-[1.5px] border-[#e1e4ed] bg-white px-2.5 text-[12px] font-bold active:scale-[0.975]'
+													className='flex h-[34px] min-w-0 flex-1 items-center justify-center gap-[7px] whitespace-nowrap rounded-[9px] border-[1.5px] border-line-2 bg-white px-2.5 text-[12px] font-bold active:scale-[0.975]'
 												>
 													<Navigation className='size-3.5 shrink-0' />
 													Yo‘nalish
@@ -241,14 +241,14 @@ export default function FavoritesPage() {
 												<button
 													type='button'
 													onClick={() => setBookingParkingId(parking.id)}
-													className='flex h-[34px] min-w-0 flex-[1.15] items-center justify-center whitespace-nowrap rounded-[9px] bg-[#6c47e0] px-2.5 text-[12px] font-extrabold text-white shadow-[0_6px_16px_rgba(108,71,224,.28)] active:scale-[0.975]'
+													className='flex h-[34px] min-w-0 flex-[1.15] items-center justify-center whitespace-nowrap rounded-[9px] bg-brand px-2.5 text-[12px] font-extrabold text-white shadow-[0_6px_16px_rgba(108,71,224,.28)] active:scale-[0.975]'
 												>
 													Bron qilish
 												</button>
 												<button
 													type='button'
 													onClick={() => toggleFavorite(parking.id)}
-													className='grid size-[34px] shrink-0 place-items-center rounded-[9px] bg-[#f7f8fc] text-rose-500 active:scale-[0.975]'
+													className='grid size-[34px] shrink-0 place-items-center rounded-[9px] bg-card-2 text-rose-500 active:scale-[0.975]'
 													aria-label={`${parking.name}ni sevimlilardan olib tashlash`}
 												>
 													<X className='size-4' />
@@ -396,8 +396,8 @@ function FavoriteTabs({
 						}}
 						className={`h-9 shrink-0 rounded-[11px] px-3.5 text-[12px] font-bold transition active:scale-[0.98] ${
 							tab === item.id
-								? 'bg-[#6c47e0] text-white shadow-[0_5px_14px_rgba(108,71,224,0.22)]'
-								: 'border border-[#e1e4ed] bg-white text-[#475069]'
+								? 'bg-brand text-white shadow-[0_5px_14px_rgba(108,71,224,0.22)]'
+								: 'border border-line-2 bg-white text-ink-2'
 						}`}
 					>
 						{item.label} · {counts[item.id]}
@@ -416,7 +416,7 @@ function PlaceFavoriteCard({
 	onRemove: () => void
 }) {
 	return (
-		<article className='overflow-hidden rounded-[20px] bg-white shadow-[0_4px_14px_rgba(16,24,40,0.07)] ring-1 ring-[#eaecf2]'>
+		<article className='overflow-hidden rounded-[20px] bg-white shadow-[0_4px_14px_rgba(16,24,40,0.07)] ring-1 ring-line'>
 			<Link
 				href={place.parkingId ? `/parking/${place.parkingId}` : '/home'}
 				className='flex min-h-23'
@@ -433,21 +433,21 @@ function PlaceFavoriteCard({
 							<h2 className='truncate text-[15px] font-extrabold'>
 								{place.title}
 							</h2>
-							<p className='mt-1 truncate text-[11px] text-[#8a91a6]'>
+							<p className='mt-1 truncate text-[11px] text-ink-3'>
 								{place.subtitle}
 							</p>
 						</div>
-						<span className='shrink-0 text-[10px] text-[#8a91a6]'>
+						<span className='shrink-0 text-[10px] text-ink-3'>
 							{formatDistance(place.distanceKm)}
 						</span>
 					</div>
 
 					<div className='mt-2.5 flex items-center gap-2'>
 						<span className='flex items-center gap-1 text-[12px] font-bold'>
-							<Star className='size-3.5 fill-[#fdb022] text-[#fdb022]' />{' '}
+							<Star className='size-3.5 fill-star text-star' />{' '}
 							{place.rating}
 						</span>
-						<span className='rounded-[7px] bg-[#e7f8f0] px-2 py-1 text-[10px] font-extrabold text-[#12b76a]'>
+						<span className='rounded-[7px] bg-ok-bg px-2 py-1 text-[10px] font-extrabold text-ok'>
 							Ochiq
 						</span>
 					</div>
@@ -459,14 +459,14 @@ function PlaceFavoriteCard({
 					href={
 						place.parkingId ? `/navigate/parking/${place.parkingId}` : '/home'
 					}
-					className='flex h-9 items-center justify-center gap-1.5 rounded-[10px] border border-[#e1e4ed] bg-white px-2 text-[11px] font-bold'
+					className='flex h-9 items-center justify-center gap-1.5 rounded-[10px] border border-line-2 bg-white px-2 text-[11px] font-bold'
 				>
 					<Navigation className='size-3.5' /> Yo‘nalish
 				</Link>
 				<button
 					type='button'
 					onClick={onRemove}
-					className='flex h-9 items-center justify-center gap-1.5 rounded-[10px] border border-[#e1e4ed] bg-white px-2 text-[11px] font-bold active:scale-[0.98]'
+					className='flex h-9 items-center justify-center gap-1.5 rounded-[10px] border border-line-2 bg-white px-2 text-[11px] font-bold active:scale-[0.98]'
 				>
 					<Heart className='size-3.5 text-rose-500' /> Olib tashlash
 				</button>

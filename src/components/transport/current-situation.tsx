@@ -26,7 +26,7 @@ function Row({
 }) {
 	const [expanded, setExpanded] = useState(false)
 	return (
-		<div className='border-t border-[#eaecf2] first:border-t-0'>
+		<div className='border-t border-line first:border-t-0'>
 			<button
 				type='button'
 				onClick={() => setExpanded(current => !current)}
@@ -39,10 +39,10 @@ function Row({
 				<span className={`shrink-0 text-[13.5px] font-extrabold ${TONE_TEXT[tone]}`}>
 					{value}
 				</span>
-				<ChevronRight className='size-4 shrink-0 text-[#8a91a6]' />
+				<ChevronRight className='size-4 shrink-0 text-ink-3' />
 			</button>
 			{expanded && (
-				<p className='px-3.5 pb-3 text-[11.5px] leading-5 text-[#8a91a6]'>
+				<p className='px-3.5 pb-3 text-[11.5px] leading-5 text-ink-3'>
 					{detail}
 				</p>
 			)}
@@ -76,14 +76,14 @@ export function CurrentSituation({
 				<button
 					type='button'
 					onClick={onRefresh}
-					className='inline-flex items-center gap-1 text-[12.5px] font-bold text-[#6c47e0]'
+					className='inline-flex items-center gap-1 text-[12.5px] font-bold text-brand'
 				>
 					<RefreshCw className={`size-3.5 ${refreshing ? 'animate-spin' : ''}`} />
 					Yangilash
 				</button>
 			</div>
 
-			<div className='mt-2.5 overflow-hidden rounded-[20px] bg-white shadow-[0_1px_2px_rgba(16,24,40,.04),0_4px_14px_rgba(16,24,40,.06)]'>
+			<div className='mt-2.5 overflow-hidden rounded-[20px] bg-white shadow-card'>
 				{rows.map(row => (
 					<Row
 						key={row.label}
@@ -103,7 +103,7 @@ export function CurrentSituation({
 				/>
 			</div>
 
-			<p className='mt-1.5 px-1 text-[10.5px] text-[#8a91a6]'>
+			<p className='mt-1.5 px-1 text-[10.5px] text-ink-3'>
 				Tirbandlik, HTH va yopiq yo‘llar — namunaviy ma’lumot. Ob-havo B SPACE
 				ilovasining shahar bo‘yicha statik ma’lumotidan olindi.
 			</p>

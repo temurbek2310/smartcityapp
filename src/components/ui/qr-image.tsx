@@ -35,7 +35,7 @@ export function QrImage({ value, size = 220 }: { value: string; size?: number })
 	return (
 		<Image
 			src={src}
-			alt='Reservation QR code'
+			alt='Bron QR kodi'
 			width={size}
 			height={size}
 			unoptimized

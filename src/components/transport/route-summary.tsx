@@ -57,24 +57,24 @@ function SummaryRow({
 			<span className={`shrink-0 text-right text-[13.5px] font-extrabold ${valueClassName}`}>
 				{value}
 				{sublabel && (
-					<span className='ml-1 font-medium text-[#8a91a6]'>({sublabel})</span>
+					<span className='ml-1 font-medium text-ink-3'>({sublabel})</span>
 				)}
 			</span>
 			{interactive && (
-				<ChevronRight className='size-4 shrink-0 text-[#8a91a6]' />
+				<ChevronRight className='size-4 shrink-0 text-ink-3' />
 			)}
 		</div>
 	)
 
 	return (
-		<div className='border-t border-[#eaecf2] first:border-t-0'>
+		<div className='border-t border-line first:border-t-0'>
 			{href ? (
 				<Link href={href}>{row}</Link>
 			) : (
 				row
 			)}
 			{explain && expanded && (
-				<p className='px-3.5 pb-3 text-[11.5px] leading-5 text-[#8a91a6]'>
+				<p className='px-3.5 pb-3 text-[11.5px] leading-5 text-ink-3'>
 					{explain}
 				</p>
 			)}
@@ -101,14 +101,14 @@ export function RouteSummary({
 					Marshrut xulosasi
 				</h2>
 				{modeInfo && (
-					<span className='rounded-full bg-[#f7f8fc] px-2.5 py-1 text-[11px] font-bold text-[#475069]'>
+					<span className='rounded-full bg-card-2 px-2.5 py-1 text-[11px] font-bold text-ink-2'>
 						{modeInfo.label}
 					</span>
 				)}
 			</div>
 
-			<div className='mt-2.5 overflow-hidden rounded-[20px] bg-white shadow-[0_1px_2px_rgba(16,24,40,.04),0_4px_14px_rgba(16,24,40,.06)]'>
-				<SummaryRow icon={Clock3} label='Vaqt yo‘lda' value={`${minutes} min`} />
+			<div className='mt-2.5 overflow-hidden rounded-[20px] bg-white shadow-card'>
+				<SummaryRow icon={Clock3} label='Vaqt yo‘lda' value={`${minutes} daq`} />
 				<SummaryRow
 					icon={RouteIcon}
 					label='Masofa'
@@ -138,7 +138,7 @@ export function RouteSummary({
 				/>
 			</div>
 
-			<div className='mt-2.5 flex items-center justify-between rounded-[16px] bg-white px-3.5 py-3 shadow-[0_1px_2px_rgba(16,24,40,.04),0_4px_14px_rgba(16,24,40,.06)]'>
+			<div className='mt-2.5 flex items-center justify-between rounded-[16px] bg-white px-3.5 py-3 shadow-card'>
 				<span className='text-[13px] text-slate-500'>
 					Narx {costLabel && `· ${costLabel}`}
 				</span>
@@ -146,7 +146,7 @@ export function RouteSummary({
 					{costUZS > 0 ? `≈ ${formatUZS(costUZS)}` : 'Bepul'}
 				</span>
 			</div>
-			<p className='mt-1.5 px-1 text-[10.5px] text-[#8a91a6]'>
+			<p className='mt-1.5 px-1 text-[10.5px] text-ink-3'>
 				Yo‘l holati bo‘yicha qatorlar — namunaviy ma’lumot. Narx va vaqt real
 				masofaga asoslangan taxminiy hisob.
 			</p>

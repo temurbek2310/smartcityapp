@@ -54,7 +54,7 @@ export function RouteFiltersSheet({
 							</span>
 							<span
 								className={`relative h-6.5 w-11 shrink-0 rounded-full transition ${
-									on ? 'bg-[#6c47e0]' : 'bg-slate-200'
+									on ? 'bg-brand' : 'bg-slate-200'
 								}`}
 							>
 								<span

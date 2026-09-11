@@ -15,15 +15,15 @@ export type RouteNotice = {
 }
 
 const TONE_BG: Record<RouteNotice['tone'], string> = {
-	ok: 'bg-[#e7f8f0] text-[#12b76a]',
-	warn: 'bg-[#fef4e5] text-[#f79009]',
-	brand: 'bg-[#ede7fe] text-[#6c47e0]',
+	ok: 'bg-ok-bg text-ok',
+	warn: 'bg-warn-bg text-warn',
+	brand: 'bg-brand-100 text-brand',
 }
 
 function NoticeCard({ notice }: { notice: RouteNotice }) {
 	const Icon = notice.icon
 	const content = (
-		<div className='flex items-center gap-3 rounded-[18px] bg-white p-3.5 shadow-[0_1px_2px_rgba(16,24,40,.04),0_4px_14px_rgba(16,24,40,.06)]'>
+		<div className='flex items-center gap-3 rounded-[18px] bg-white p-3.5 shadow-card'>
 			<span className={`grid size-10 shrink-0 place-items-center rounded-[13px] ${TONE_BG[notice.tone]}`}>
 				<Icon className='size-4.5' />
 			</span>
@@ -31,12 +31,12 @@ function NoticeCard({ notice }: { notice: RouteNotice }) {
 				<p className='text-[13.5px] font-extrabold text-slate-950'>
 					{notice.title}
 				</p>
-				<p className='mt-0.5 text-[12px] leading-5 text-[#8a91a6]'>
+				<p className='mt-0.5 text-[12px] leading-5 text-ink-3'>
 					{notice.message}
 				</p>
 			</div>
 			{(notice.href || notice.onSelect) && (
-				<ChevronRight className='size-4 shrink-0 text-[#8a91a6]' />
+				<ChevronRight className='size-4 shrink-0 text-ink-3' />
 			)}
 		</div>
 	)

@@ -53,13 +53,13 @@ export default function SessionPage() {
 		return (
 			<div className='space-y-4'>
 				<p className='rounded-2xl bg-amber-50 p-4 text-sm text-amber-800'>
-					Bu booking hali active emas.
+					Bu bron hali faol emas.
 				</p>
 				<button
 					onClick={() => router.push(`/reservation/${reservation.id}`)}
 					className='h-12 w-full rounded-2xl bg-slate-950 font-bold text-white'
 				>
-					Reservationga qaytish
+					Bronga qaytish
 				</button>
 			</div>
 		)
@@ -83,31 +83,31 @@ export default function SessionPage() {
 			<div className='text-center'>
 				<span className='inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-black text-emerald-700'>
 					<span className='size-2 animate-pulse rounded-full bg-emerald-500' />{' '}
-					ACTIVE
+					FAOL
 				</span>
-				<h1 className='mt-4 text-3xl font-black'>Parking in progress</h1>
+				<h1 className='mt-4 text-3xl font-black'>Parking davom etmoqda</h1>
 				<p className='mt-2 text-sm text-slate-500'>{parking.name}</p>
 			</div>
 			<section className='rounded-4xl bg-slate-950 p-7 text-center text-white shadow-xl shadow-slate-950/10'>
 				<Clock3 className='mx-auto size-7 text-sky-300' />
 				<p className='mt-4 text-xs font-bold uppercase tracking-[.2em] text-slate-400'>
-					Time remaining
+					Qolgan vaqt
 				</p>
 				<p className='mt-3 font-mono text-5xl font-black tracking-tight'>
 					{formatDuration(remaining)}
 				</p>
 				<div className='mt-5 flex justify-between border-t border-white/10 pt-4 text-sm'>
-					<span className='text-slate-400'>End time</span>
+					<span className='text-slate-400'>Tugash vaqti</span>
 					<strong>{formatTime(reservation.endAt)}</strong>
 				</div>
 			</section>
 			<section className='rounded-3xl border border-slate-200 p-5'>
 				<div className='flex justify-between text-sm'>
-					<span className='text-slate-500'>Vehicle</span>
+					<span className='text-slate-500'>Avtomobil</span>
 					<strong>{formatUzbekPlate(reservation.vehiclePlate)}</strong>
 				</div>
 				<div className='mt-3 flex justify-between text-sm'>
-					<span className='text-slate-500'>Current estimate</span>
+					<span className='text-slate-500'>Joriy hisob</span>
 					<strong>{formatUZS(runningTotal)}</strong>
 				</div>
 				<button
@@ -117,8 +117,8 @@ export default function SessionPage() {
 					<Plus className='size-5' /> +1 soat uzaytirish
 				</button>
 				<p className='mt-2 text-center text-[11px] text-slate-400'>
-					Demo: future capacity check avtomatik ravishda available deb qabul
-					qilinadi.
+					Demo: bo‘sh joy tekshiruvi avtomatik ravishda mavjud deb
+					hisoblanadi.
 				</p>
 			</section>
 
@@ -127,24 +127,24 @@ export default function SessionPage() {
 					onClick={() => setShowExitQr(true)}
 					className='flex h-14 w-full items-center justify-center gap-2 rounded-2xl border border-slate-300 font-black'
 				>
-					<QrIcon className='size-5' /> Exit QR ochish
+					<QrIcon className='size-5' /> Chiqish QR kodini ochish
 				</button>
 			) : (
 				<section className='animate-slide-up rounded-4xl border border-slate-200 p-6 text-center'>
 					<p className='text-xs font-bold uppercase tracking-[.2em] text-slate-400'>
-						Exit QR
+						Chiqish QR kodi
 					</p>
 					<div className='mx-auto mt-4 w-fit rounded-3xl border border-slate-100 p-3'>
 						<QrImage value={`BSPACE:EXIT:${reservation.id}`} size={190} />
 					</div>
 					<p className='mt-3 text-xs text-slate-500'>
-						Gate scanner o‘rniga MVP simulator ishlaydi.
+						Shlagbaum skaneri o‘rniga demo simulyator ishlaydi.
 					</p>
 					<button
 						onClick={finish}
 						className='mt-5 flex h-13 w-full items-center justify-center gap-2 rounded-2xl bg-rose-500 font-black text-white'
 					>
-						<LogOut className='size-5' /> Simulate exit & pay
+						<LogOut className='size-5' /> Chiqish va to‘lov (demo)
 					</button>
 				</section>
 			)}

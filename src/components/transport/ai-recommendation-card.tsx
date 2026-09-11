@@ -37,17 +37,17 @@ export function AiRecommendationCard({
 	const savedMinutes = currentMinutes - displayMinutes
 
 	return (
-		<section className='rounded-[20px] bg-gradient-to-br from-[#f3efff] to-[#edf5ff] p-4 shadow-[0_1px_2px_rgba(16,24,40,.04),0_4px_14px_rgba(16,24,40,.06)]'>
+		<section className='rounded-[20px] bg-gradient-to-br from-[#f3efff] to-[#edf5ff] p-4 shadow-card'>
 			<div className='flex items-start gap-3'>
-				<span className='grid size-9 shrink-0 place-items-center rounded-[13px] bg-[#6c47e0] text-white'>
+				<span className='grid size-9 shrink-0 place-items-center rounded-[13px] bg-brand text-white'>
 					<Bot className='size-4.5' />
 				</span>
 				<div className='min-w-0 flex-1'>
 					<div className='flex items-center justify-between gap-2'>
-						<p className='text-[12.5px] font-extrabold text-[#6c47e0]'>
+						<p className='text-[12.5px] font-extrabold text-brand'>
 							AI tavsiyasi
 						</p>
-						<span className='shrink-0 rounded-full bg-white px-2.5 py-1 text-[10.5px] font-bold text-[#6c47e0]'>
+						<span className='shrink-0 rounded-full bg-white px-2.5 py-1 text-[10.5px] font-bold text-brand'>
 							{alreadyFastest ? 'Siz eng tez yo‘ldasiz' : 'Eng yaxshi variant'}
 						</span>
 					</div>
@@ -56,8 +56,8 @@ export function AiRecommendationCard({
 						<p className='text-[19px] font-black text-slate-950'>
 							{displayModeInfo.label}
 						</p>
-						<p className='text-[19px] font-black text-[#12b76a]'>
-							{displayMinutes} min
+						<p className='text-[19px] font-black text-ok'>
+							{displayMinutes} daq
 						</p>
 					</div>
 
@@ -79,7 +79,7 @@ export function AiRecommendationCard({
 						<button
 							type='button'
 							onClick={() => setShowWhy(current => !current)}
-							className='inline-flex h-9 items-center gap-1 rounded-xl bg-[#6c47e0] px-3.5 text-[12.5px] font-bold text-white'
+							className='inline-flex h-9 items-center gap-1 rounded-xl bg-brand px-3.5 text-[12.5px] font-bold text-white'
 						>
 							Nima uchun
 							<ChevronRight className='size-3.5' />

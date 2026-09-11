@@ -206,7 +206,10 @@ export function ParkingMap({
         pointer-events: none;
       `
 
-			visual.textContent = full ? 'FULL' : String(parking.availableSpaces)
+			// A bare count, including "0" when full: the pin is 42px, the red
+			// band already reads as full, and "TO‘LA" sets badly at that size.
+			// The Uzbek meaning is carried by title and aria-label above.
+			visual.textContent = String(parking.availableSpaces)
 
 			const tail = document.createElement('span')
 			tail.style.cssText = `

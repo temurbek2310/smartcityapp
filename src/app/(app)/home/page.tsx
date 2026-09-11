@@ -313,7 +313,7 @@ const AI_TIPS = [
 	},
 	{
 		title: 'Yaqin alternativ',
-		text: 'Agar parking FULL bo‘lsa, ilova mavjud bo‘sh joyli alternativni ko‘rsatadi.',
+		text: 'Agar parking TO‘LA bo‘lsa, ilova mavjud bo‘sh joyli alternativni ko‘rsatadi.',
 		action: 'Xaritada ko‘rish',
 		parkingId: 'amir-temur',
 	},
@@ -739,7 +739,7 @@ export default function HomePage() {
 								className='inline-flex h-10 shrink-0 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700'
 							>
 								<Icon className='size-4 text-violet-600' />
-								{route.title} · {route.minutes} min
+								{route.title} · {route.minutes} daq
 							</button>
 						)
 					})}
@@ -809,7 +809,7 @@ export default function HomePage() {
 								<p className='mt-0.5 text-[10px] font-semibold text-slate-400'>
 									{selectedParking.availableSpaces > 0
 										? `${selectedParking.availableSpaces} bo‘sh joy`
-										: 'FULL'}{' '}
+										: 'TO‘LA'}{' '}
 									· {formatUZS(selectedParking.pricePerHour)}/soat
 								</p>
 							</div>
@@ -867,7 +867,7 @@ export default function HomePage() {
 								}`}
 							>
 								<Icon className='mx-auto size-5' />
-								<p className='mt-1 text-xs font-black'>{mode.time} min</p>
+								<p className='mt-1 text-xs font-black'>{mode.time} daq</p>
 								<p className='mt-0.5 text-[10px] font-semibold'>{mode.label}</p>
 							</button>
 						)
@@ -1021,7 +1021,7 @@ export default function HomePage() {
 													}
 												>
 													{parking.availableSpaces === 0
-														? 'FULL'
+														? 'TO‘LA'
 														: `${parking.availableSpaces} joy`}
 												</span>
 											</div>
@@ -1134,7 +1134,7 @@ export default function HomePage() {
 											)}
 											{place.queue !== undefined && (
 												<span className='text-slate-600'>
-													{place.queue} min
+													{place.queue} daq
 												</span>
 											)}
 										</div>
@@ -1185,7 +1185,7 @@ export default function HomePage() {
 									key={service.id}
 									type='button'
 									onClick={() => openService(service.id)}
-									className='inline-flex shrink-0 items-center gap-2.5 rounded-[18px] bg-white px-3.5 py-3 text-[13px] font-semibold text-slate-700 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_4px_14px_rgba(16,24,40,0.06)]'
+									className='inline-flex shrink-0 items-center gap-2.5 rounded-[18px] bg-white px-3.5 py-3 text-[13px] font-semibold text-slate-700 shadow-card'
 								>
 									<Icon
 										className={`size-5 shrink-0 ${service.tone}`}
@@ -1492,7 +1492,7 @@ export default function HomePage() {
 													>
 														{parking.availableSpaces > 0
 															? `${parking.availableSpaces} joy`
-															: 'FULL'}
+															: 'TO‘LA'}
 													</span>
 												</button>
 											))}
@@ -1777,7 +1777,7 @@ export default function HomePage() {
 										>
 											<Icon className='mx-auto size-5 text-violet-600' />
 											<p className='mt-2 text-lg font-black text-slate-950'>
-												{minutes} min
+												{minutes} daq
 											</p>
 											<p className='mt-1 text-xs text-slate-400'>
 												{mode.label}
@@ -1978,7 +1978,7 @@ export default function HomePage() {
 											>
 												{parking.availableSpaces > 0
 													? `${parking.availableSpaces} bo‘sh joy`
-													: 'FULL'}
+													: 'TO‘LA'}
 											</p>
 										</button>
 										<Link
@@ -2074,7 +2074,7 @@ export default function HomePage() {
 								<div className='rounded-2xl bg-white p-3 text-center shadow-sm ring-1 ring-slate-200'>
 									<Navigation className='mx-auto size-4 text-violet-600' />
 									<p className='mt-2 text-lg font-black text-slate-950'>
-										{Math.max(3, Math.round(place.distanceKm * 5))} min
+										{Math.max(3, Math.round(place.distanceKm * 5))} daq
 									</p>
 									<p className='text-[10px] text-slate-400'>
 										{place.distanceKm.toFixed(1)} km
