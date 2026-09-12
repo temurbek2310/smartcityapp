@@ -37,7 +37,7 @@ export function AiRecommendationCard({
 	const savedMinutes = currentMinutes - displayMinutes
 
 	return (
-		<section className='rounded-[20px] bg-gradient-to-br from-[#f3efff] to-[#edf5ff] p-4 shadow-card'>
+		<section className='animate-fade-up rounded-[20px] bg-gradient-to-br from-[#f3efff] to-[#edf5ff] p-4 shadow-card'>
 			<div className='flex items-start gap-3'>
 				<span className='grid size-9 shrink-0 place-items-center rounded-[13px] bg-brand text-white'>
 					<Bot className='size-4.5' />
@@ -53,7 +53,7 @@ export function AiRecommendationCard({
 					</div>
 
 					<div className='mt-1.5 flex items-center justify-between gap-3'>
-						<p className='text-[19px] font-black text-slate-950'>
+						<p className='text-[19px] font-black text-ink'>
 							{displayModeInfo.label}
 						</p>
 						<p className='text-[19px] font-black text-ok'>
@@ -61,14 +61,14 @@ export function AiRecommendationCard({
 						</p>
 					</div>
 
-					<p className='mt-1 text-[12.5px] leading-5 text-slate-600'>
+					<p className='mt-1 text-[12.5px] leading-5 text-ink-2'>
 						{alreadyFastest
 							? `Hozirgi tanlovingiz — ${displayModeInfo.label.toLowerCase()} — masofaga ko‘ra eng tezkor variant.`
 							: `${displayModeInfo.label} ${savedMinutes} daqiqa tezroq — taxminiy hisob-kitobga ko‘ra.`}
 					</p>
 
 					{showWhy && (
-						<p className='mt-2 rounded-xl bg-white/70 p-2.5 text-[11.5px] leading-5 text-slate-500'>
+						<p className='mt-2 rounded-xl bg-white/70 p-2.5 text-[11.5px] leading-5 text-ink-3'>
 							Bu taqqoslash haqiqiy masofa va har bir transport turi uchun
 							o‘rtacha shahar tezligiga asoslangan taxminiy hisob — jonli
 							tirbandlik xizmati B SPACE MVPda hali ulanmagan.
@@ -88,7 +88,7 @@ export function AiRecommendationCard({
 							<button
 								type='button'
 								onClick={() => onSwitch(displayMode)}
-								className='inline-flex h-9 items-center rounded-xl bg-white px-3.5 text-[12.5px] font-bold text-slate-800 shadow-[0_1px_2px_rgba(16,24,40,.04)]'
+								className='inline-flex h-9 items-center rounded-xl bg-white px-3.5 text-[12.5px] font-bold text-ink shadow-[0_1px_2px_rgba(16,24,40,.04)]'
 							>
 								Almashtirish
 							</button>

@@ -119,12 +119,13 @@ export function PullToRefresh({ children }: { children: ReactNode }) {
 			<div
 				aria-hidden={!refreshing}
 				style={{ height }}
-				className='flex items-center justify-center overflow-hidden transition-[height] duration-200'
+				className='flex items-center justify-center overflow-hidden transition-[height] duration-[220ms]'
 			>
 				<RefreshCw
 					className={cn(
 						'size-5 text-brand',
-						refreshing && 'animate-spin',
+						'citygo-refresh-spinner',
+						refreshing && 'is-refreshing',
 					)}
 					style={{ opacity: height ? 1 : 0 }}
 				/>

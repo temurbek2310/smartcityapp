@@ -1,6 +1,6 @@
 'use client'
 
-import { ExternalLink, type LucideIcon } from 'lucide-react'
+import { Navigation, type LucideIcon } from 'lucide-react'
 
 export type TimelineStep = {
 	icon: LucideIcon
@@ -8,32 +8,34 @@ export type TimelineStep = {
 	title: string
 	subtitle: string
 	distanceLabel: string
+	distanceKm?: number
 	note?: string
 }
 
 type RouteTimelineProps = {
 	steps: TimelineStep[]
-	navigateHref: string
+	// City Goo's «Поехали»: the header action starts the in-app navigator
+	// rather than handing the whole journey to an external map.
+	onStartNavigation: () => void
 }
 
 // Reusable vertical route timeline — used once by /transport, kept as its
 // own component instead of inline JSX per-step as requested.
-export function RouteTimeline({ steps, navigateHref }: RouteTimelineProps) {
+export function RouteTimeline({ steps, onStartNavigation }: RouteTimelineProps) {
 	return (
 		<section>
 			<div className='flex items-baseline justify-between px-1'>
-				<h2 className='text-[18px] font-extrabold tracking-[-0.01em] text-slate-950'>
+				<h2 className='text-[18px] font-extrabold tracking-[-0.01em] text-ink'>
 					Marshrut tafsilotlari
 				</h2>
-				<a
-					href={navigateHref}
-					target='_blank'
-					rel='noreferrer'
+				<button
+					type='button'
+					onClick={onStartNavigation}
 					className='inline-flex items-center gap-1 text-[12.5px] font-bold text-brand'
 				>
+					<Navigation className='size-3.5' />
 					Yo‘lga chiqish
-					<ExternalLink className='size-3.5' />
-				</a>
+				</button>
 			</div>
 
 			<div className='mt-2.5 rounded-[20px] bg-white p-3.5 shadow-card'>
@@ -56,7 +58,7 @@ export function RouteTimeline({ steps, navigateHref }: RouteTimelineProps) {
 
 							<div className={`min-w-0 flex-1 ${isLast ? 'pb-0' : 'pb-4'}`}>
 								<div className='flex items-start justify-between gap-2'>
-									<p className='text-[14px] font-extrabold text-slate-950'>
+									<p className='text-[14px] font-extrabold text-ink'>
 										{step.title}
 									</p>
 									<span className='shrink-0 pt-0.5 text-[11.5px] font-semibold text-ink-3'>
@@ -67,7 +69,7 @@ export function RouteTimeline({ steps, navigateHref }: RouteTimelineProps) {
 									{step.subtitle}
 								</p>
 								{step.note && (
-									<p className='mt-1 text-[11.5px] leading-5 text-slate-500'>
+									<p className='mt-1 text-[11.5px] leading-5 text-ink-3'>
 										{step.note}
 									</p>
 								)}

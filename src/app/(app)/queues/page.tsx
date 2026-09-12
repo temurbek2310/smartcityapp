@@ -1,8 +1,14 @@
 'use client'
 
-import { CircleParking, Clock3, HelpCircle, Users } from 'lucide-react'
-import { useRouter } from 'next/navigation'
-import { useMemo, useState } from 'react'
+import {
+	BellRing,
+	CircleParking,
+	Clock3,
+	HelpCircle,
+	Users,
+} from 'lucide-react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { Suspense, useMemo, useState } from 'react'
 
 import { QueueForecastCard } from '@/components/queues/queue-forecast-card'
 import { QueueOrgCard } from '@/components/queues/queue-org-card'
@@ -18,6 +24,7 @@ import { Chip } from '@/components/ui/chip'
 import { HorizontalRail } from '@/components/ui/horizontal-rail'
 import { IconButton } from '@/components/ui/icon-button'
 import { IconTile } from '@/components/ui/icon-tile'
+import { LoadingScreen } from '@/components/ui/loading-screen'
 import { SearchField } from '@/components/ui/search-field'
 import { SectionHeader } from '@/components/ui/section-header'
 import { Toast } from '@/components/ui/toast'
@@ -27,7 +34,7 @@ import { QUEUE_HOURS, QUEUE_ORGS, getQueueOrg } from '@/data/queue-orgs'
 import { useToast } from '@/hooks/use-toast'
 import { occupancyTone } from '@/lib/availability'
 import { cn } from '@/lib/cn'
-import { formatDistance } from '@/lib/format'
+import { formatDistance, formatTime } from '@/lib/format'
 import type { QueueCategory } from '@/lib/types'
 
 const CATEGORIES: { id: QueueCategory | 'all'; label: string }[] = [
@@ -48,11 +55,23 @@ const HOW_IT_WORKS = [
 ]
 
 export default function QueuesPage() {
+	return (
+		<Suspense fallback={<LoadingScreen />}>
+			<QueuesView />
+		</Suspense>
+	)
+}
+
+function QueuesView() {
 	const router = useRouter()
 	const toast = useToast<string>()
-	const { queueTickets } = useApp()
+	const { queueTickets, notificationPrefs, setNotificationPref } = useApp()
 
-	const [orgId, setOrgId] = useState(QUEUE_ORGS[0].id)
+	// /map's "Ochish" lands here on a specific organisation.
+	const requestedOrg = useSearchParams().get('org')
+	const [orgId, setOrgId] = useState(
+		requestedOrg && getQueueOrg(requestedOrg) ? requestedOrg : QUEUE_ORGS[0].id,
+	)
 	const [category, setCategory] = useState<QueueCategory | 'all'>('all')
 	const [query, setQuery] = useState('')
 	const [takeOpen, setTakeOpen] = useState(false)
@@ -106,6 +125,46 @@ export default function QueuesPage() {
 		openHours[0],
 	)
 	const parking = getParking(org.parkingId)
+
+	// What the app would actually push, given the ticket in hand and this
+	// organisation's load. City Goo hardcodes three of these; deriving them
+	// means the section never announces a queue position nobody holds.
+	const queueNotices = [
+		...(activeTicket
+			? [
+					{
+						icon: Users,
+						tone: 'bg-ok-bg text-ok',
+						title: `Sizning navbatingiz ${activeTicket.number}`,
+						body: `Taxminan ${activeTicket.etaMinutes} daqiqadan keyin chaqiramiz.`,
+						time: formatTime(activeTicket.createdAt),
+					},
+				]
+			: [{ icon: Users, tone: 'bg-ok-bg text-ok', title: 'Navbatni onlayn oling',
+				body: `${org.title} uchun xizmat tanlang va talon oling.`, time: 'hozir' }]),
+		...(org.open
+			? [
+					{
+						icon: Clock3,
+						tone: 'bg-warn-bg text-warn',
+						title: 'Hozirgi kutish vaqti',
+						body: `${org.title} — kutish ${org.waitMinutes} daqiqa.`,
+						time: 'hozir',
+					},
+				]
+			: []),
+		...(parking
+			? [
+					{
+						icon: CircleParking,
+						tone: 'bg-brand-50 text-brand',
+						title: 'Chiqish haqida eslatma',
+						body: `${parking.name}da ${parking.availableSpaces} joy bo‘sh — oldindan bron qiling.`,
+						time: 'hozir',
+					},
+				]
+			: []),
+	]
 
 	return (
 		<div className='-mx-5 -mt-6 min-h-[calc(100dvh-var(--spacing-nav))] bg-canvas pb-28 pt-5'>
@@ -318,6 +377,62 @@ export default function QueuesPage() {
 						)
 					})}
 				</div>
+
+				{/* City Goo's queue notification list. These are generated from the
+				    ticket you actually hold rather than hardcoded, so the section is
+				    empty until there is something to be notified about. */}
+				{queueNotices.length > 0 && (
+					<>
+						<div className='px-4'>
+							<SectionHeader
+								title='Bildirishnomalar'
+								action={
+									<span className='flex items-center gap-1'>
+										<BellRing className='size-3.5' />
+										{notificationPrefs.queueTurn ? 'Yoqilgan' : 'O‘chirilgan'}
+									</span>
+								}
+								onAction={() => {
+									const next = !notificationPrefs.queueTurn
+									setNotificationPref('queueTurn', next)
+									toast.show(
+										next
+											? 'Navbat haqida xabar beramiz'
+											: 'Navbat bildirishnomalari o‘chirildi',
+									)
+								}}
+							/>
+						</div>
+						<div className='space-y-2 px-4'>
+							{queueNotices.map(notice => (
+								<Card
+									key={notice.title}
+									className={cn(
+										'flex items-start gap-3',
+										!notificationPrefs.queueTurn && 'opacity-50',
+									)}
+								>
+									<IconTile tone={notice.tone}>
+										<notice.icon className='size-[18px]' />
+									</IconTile>
+									<div className='min-w-0 flex-1'>
+										<div className='flex items-baseline justify-between gap-2'>
+											<p className='truncate text-[13px] font-semibold text-ink'>
+												{notice.title}
+											</p>
+											<span className='shrink-0 text-[11px] text-ink-3'>
+												{notice.time}
+											</span>
+										</div>
+										<p className='mt-1 text-[11.5px] leading-5 text-ink-3'>
+											{notice.body}
+										</p>
+									</div>
+								</Card>
+							))}
+						</div>
+					</>
+				)}
 
 				{history.length > 0 && (
 					<>

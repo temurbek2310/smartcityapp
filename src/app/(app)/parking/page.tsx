@@ -4,6 +4,7 @@ import {
 	ArrowUpDown,
 	CircleParking,
 	LocateFixed,
+	MapPin,
 	SlidersHorizontal,
 	Tag,
 	TriangleAlert,
@@ -55,6 +56,7 @@ export default function ParkingListPage() {
 	const [bookingParkingId, setBookingParkingId] = useState<string | null>(null)
 	const [forecastId, setForecastId] = useState(PARKINGS[1]?.id ?? PARKINGS[0].id)
 	const [selectedId, setSelectedId] = useState<string | null>(null)
+	const [locateRevision, setLocateRevision] = useState(0)
 
 	useEffect(() => {
 		locate()
@@ -127,21 +129,26 @@ export default function ParkingListPage() {
 						<ParkingMap
 							parkings={results.map(item => item.parking)}
 							userLocation={location}
+							locateRevision={locateRevision}
 							selectedParkingId={selectedId ?? undefined}
 							onSelect={id => setSelectedId(id)}
+							showPrices={filters.showPrices}
 							className='h-[246px]'
 						/>
 
 						<div className='pointer-events-none absolute left-2.5 top-2.5 flex flex-col gap-2'>
 							<IconButton
 								label='Joylashuvimni topish'
-								onClick={locate}
+								onClick={() => {
+									setLocateRevision(current => current + 1)
+									locate()
+								}}
 								className='pointer-events-auto'
 							>
 								<LocateFixed
 									className={cn(
 										'size-[18px] text-ink-2',
-										status === 'loading' && 'animate-pulse',
+										status === 'loading' && 'citygo-refresh-spinner is-refreshing',
 									)}
 								/>
 							</IconButton>
@@ -269,6 +276,14 @@ export default function ParkingListPage() {
 							action='Bosh sahifa'
 						/>
 					)}
+				</div>
+
+				{/* City Goo's «Показать все на карте» — the list's way into the
+				    full map screen. */}
+				<div className='px-4'>
+					<Button variant='primary' block onClick={() => router.push('/map')}>
+						<MapPin className='size-[18px]' /> Hammasini xaritada ko‘rish
+					</Button>
 				</div>
 
 				<div className='px-4 pt-1'>

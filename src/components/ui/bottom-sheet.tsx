@@ -9,9 +9,9 @@ export function BottomSheet({
 	title,
 	onClose,
 	children,
-	// Opt-in City Goo slide-up. Off by default so every sheet that already
-	// uses this component keeps appearing exactly as it does today.
-	slideUp = false,
+	// City Goo sheets always rise over a fading scrim. Keep the prop for the
+	// few callers that want to explicitly disable the motion.
+	slideUp = true,
 }: {
 	title: string
 	onClose: () => void
@@ -40,25 +40,25 @@ export function BottomSheet({
 			<button
 				type='button'
 				aria-label='Oynani yopish'
-				className={`fixed inset-0 z-70 bg-slate-950/45 backdrop-blur-[2px] ${
+				className={`fixed inset-0 z-70 bg-ink/45 backdrop-blur-[2px] ${
 					slideUp ? 'animate-scrim-in' : ''
 				}`}
 				onClick={onClose}
 			/>
 			<section
-				className={`fixed inset-x-0 bottom-0 z-80 mx-auto max-h-[88dvh] w-full max-w-md overflow-hidden rounded-t-[28px] bg-slate-50 shadow-2xl ${
+				className={`fixed inset-x-0 bottom-0 z-80 mx-auto max-h-[88dvh] w-full max-w-md overflow-hidden rounded-t-[28px] bg-canvas shadow-2xl ${
 					slideUp ? 'animate-sheet-up' : ''
 				}`}
 			>
-				<div className='mx-auto mt-2.5 h-1 w-10 rounded-full bg-slate-300' />
+				<div className='mx-auto mt-2.5 h-1 w-10 rounded-full bg-line-2' />
 				<div className='flex items-center justify-between gap-3 px-4 pb-3 pt-3'>
-					<h2 className='text-xl font-black tracking-tight text-slate-950'>
+					<h2 className='text-xl font-black tracking-tight text-ink'>
 						{title}
 					</h2>
 					<button
 						type='button'
 						onClick={onClose}
-						className='grid size-10 place-items-center rounded-xl bg-white text-slate-700 shadow-sm ring-1 ring-slate-200'
+						className='citygo-pressable grid size-10 place-items-center rounded-xl bg-white text-ink-2 shadow-card'
 						aria-label='Yopish'
 					>
 						<X className='size-5' />

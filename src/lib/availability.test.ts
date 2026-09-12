@@ -20,13 +20,13 @@ describe('parkingAvailability', () => {
 	})
 
 	it('bands comfortable, tight and critical', () => {
-		expect(parkingAvailability(lot(40)).tone.bar).toContain('emerald')
-		expect(parkingAvailability(lot(20)).tone.bar).toContain('amber')
-		expect(parkingAvailability(lot(5)).tone.bar).toContain('rose')
+		expect(parkingAvailability(lot(40)).tone.bar).toBe('bg-ok')
+		expect(parkingAvailability(lot(20)).tone.bar).toBe('bg-warn')
+		expect(parkingAvailability(lot(5)).tone.bar).toBe('bg-bad')
 	})
 
 	it('treats a full lot as critical however the percentage rounds', () => {
-		expect(parkingAvailability(lot(0)).tone.bar).toContain('rose')
+		expect(parkingAvailability(lot(0)).tone.bar).toBe('bg-bad')
 	})
 
 	it('survives a lot with no capacity rather than dividing by zero', () => {

@@ -22,7 +22,7 @@ export function IconButton({
 			type={type}
 			aria-label={label}
 			className={cn(
-				'relative grid size-[38px] shrink-0 place-items-center rounded-xl bg-white shadow-card',
+				'citygo-pressable relative grid size-[38px] shrink-0 place-items-center rounded-xl bg-white shadow-card',
 				className,
 			)}
 			{...rest}

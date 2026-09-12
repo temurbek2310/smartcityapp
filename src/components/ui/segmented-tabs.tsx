@@ -30,7 +30,7 @@ export function SegmentedTabs<T extends string>({
 						aria-selected={active}
 						onClick={() => onChange(item.id)}
 						className={cn(
-							'h-9 flex-1 rounded-[10px] text-[13px] font-[650] transition-colors',
+							'h-9 flex-1 rounded-[10px] text-[13px] font-[650] transition-colors duration-200',
 							active
 								? 'bg-white text-ink shadow-[0_1px_3px_rgb(16_24_40/.12)]'
 								: 'text-ink-2',

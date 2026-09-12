@@ -80,24 +80,82 @@ button, a { touch-action: manipulation; }
 .maplibregl-ctrl-bottom-left, .maplibregl-ctrl-bottom-right { font-size: 9px; }
 
 @keyframes slide-up {
-  from { opacity: 0; transform: translateY(12px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
 }
-.animate-slide-up { animation: slide-up .25s ease-out; }
+.animate-slide-up,
+.animate-fade-up { animation: slide-up .24s ease both; }
 
 /* City Goo sheet motion: .sheet slides in over .3s cubic-bezier(.32,.72,0,1)
-   from translateY(102%), its scrim fades in over .22s. Opt-in per sheet. */
+   from translateY(102%), its scrim fades in over .22s. */
 @keyframes sheet-up {
   from { transform: translateY(102%); }
   to { transform: none; }
 }
-.animate-sheet-up { animation: sheet-up .3s cubic-bezier(.32, .72, 0, 1); }
+.animate-sheet-up { animation: sheet-up .3s cubic-bezier(.32, .72, 0, 1) both; }
 
 @keyframes scrim-in {
   from { opacity: 0; }
   to { opacity: 1; }
 }
-.animate-scrim-in { animation: scrim-in .22s ease; }
+.animate-scrim-in { animation: scrim-in .22s ease both; }
+
+.citygo-pressable { transition: transform .12s ease; }
+.citygo-pressable:active { transform: scale(.975); }
+.citygo-tile:active > span { transform: scale(.92); }
+
+.citygo-map-pin-bubble {
+  transition: transform .15s ease, box-shadow .16s ease;
+}
+.citygo-map-pin:active > .citygo-map-pin-bubble { transform: scale(1.12); }
+
+@keyframes citygo-map-card-in {
+  from { transform: translateY(130%); }
+  to { transform: none; }
+}
+.animate-map-card-in { animation: citygo-map-card-in .26s cubic-bezier(.32, .72, 0, 1) both; }
+
+.citygo-location-dot { transition: box-shadow .5s ease; }
+@keyframes citygo-ping {
+  0% { box-shadow: 0 0 0 9px rgb(46 144 250 / .34), 0 4px 12px rgb(15 23 42 / .18); }
+  70% { box-shadow: 0 0 0 26px rgb(46 144 250 / 0), 0 4px 12px rgb(15 23 42 / .18); }
+  100% { box-shadow: 0 0 0 9px rgb(46 144 250 / .18), 0 4px 12px rgb(15 23 42 / .18); }
+}
+.citygo-location-dot.is-ping { animation: citygo-ping 1s ease-out; }
+
+@keyframes citygo-shimmer {
+  from { background-position: 100% 0; }
+  to { background-position: -100% 0; }
+}
+.citygo-shimmer {
+  background-image: linear-gradient(90deg, var(--color-card-2) 25%, #fff 50%, var(--color-card-2) 75%);
+  background-size: 400% 100%;
+  animation: citygo-shimmer 1.3s infinite;
+}
+
+@keyframes citygo-spin { to { transform: rotate(360deg); } }
+.citygo-refresh-spinner.is-refreshing { animation: citygo-spin .9s linear infinite; }
+
+.citygo-voice-ring {
+  position: relative;
+  isolation: isolate;
+}
+.citygo-voice-ring::before,
+.citygo-voice-ring::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 2px solid rgb(255 255 255 / .5);
+  border-radius: 999px;
+  animation: citygo-ring-pulse 1.8s ease-out infinite;
+  z-index: 0;
+}
+.citygo-voice-ring::after { animation-delay: .6s; }
+.citygo-voice-ring > * { position: relative; z-index: 1; }
+@keyframes citygo-ring-pulse {
+  0% { transform: scale(1); opacity: .6; }
+  100% { transform: scale(1.9); opacity: 0; }
+}
 
 @media (prefers-reduced-motion: reduce) {
   .animate-sheet-up, .animate-scrim-in { animation: none; }
@@ -143,4 +201,13 @@ button, a { touch-action: manipulation; }
 
 @media (prefers-reduced-motion: reduce) {
   .citygo-toast { transform: none; transition: opacity .28s ease, visibility 0s linear .28s; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

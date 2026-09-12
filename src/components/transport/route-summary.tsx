@@ -24,7 +24,7 @@ function SummaryRow({
 	icon: Icon,
 	label,
 	value,
-	valueClassName = 'text-slate-950',
+	valueClassName = 'text-ink',
 	sublabel,
 	onClick,
 	explain,
@@ -50,8 +50,8 @@ function SummaryRow({
 				if (explain) setExpanded(current => !current)
 			}}
 		>
-			<Icon className='size-4.5 shrink-0 text-slate-500' />
-			<span className='min-w-0 flex-1 truncate text-[13.5px] text-slate-700'>
+			<Icon className='size-4.5 shrink-0 text-ink-3' />
+			<span className='min-w-0 flex-1 truncate text-[13.5px] text-ink-2'>
 				{label}
 			</span>
 			<span className={`shrink-0 text-right text-[13.5px] font-extrabold ${valueClassName}`}>
@@ -97,7 +97,7 @@ export function RouteSummary({
 	return (
 		<section>
 			<div className='flex items-baseline justify-between px-1'>
-				<h2 className='text-[18px] font-extrabold tracking-[-0.01em] text-slate-950'>
+				<h2 className='text-[18px] font-extrabold tracking-[-0.01em] text-ink'>
 					Marshrut xulosasi
 				</h2>
 				{modeInfo && (
@@ -139,10 +139,10 @@ export function RouteSummary({
 			</div>
 
 			<div className='mt-2.5 flex items-center justify-between rounded-[16px] bg-white px-3.5 py-3 shadow-card'>
-				<span className='text-[13px] text-slate-500'>
+				<span className='text-[13px] text-ink-3'>
 					Narx {costLabel && `· ${costLabel}`}
 				</span>
-				<span className='text-[15px] font-extrabold text-slate-950'>
+				<span className='text-[15px] font-extrabold text-ink'>
 					{costUZS > 0 ? `≈ ${formatUZS(costUZS)}` : 'Bepul'}
 				</span>
 			</div>

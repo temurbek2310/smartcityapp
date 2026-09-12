@@ -42,23 +42,23 @@ export function RouteFiltersSheet({
 							key={filter.id}
 							type='button'
 							onClick={() => onToggle(filter.id)}
-							className='flex w-full items-center gap-3 rounded-2xl bg-white p-3.5 text-left shadow-sm ring-1 ring-slate-200'
+							className='flex w-full items-center gap-3 rounded-2xl bg-white p-3.5 text-left shadow-sm ring-1 ring-line'
 						>
 							<span className='min-w-0 flex-1'>
-								<span className='block text-[13.5px] font-bold text-slate-950'>
+								<span className='block text-[13.5px] font-bold text-ink'>
 									{filter.label}
 								</span>
-								<span className='mt-0.5 block text-[11.5px] text-slate-400'>
+								<span className='mt-0.5 block text-[11.5px] text-ink-3'>
 									{filter.sublabel}
 								</span>
 							</span>
 							<span
-								className={`relative h-6.5 w-11 shrink-0 rounded-full transition ${
-									on ? 'bg-brand' : 'bg-slate-200'
+								className={`relative h-6.5 w-11 shrink-0 rounded-full transition duration-200 ${
+									on ? 'bg-brand' : 'bg-line'
 								}`}
 							>
 								<span
-									className={`absolute top-0.75 size-5 rounded-full bg-white shadow transition ${
+									className={`absolute top-0.75 size-5 rounded-full bg-white shadow transition duration-200 ${
 										on ? 'left-5' : 'left-0.75'
 									}`}
 								/>
@@ -67,7 +67,7 @@ export function RouteFiltersSheet({
 					)
 				})}
 			</div>
-			<p className='mt-4 text-[11.5px] leading-5 text-slate-400'>
+			<p className='mt-4 text-[11.5px] leading-5 text-ink-3'>
 				B SPACE MVPda hali real yo‘l grafigi yo‘q, shu sababli filtrlar
 				muqobil marshrutlar ro‘yxatini qayta tartiblaydi — yangi marshrut
 				hisoblanmaydi.

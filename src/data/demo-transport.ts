@@ -488,12 +488,36 @@ export type DemoMetroLine = {
 	occupancyPct: number
 	color: string
 	recommendedCar: number
+	// Occupancy per carriage, front to back. City Goo draws this row so you
+	// know which door to stand at, which is the whole point of the section.
+	cars: number[]
 }
 
 export const DEMO_METRO_LINES: DemoMetroLine[] = [
-	{ name: 'Chilonzor liniyasi', arrivalMin: 2, occupancyPct: 28, color: '#12B76A', recommendedCar: 2 },
-	{ name: 'O‘zbekiston liniyasi', arrivalMin: 5, occupancyPct: 45, color: '#2E90FA', recommendedCar: 1 },
-	{ name: 'Yunusobod liniyasi', arrivalMin: 6, occupancyPct: 60, color: '#7C3AED', recommendedCar: 1 },
+	{
+		name: 'Chilonzor liniyasi',
+		arrivalMin: 2,
+		occupancyPct: 28,
+		color: '#12B76A',
+		recommendedCar: 2,
+		cars: [42, 18, 22, 35],
+	},
+	{
+		name: 'O‘zbekiston liniyasi',
+		arrivalMin: 5,
+		occupancyPct: 45,
+		color: '#2E90FA',
+		recommendedCar: 1,
+		cars: [22, 38, 55, 48],
+	},
+	{
+		name: 'Yunusobod liniyasi',
+		arrivalMin: 6,
+		occupancyPct: 60,
+		color: '#7C3AED',
+		recommendedCar: 1,
+		cars: [30, 52, 68, 74],
+	},
 ]
 
 export type DemoMicroOption = {
@@ -587,6 +611,7 @@ export type DemoDestination = {
 	// declared here instead of derived from coordinates. Without one the
 	// page keeps its existing behaviour and routes to the closest parking.
 	parkingId?: string
+	point?: { lat: number; lng: number }
 }
 
 // City Goo's `ADDR_BOOK`, reproduced as /transport demo content only.
@@ -627,13 +652,13 @@ export const DEMO_DESTINATIONS: DemoDestination[] = [
 		icon: Smile,
 		title: 'Humo Arena',
 		address: 'ул. Бабура, 40',
-		parkingId: 'next-mall',
+		parkingId: 'humo-arena',
 	},
 	{
 		id: 'airport',
 		icon: Navigation,
-		title: 'Аэропорт Ташкент',
-		address: 'ул. Ислама Каримова, 90',
-		parkingId: 'next-mall',
+		title: 'Toshkent aeroporti',
+		address: 'Toshkent xalqaro aeroporti',
+		point: { lat: 41.2570, lng: 69.2810 },
 	},
 ]

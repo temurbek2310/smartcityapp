@@ -15,7 +15,7 @@ export const EVENTS: CityEvent[] = [
 		description:
 			'Kechki konsert. Tadbir boshlanishidan oldin yaqin parkingni band qilish tavsiya etiladi.',
 		accent: 'from-purple-900 via-violet-700 to-slate-950',
-		parkingId: 'magic-city',
+		parkingId: 'humo-arena',
 	},
 	{
 		id: 'fair',

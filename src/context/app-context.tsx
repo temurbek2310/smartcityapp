@@ -21,6 +21,7 @@ import type {
   UserProfile,
 } from "@/lib/types";
 import { calculateFinalTotal } from "@/lib/reservation";
+import { clearAccountStorage } from "@/lib/account-storage";
 
 const STORAGE_KEY = "b-space-mvp-v1";
 
@@ -177,7 +178,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       notifications: state.notifications,
       notificationPrefs: state.notificationPrefs,
     };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));
+    } catch {
+      // Keep the current session usable when browser storage is unavailable.
+    }
   }, [state]);
 
   useEffect(() => {
@@ -271,7 +276,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const resetDemo = useCallback(() => {
-    localStorage.removeItem(STORAGE_KEY);
+    clearAccountStorage(localStorage);
     setState({ ...initialState, hydrated: true, notifications: [] });
   }, []);
 

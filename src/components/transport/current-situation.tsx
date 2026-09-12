@@ -6,9 +6,9 @@ import { useState } from 'react'
 import type { CurrentSituationRow } from '@/data/demo-transport'
 
 const TONE_TEXT: Record<CurrentSituationRow['tone'], string> = {
-	ok: 'text-emerald-600',
-	warn: 'text-amber-600',
-	bad: 'text-rose-500',
+	ok: 'text-ok',
+	warn: 'text-warn',
+	bad: 'text-bad',
 }
 
 function Row({
@@ -33,7 +33,7 @@ function Row({
 				className='flex w-full items-center gap-3 px-3.5 py-3 text-left'
 			>
 				<Icon className={`size-4.5 shrink-0 ${TONE_TEXT[tone]}`} />
-				<span className='min-w-0 flex-1 truncate text-[13.5px] text-slate-700'>
+				<span className='min-w-0 flex-1 truncate text-[13.5px] text-ink-2'>
 					{label}
 				</span>
 				<span className={`shrink-0 text-[13.5px] font-extrabold ${TONE_TEXT[tone]}`}>
@@ -70,15 +70,15 @@ export function CurrentSituation({
 	return (
 		<section>
 			<div className='flex items-baseline justify-between px-1'>
-				<h2 className='text-[18px] font-extrabold tracking-[-0.01em] text-slate-950'>
+				<h2 className='text-[18px] font-extrabold tracking-[-0.01em] text-ink'>
 					Hozirgi holat
 				</h2>
 				<button
 					type='button'
 					onClick={onRefresh}
-					className='inline-flex items-center gap-1 text-[12.5px] font-bold text-brand'
+					className='citygo-pressable inline-flex items-center gap-1 text-[12.5px] font-bold text-brand'
 				>
-					<RefreshCw className={`size-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+					<RefreshCw className={`size-3.5 citygo-refresh-spinner ${refreshing ? 'is-refreshing' : ''}`} />
 					Yangilash
 				</button>
 			</div>

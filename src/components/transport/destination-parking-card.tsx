@@ -29,7 +29,7 @@ export function DestinationParkingCard({
 					<CircleParking className='size-5' />
 				</span>
 				<div className='min-w-0 flex-1'>
-					<p className='truncate text-[14.5px] font-extrabold text-slate-950'>
+					<p className='truncate text-[14.5px] font-extrabold text-ink'>
 						{parking.name}
 					</p>
 					<p className='mt-0.5 truncate text-[11.5px] text-ink-3'>
@@ -41,7 +41,7 @@ export function DestinationParkingCard({
 				</span>
 			</div>
 
-			<p className='mt-3 text-[12.5px] text-slate-600'>
+			<p className='mt-3 text-[12.5px] text-ink-2'>
 				Bo‘sh {parking.availableSpaces} / {parking.totalSpaces} joy
 			</p>
 			<div className='mt-1.5 h-1.5 overflow-hidden rounded-full bg-line'>
@@ -54,7 +54,7 @@ export function DestinationParkingCard({
 			<div className='mt-3 grid grid-cols-2 gap-2'>
 				<Link
 					href={`/parking/${parking.id}`}
-					className='flex h-11 items-center justify-center rounded-[14px] border border-line-2 text-[13px] font-bold text-slate-800'
+					className='flex h-11 items-center justify-center rounded-[14px] border border-line-2 text-[13px] font-bold text-ink'
 				>
 					Batafsil
 				</Link>

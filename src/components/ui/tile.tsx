@@ -26,7 +26,7 @@ export function Tile({
 		<button
 			type={type}
 			className={cn(
-				'flex cursor-pointer flex-col items-center gap-[7px] text-center',
+				'citygo-tile flex cursor-pointer flex-col items-center gap-[7px] text-center',
 				dimmed && 'opacity-[.32]',
 				className,
 			)}
@@ -34,7 +34,7 @@ export function Tile({
 		>
 			<span
 				className={cn(
-					'grid size-12 place-items-center rounded-2xl transition-transform active:scale-[.92]',
+					'grid size-12 place-items-center rounded-2xl transition-[transform,box-shadow] duration-150',
 					tone,
 					active && 'shadow-[0_0_0_2.5px_var(--color-brand)]',
 				)}

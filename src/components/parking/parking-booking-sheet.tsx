@@ -8,7 +8,13 @@ import { BottomSheet } from '@/components/ui/bottom-sheet'
 import { HorizontalRail } from '@/components/ui/horizontal-rail'
 import { useApp } from '@/context/app-context'
 import { PARKINGS } from '@/data/parkings'
-import { saveBookingMeta } from '@/lib/booking-meta'
+import { BayGrid } from '@/components/parking/bay-grid'
+import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
+import { Chip } from '@/components/ui/chip'
+import { bayMap, firstFreeBay, isBaySelectable } from '@/lib/bay-map'
+import { readBookingMeta, saveBookingMeta } from '@/lib/booking-meta'
+import { useBookingMeta } from '@/hooks/use-booking-meta'
 import { formatDayMonth, formatTime, formatUZS } from '@/lib/format'
 
 // The one parking booking UI in the app. It used to live inline in Home
@@ -51,16 +57,19 @@ function makeBookingDayLabels() {
 	return labels
 }
 
-function suggestedBay(parkingId: string) {
-	const code = parkingId.split('').reduce((sum, ch) => sum + ch.charCodeAt(0), 0)
-	return `A-${String((code % 18) + 1).padStart(2, '0')}`
-}
-
-function makeDraft(parkingId: string): ParkingBookingDraft {
+function makeDraft(
+	parkingId: string,
+	initialBay?: string | null,
+	initialLevel?: number,
+): ParkingBookingDraft {
 	const now = new Date()
 	now.setMinutes(now.getMinutes() + 15)
 	now.setMinutes(Math.ceil(now.getMinutes() / 15) * 15, 0, 0)
 	const nowLabel = formatTime(now)
+	const parking = PARKINGS.find(item => item.id === parkingId)!
+	const level = initialLevel && Number.isInteger(initialLevel) && initialLevel > 0 && initialLevel <= parking.levels
+		? initialLevel : 1
+	const candidate = bayMap(parking, level).bays.find(bay => bay.id === initialBay)
 
 	return {
 		parkingId,
@@ -68,8 +77,10 @@ function makeDraft(parkingId: string): ParkingBookingDraft {
 		dayLabels: makeBookingDayLabels(),
 		slot: 'Hozir',
 		hours: 2,
-		bay: suggestedBay(parkingId),
-		level: 1,
+		// The detail screen's floor plan is the same plan this sheet shows, so
+		// a bay picked there carries straight through instead of being reset.
+		level,
+		bay: candidate && isBaySelectable(candidate.state) ? candidate.id : firstFreeBay(parking, level) ?? '',
 		nowLabel,
 	}
 }
@@ -94,6 +105,10 @@ type ParkingBookingSheetProps = {
 	// The parking to book, or null while the sheet is closed. Every value in
 	// the sheet is read from this parking — nothing is hardcoded.
 	parkingId: string | null
+	// Carried in from the parking detail screen when the user picked a bay on
+	// its floor plan before tapping through.
+	initialBay?: string | null
+	initialLevel?: number
 	onClose: () => void
 	// Routed to the host screen's existing toast rather than a second one.
 	onNotify: (message: string) => void
@@ -105,21 +120,27 @@ export function ParkingBookingSheet({
 }: ParkingBookingSheetProps) {
 	// Mounted only while open, so each visit builds a fresh draft the way
 	// the original openParkingBooking() did.
-	if (!parkingId) return null
-	return <ParkingBookingSheetBody parkingId={parkingId} {...props} />
+	if (!parkingId || !PARKINGS.some(parking => parking.id === parkingId)) return null
+	return <ParkingBookingSheetBody key={parkingId} parkingId={parkingId} {...props} />
 }
 
 function ParkingBookingSheetBody({
 	parkingId,
+	initialBay,
+	initialLevel,
 	onClose,
 	onNotify,
 }: ParkingBookingSheetProps & { parkingId: string }) {
 	const router = useRouter()
-	const { createReservation } = useApp()
+	const { createReservation, reservations } = useApp()
 	const [booking, setBooking] = useState<ParkingBookingDraft>(() =>
-		makeDraft(parkingId),
+		makeDraft(parkingId, initialBay, initialLevel),
 	)
 	const [bayOpen, setBayOpen] = useState(false)
+	const heldReservation = reservations.find(item => item.parkingId === parkingId &&
+		(item.status === 'active' || item.status === 'reserved'))
+	const heldMeta = useBookingMeta(heldReservation?.id)
+	const heldBay = heldMeta?.level === booking.level ? heldMeta.bay : null
 
 	const parking = PARKINGS.find(item => item.id === booking.parkingId)
 	if (!parking) return null
@@ -128,6 +149,20 @@ function ParkingBookingSheetBody({
 		if (!parking) return
 		if (parking.availableSpaces <= 0) {
 			onNotify('Bu parking hozir to‘la')
+			return
+		}
+		const bay = bayMap(parking, booking.level).bays.find(item => item.id === booking.bay)
+		if (!bay || !isBaySelectable(bay.state)) {
+			onNotify('Bo‘sh joyni tanlang')
+			return
+		}
+		const held = reservations.some(item => {
+			if (item.parkingId !== parking.id || !['active', 'reserved'].includes(item.status)) return false
+			const meta = readBookingMeta(item.id)
+			return meta?.level === booking.level && meta.bay === booking.bay
+		})
+		if (held) {
+			onNotify('Bu joy allaqachon siz uchun bron qilingan. Boshqa joyni tanlang.')
 			return
 		}
 
@@ -162,90 +197,64 @@ function ParkingBookingSheetBody({
 	}
 
 	if (bayOpen) {
-		const prefix = String.fromCharCode(64 + booking.level)
-		const bays = Array.from(
-			{ length: 20 },
-			(_, index) => `${prefix}-${String(index + 1).padStart(2, '0')}`,
-		)
-
 		return (
 			<BottomSheet
 				title='Parking joyini tanlang'
 				onClose={() => setBayOpen(false)}
 			>
-				<div className='rounded-2xl bg-white p-3 shadow-sm ring-1 ring-slate-200'>
-					<p className='text-sm font-black text-slate-950'>{parking.name}</p>
-					<p className='mt-1 text-xs text-slate-400'>
-						Bo‘sh joylardan birini tanlang
-					</p>
-				</div>
+				<Card>
+					<div className='flex items-center justify-between gap-3'>
+						<div className='min-w-0'>
+							<p className='truncate text-[14px] font-bold text-ink'>
+								{parking.name}
+							</p>
+							<p className='mt-0.5 text-[11.5px] text-ink-3'>
+								Bo‘sh joylardan birini tanlang
+							</p>
+						</div>
+						<div className='flex gap-1.5'>
+							{Array.from({ length: parking.levels }, (_, index) => (
+								<Chip
+									key={index}
+									active={booking.level === index + 1}
+									onClick={() =>
+										setBooking(current => ({
+											...current,
+											level: index + 1,
+											bay: firstFreeBay(parking!, index + 1) ?? '',
+										}))
+									}
+									className='h-7 px-2.5 text-[11.5px]'
+								>
+									{index + 1}
+								</Chip>
+							))}
+						</div>
+					</div>
 
-				<div className='mt-3 grid grid-cols-3 gap-2 rounded-2xl bg-white p-2 shadow-sm ring-1 ring-slate-200'>
-					{[1, 2, 3].map(level => (
-						<button
-							key={level}
-							type='button'
-							onClick={() =>
-								setBooking(current => ({
-									...current,
-									level,
-									bay: `${String.fromCharCode(64 + level)}-01`,
-								}))
-							}
-							className={`h-11 rounded-xl text-xs font-black ${
-								booking.level === level
-									? 'bg-violet-600 text-white'
-									: 'bg-slate-50 text-slate-600'
-							}`}
-						>
-							{level}-daraja
-						</button>
-					))}
-				</div>
+					<div className='mt-3'>
+						<BayGrid
+							parking={parking}
+							level={booking.level}
+							selectedBay={booking.bay}
+							heldBay={heldBay}
+							onSelect={(bay, state) => {
+								if (!isBaySelectable(state)) return onNotify('Bu joy band')
+								setBooking(current => ({ ...current, bay }))
+							}}
+						/>
+					</div>
+				</Card>
 
-				<div className='mt-3 flex items-center gap-4 px-1 text-[10px] font-bold text-slate-500'>
-					<span className='flex items-center gap-1.5'>
-						<i className='size-2 rounded-full bg-emerald-500' /> Bo‘sh
-					</span>
-					<span className='flex items-center gap-1.5'>
-						<i className='size-2 rounded-full bg-slate-300' /> Band
-					</span>
-					<span className='flex items-center gap-1.5'>
-						<i className='size-2 rounded-full bg-violet-600' /> Tanlangan
-					</span>
-				</div>
-
-				<div className='mt-3 grid grid-cols-4 gap-2 rounded-2xl bg-white p-3 shadow-sm ring-1 ring-slate-200'>
-					{bays.map((bay, index) => {
-						const busy = index % 6 === 2 || index % 9 === 4
-						const selected = booking.bay === bay
-						return (
-							<button
-								key={bay}
-								type='button'
-								disabled={busy}
-								onClick={() => setBooking(current => ({ ...current, bay }))}
-								className={`h-11 rounded-xl text-[11px] font-black transition ${
-									selected
-										? 'bg-violet-600 text-white shadow-md'
-										: busy
-											? 'cursor-not-allowed bg-slate-100 text-slate-300'
-											: 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100'
-								}`}
-							>
-								{bay}
-							</button>
-						)
-					})}
-				</div>
-
-				<button
-					type='button'
+				<Button
+					variant='primary'
+					block
+					className='mt-4'
+					disabled={!booking.bay || booking.bay === heldBay}
 					onClick={() => setBayOpen(false)}
-					className='mt-4 h-12 w-full rounded-2xl bg-violet-600 text-sm font-black text-white'
 				>
-					{booking.bay} joyini tanlash
-				</button>
+					{booking.bay ? `${booking.bay} joyini tanlash` : 'Bu darajada bo‘sh joy yo‘q'}
+				</Button>
 			</BottomSheet>
 		)
 	}
@@ -256,24 +265,24 @@ function ParkingBookingSheetBody({
 
 	return (
 		<BottomSheet title='Parkingni bron qilish' onClose={onClose}>
-			<div className='rounded-2xl bg-white p-3 shadow-sm ring-1 ring-slate-200'>
+			<div className='rounded-2xl bg-white p-3 shadow-card'>
 				<div className='flex items-center gap-3'>
-					<span className='grid size-12 shrink-0 place-items-center rounded-2xl bg-slate-900 text-white'>
+					<span className='grid size-12 shrink-0 place-items-center rounded-2xl bg-ink text-white'>
 						<CircleParking className='size-5' strokeWidth={2} />
 					</span>
 					<div className='min-w-0 flex-1'>
-						<p className='truncate text-sm font-black text-slate-950'>
+						<p className='truncate text-sm font-black text-ink'>
 							{parking.name}
 						</p>
-						<p className='mt-1 truncate text-xs text-slate-400'>
+						<p className='mt-1 truncate text-xs text-ink-3'>
 							{parking.address} · {parking.availableSpaces} ta bo‘sh
 						</p>
 					</div>
 				</div>
 			</div>
 
-			<div className='mt-3 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200'>
-				<p className='text-sm font-black text-slate-900'>Sana</p>
+			<div className='mt-3 rounded-2xl bg-white p-4 shadow-card'>
+				<p className='text-sm font-black text-ink'>Sana</p>
 				<HorizontalRail className='mt-3 gap-2'>
 					{booking.dayLabels.map((label, index) => (
 						<button
@@ -285,10 +294,10 @@ function ParkingBookingSheetBody({
 									dayIndex: index,
 								}))
 							}
-							className={`h-11 shrink-0 rounded-xl px-4 text-xs font-black transition ${
+							className={`h-11 shrink-0 rounded-xl px-4 text-xs font-black transition duration-200 ${
 								booking.dayIndex === index
-									? 'bg-violet-600 text-white shadow-lg shadow-violet-600/20'
-									: 'bg-white text-slate-600 ring-1 ring-slate-200'
+									? 'bg-brand text-white shadow-lg shadow-[0_8px_24px_rgb(108_71_224/.22)]'
+									: 'bg-white text-ink-2 ring-1 ring-line'
 							}`}
 						>
 							{label}
@@ -297,18 +306,18 @@ function ParkingBookingSheetBody({
 				</HorizontalRail>
 			</div>
 
-			<div className='mt-3 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200'>
-				<p className='text-sm font-black text-slate-900'>Kelish vaqti</p>
+			<div className='mt-3 rounded-2xl bg-white p-4 shadow-card'>
+				<p className='text-sm font-black text-ink'>Kelish vaqti</p>
 				<div className='mt-3 grid grid-cols-4 gap-2'>
 					{ARRIVAL_SLOTS.map(slot => (
 						<button
 							key={slot}
 							type='button'
 							onClick={() => setBooking(current => ({ ...current, slot }))}
-							className={`h-11 rounded-xl text-[11px] font-black transition ${
+							className={`h-11 rounded-xl text-[11px] font-black transition duration-200 ${
 								booking.slot === slot
-									? 'bg-violet-600 text-white shadow-lg shadow-violet-600/20'
-									: 'bg-white text-slate-600 ring-1 ring-slate-200'
+									? 'bg-brand text-white shadow-lg shadow-[0_8px_24px_rgb(108_71_224/.22)]'
+									: 'bg-white text-ink-2 ring-1 ring-line'
 							}`}
 						>
 							{slot}
@@ -317,9 +326,9 @@ function ParkingBookingSheetBody({
 				</div>
 			</div>
 
-			<div className='mt-3 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200'>
+			<div className='mt-3 rounded-2xl bg-white p-4 shadow-card'>
 				<div className='flex items-center justify-between gap-3'>
-					<p className='text-sm font-black text-slate-900'>Davomiyligi</p>
+					<p className='text-sm font-black text-ink'>Davomiyligi</p>
 					<div className='flex items-center gap-3'>
 						<button
 							type='button'
@@ -329,12 +338,12 @@ function ParkingBookingSheetBody({
 									hours: Math.max(1, current.hours - 1),
 								}))
 							}
-							className='grid size-11 place-items-center rounded-xl bg-slate-50 text-slate-800'
+							className='grid size-11 place-items-center rounded-xl bg-canvas text-ink'
 							aria-label='Bir soat kamaytirish'
 						>
 							<Minus className='size-5' />
 						</button>
-						<strong className='min-w-12 text-center text-lg font-black text-slate-950'>
+						<strong className='min-w-12 text-center text-lg font-black text-ink'>
 							{booking.hours} s
 						</strong>
 						<button
@@ -345,7 +354,7 @@ function ParkingBookingSheetBody({
 									hours: Math.min(24, current.hours + 1),
 								}))
 							}
-							className='grid size-11 place-items-center rounded-xl bg-slate-50 text-slate-800'
+							className='grid size-11 place-items-center rounded-xl bg-canvas text-ink'
 							aria-label='Bir soat qo‘shish'
 						>
 							<Plus className='size-5' />
@@ -358,10 +367,10 @@ function ParkingBookingSheetBody({
 							key={hours}
 							type='button'
 							onClick={() => setBooking(current => ({ ...current, hours }))}
-							className={`h-10 rounded-xl text-[11px] font-black transition ${
+							className={`h-10 rounded-xl text-[11px] font-black transition duration-200 ${
 								booking.hours === hours
-									? 'bg-violet-600 text-white'
-									: 'bg-white text-slate-600 ring-1 ring-slate-200'
+									? 'bg-brand text-white'
+									: 'bg-white text-ink-2 ring-1 ring-line'
 							}`}
 						>
 							{hours === 24 ? 'sutka' : `${hours} s`}
@@ -370,27 +379,27 @@ function ParkingBookingSheetBody({
 				</div>
 			</div>
 
-			<div className='mt-3 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200'>
+			<div className='mt-3 rounded-2xl bg-white p-4 shadow-card'>
 				<div className='flex items-center justify-between gap-3'>
-					<p className='text-sm font-black text-slate-900'>Joy</p>
+					<p className='text-sm font-black text-ink'>Joy</p>
 					<button
 						type='button'
 						onClick={() => setBayOpen(true)}
-						className='h-9 rounded-xl bg-white px-3 text-[11px] font-black text-slate-700 ring-1 ring-slate-200'
+						className='h-9 rounded-xl bg-white px-3 text-[11px] font-black text-ink-2 ring-1 ring-line'
 					>
 						Boshqasini tanlash
 					</button>
 				</div>
 				<div className='mt-3 flex items-center gap-3'>
-					<div className='w-22 shrink-0 rounded-2xl bg-violet-50 px-2 py-3 text-center'>
-						<p className='font-mono text-xl font-black text-violet-600'>
-							{booking.bay}
+					<div className='w-22 shrink-0 rounded-2xl bg-brand-50 px-2 py-3 text-center'>
+						<p className='font-mono text-xl font-black text-brand'>
+							{booking.bay || '—'}
 						</p>
-						<p className='mt-1 text-[10px] text-slate-400'>
+						<p className='mt-1 text-[10px] text-ink-3'>
 							{booking.level}-daraja
 						</p>
 					</div>
-					<p className='text-xs leading-5 text-slate-500'>
+					<p className='text-xs leading-5 text-ink-3'>
 						Joy siz uchun biriktiriladi. Shlagbaum{' '}
 						{hasAnpr ? 'avtomobil raqami yoki QR orqali' : 'QR-kod orqali'}{' '}
 						ochiladi.
@@ -398,7 +407,7 @@ function ParkingBookingSheetBody({
 				</div>
 			</div>
 
-			<div className='mt-3 rounded-2xl bg-white px-4 shadow-sm ring-1 ring-slate-200'>
+			<div className='mt-3 rounded-2xl bg-white px-4 shadow-card'>
 				{[
 					['Tarif', `${formatUZS(parking.pricePerHour)}/soat`],
 					['Davomiyligi', `${booking.hours} soat`],
@@ -407,15 +416,15 @@ function ParkingBookingSheetBody({
 				].map(([label, value], index) => (
 					<div
 						key={label}
-						className={`flex items-center justify-between gap-4 py-3 text-xs ${index ? 'border-t border-slate-100' : ''}`}
+						className={`flex items-center justify-between gap-4 py-3 text-xs ${index ? 'border-t border-line' : ''}`}
 					>
-						<span className='text-slate-500'>{label}</span>
-						<strong className='text-right text-slate-900'>{value}</strong>
+						<span className='text-ink-3'>{label}</span>
+						<strong className='text-right text-ink'>{value}</strong>
 					</div>
 				))}
-				<div className='flex items-center justify-between gap-4 border-t border-slate-100 py-3'>
-					<span className='text-xs text-slate-500'>Jami</span>
-					<strong className='text-lg font-black text-slate-950'>
+				<div className='flex items-center justify-between gap-4 border-t border-line py-3'>
+					<span className='text-xs text-ink-3'>Jami</span>
+					<strong className='text-lg font-black text-ink'>
 						{total ? formatUZS(total) : 'Bepul'}
 					</strong>
 				</div>
@@ -424,11 +433,11 @@ function ParkingBookingSheetBody({
 			<button
 				type='button'
 				onClick={confirmParkingBooking}
-				className='mt-4 h-13 w-full rounded-2xl bg-violet-600 px-4 text-sm font-black text-white shadow-lg shadow-violet-600/25'
+				className='mt-4 h-13 w-full rounded-2xl bg-brand px-4 text-sm font-black text-white shadow-lg shadow-[0_6px_16px_rgb(108_71_224/.28)]'
 			>
 				{total ? 'To‘lash va bron qilish' : 'Bron qilish'}
 			</button>
-			<p className='mt-2 text-center text-[11px] text-slate-400'>
+			<p className='mt-2 text-center text-[11px] text-ink-3'>
 				Kelishdan 1 soat oldin bepul bekor qilish mumkin
 			</p>
 		</BottomSheet>

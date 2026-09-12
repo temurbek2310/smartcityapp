@@ -29,13 +29,13 @@ export function Switch({
 			<span
 				aria-hidden
 				className={cn(
-					'block h-[26px] w-11 rounded-full transition-colors peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-brand',
+					'block h-[26px] w-11 rounded-full transition-colors duration-200 peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-brand',
 					checked ? 'bg-brand' : 'bg-line-2',
 				)}
 			>
 				<i
 					className={cn(
-						'absolute left-[3px] top-[3px] size-5 rounded-full bg-white shadow-[0_1px_3px_rgb(0_0_0/.2)] transition-transform',
+						'absolute left-[3px] top-[3px] size-5 rounded-full bg-white shadow-[0_1px_3px_rgb(0_0_0/.2)] transition-transform duration-200',
 						checked && 'translate-x-[18px]',
 					)}
 				/>

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 
+import { formatUZS } from '@/lib/format'
 import type { Coordinate } from '@/lib/geo'
 import { TASHKENT_CENTER, UZBEKISTAN_BOUNDS } from '@/lib/geo'
 import type { Parking } from '@/lib/types'
@@ -15,7 +16,12 @@ type ParkingMapProps = {
 	onSelect?: (parkingId: string) => void
 	selectedParkingId?: string | null
 	userLocation?: Coordinate
+	locateRevision?: number
 	routeTo?: Coordinate
+	// City Goo puts a price tag under every parking pin, behind a toggle on the
+	// map controls. The toggle existed here before this prop did, so it lit up
+	// and changed nothing.
+	showPrices?: boolean
 	className?: string
 }
 
@@ -39,7 +45,9 @@ export function ParkingMap({
 	onSelect,
 	selectedParkingId,
 	userLocation,
+	locateRevision = 0,
 	routeTo,
+	showPrices = false,
 	className = 'h-[46vh]',
 }: ParkingMapProps) {
 	const containerRef = useRef<HTMLDivElement>(null)
@@ -164,12 +172,14 @@ export function ParkingMap({
 
 			const outer = document.createElement('button')
 			outer.type = 'button'
+			outer.className = 'citygo-map-pin'
 			outer.title = `${parking.name} — ${parking.availableSpaces} bo‘sh joy`
 			outer.setAttribute(
 				'aria-label',
 				`${parking.name}, ${parking.availableSpaces} bo‘sh joy`,
 			)
 			outer.style.cssText = `
+        position: relative;
         width: 48px;
         height: 56px;
         padding: 0;
@@ -184,6 +194,7 @@ export function ParkingMap({
       `
 
 			const visual = document.createElement('span')
+			visual.className = 'citygo-map-pin-bubble'
 			visual.style.cssText = `
         position: relative;
         display: flex;
@@ -202,7 +213,6 @@ export function ParkingMap({
 						? '0 0 0 5px rgba(20,184,166,.22), 0 10px 28px rgba(15,23,42,.32)'
 						: '0 7px 18px rgba(15,23,42,.24)'
 				};
-        transition: box-shadow 160ms ease;
         pointer-events: none;
       `
 
@@ -227,6 +237,28 @@ export function ParkingMap({
 
 			visual.appendChild(tail)
 			outer.appendChild(visual)
+
+			if (showPrices) {
+				const price = document.createElement('span')
+				price.textContent = parking.pricePerHour
+					? `${formatUZS(parking.pricePerHour)}/soat`
+					: 'Bepul'
+				price.style.cssText = `
+          position: absolute;
+          left: 50%;
+          bottom: -16px;
+          transform: translateX(-50%);
+          background: #ffffff;
+          color: #0f172a;
+          font: 700 10px/1 var(--font-sans);
+          padding: 3px 6px;
+          border-radius: 7px;
+          white-space: nowrap;
+          box-shadow: 0 2px 8px rgba(15,23,42,.2);
+          pointer-events: none;
+        `
+				outer.appendChild(price)
+			}
 
 			outer.addEventListener('click', event => {
 				event.preventDefault()
@@ -253,7 +285,7 @@ export function ParkingMap({
 				parkingMarkersRef.current = []
 			}
 		}
-	}, [parkings, selectedParkingId, mapReady])
+	}, [parkings, selectedParkingId, showPrices, mapReady])
 
 	// When search results change, show a useful local viewport. We deliberately
 	// do NOT fit all Uzbekistan-wide demo records into one view because that
@@ -323,6 +355,7 @@ export function ParkingMap({
 		if (!userLocation) return
 
 		const element = document.createElement('div')
+		element.className = 'citygo-location-dot'
 		element.setAttribute('aria-label', 'Sizning joylashuvingiz')
 		element.style.cssText = `
       width: 18px;
@@ -353,6 +386,15 @@ export function ParkingMap({
 			userMarkerRef.current = null
 		}
 	}, [userLocation, selectedParkingId, routeTo, mapReady])
+
+	useEffect(() => {
+		if (!mapReady || !locateRevision || !userLocation) return
+		const element = userMarkerRef.current?.getElement()
+		if (!element) return
+		element.classList.remove('is-ping')
+		void element.offsetWidth
+		element.classList.add('is-ping')
+	}, [mapReady, userLocation, locateRevision])
 
 	// Straight-line MVP navigation preview. The real road routing hand-off is
 	// handled by the navigation page's external navigator button.
@@ -425,7 +467,7 @@ export function ParkingMap({
 	return (
 		<div
 			ref={containerRef}
-			className={`relative overflow-hidden rounded-[2rem] bg-slate-100 ${className}`}
+			className={`relative overflow-hidden rounded-[2rem] bg-card-2 ${className}`}
 		/>
 	)
 }

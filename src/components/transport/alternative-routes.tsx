@@ -1,9 +1,9 @@
 'use client'
 
 const TONE_TEXT: Record<'ok' | 'warn' | 'bad', string> = {
-	ok: 'text-emerald-600',
-	warn: 'text-amber-600',
-	bad: 'text-rose-500',
+	ok: 'text-ok',
+	warn: 'text-warn',
+	bad: 'text-bad',
 }
 
 export type AlternativeRoute = {
@@ -29,7 +29,7 @@ export function AlternativeRoutes({
 }: AlternativeRoutesProps) {
 	return (
 		<section>
-			<h2 className='px-1 text-[18px] font-extrabold tracking-[-0.01em] text-slate-950'>
+			<h2 className='px-1 text-[18px] font-extrabold tracking-[-0.01em] text-ink'>
 				Muqobil marshrutlar
 			</h2>
 
@@ -49,7 +49,7 @@ export function AlternativeRoutes({
 								className={`grid size-9 shrink-0 place-items-center rounded-[13px] text-[13px] font-black ${
 									selected
 										? 'bg-brand text-white'
-										: 'bg-card-2 text-slate-500'
+										: 'bg-card-2 text-ink-3'
 								}`}
 							>
 								{index + 1}
@@ -57,11 +57,11 @@ export function AlternativeRoutes({
 
 							<div className='min-w-0 flex-1'>
 								<div className='flex items-start justify-between gap-2'>
-									<p className='text-[14px] font-extrabold text-slate-950'>
+									<p className='text-[14px] font-extrabold text-ink'>
 										{route.title}
 									</p>
 									{route.best && (
-										<span className='shrink-0 rounded-full bg-ok-bg px-2 py-0.5 text-[10px] font-extrabold text-emerald-700'>
+										<span className='shrink-0 rounded-full bg-ok-bg px-2 py-0.5 text-[10px] font-extrabold text-ok'>
 											Tezroq
 										</span>
 									)}

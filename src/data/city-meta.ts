@@ -11,4 +11,5 @@ export const CITY_META: Record<string, CityMeta> = {
 	Samarqand: { temp: 24, sky: 'Bulutli', population: '560 ming' },
 	Buxoro: { temp: 29, sky: 'Ochiq', population: '280 ming' },
 	Namangan: { temp: 23, sky: 'Yengil yomg‘ir', population: '650 ming' },
+	Andijon: { temp: 25, sky: 'Ochiq', population: '450 ming' },
 }

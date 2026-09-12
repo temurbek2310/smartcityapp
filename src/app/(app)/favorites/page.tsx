@@ -140,7 +140,7 @@ export default function FavoritesPage() {
 	// edge to edge — the same idiom parking/[id] uses for its hero. This was
 	// a nested <main>, which gave the document two landmarks.
 	return (
-		<div className='-mx-5 -mt-6 min-h-[calc(100dvh-var(--spacing-nav))] bg-canvas pb-28 pt-5 text-slate-950'>
+		<div className='-mx-5 -mt-6 min-h-[calc(100dvh-var(--spacing-nav))] bg-canvas pb-28 pt-5 text-ink'>
 			<div className='mx-auto w-full max-w-md'>
 				<header className='px-4'>
 					<div className='flex items-start justify-between gap-4'>
@@ -155,7 +155,7 @@ export default function FavoritesPage() {
 
 						<button
 							type='button'
-							className='grid size-12 shrink-0 place-items-center rounded-[15px] bg-white text-slate-700 shadow-[0_7px_22px_rgba(15,23,42,0.08)] ring-1 ring-line active:scale-[0.97]'
+							className='grid size-12 shrink-0 place-items-center rounded-[15px] bg-white text-ink-2 shadow-[0_7px_22px_rgba(15,23,42,0.08)] ring-1 ring-line active:scale-[0.97]'
 							aria-label='Sevimlilar menyusi'
 						>
 							<span className='-translate-y-0.5 text-[22px] leading-none'>
@@ -240,7 +240,7 @@ export default function FavoritesPage() {
 															Bo‘sh {parking.availableSpaces} /{' '}
 															{parking.totalSpaces}
 														</span>
-														<span className='shrink-0 text-[12.5px] font-extrabold text-slate-950'>
+														<span className='shrink-0 text-[12.5px] font-extrabold text-ink'>
 															{formatUZS(parking.pricePerHour)}/s
 														</span>
 													</div>
@@ -272,7 +272,7 @@ export default function FavoritesPage() {
 												<button
 													type='button'
 													onClick={() => toggleFavorite(parking.id)}
-													className='grid size-[34px] shrink-0 place-items-center rounded-[9px] bg-card-2 text-rose-500 active:scale-[0.975]'
+													className='grid size-[34px] shrink-0 place-items-center rounded-[9px] bg-card-2 text-bad active:scale-[0.975]'
 													aria-label={`${parking.name}ni sevimlilardan olib tashlash`}
 												>
 													<X className='size-4' />
@@ -620,7 +620,7 @@ function PlaceFavoriteCard({
 					onClick={onRemove}
 					className='flex h-9 items-center justify-center gap-1.5 rounded-[10px] border border-line-2 bg-white px-2 text-[11px] font-bold active:scale-[0.98]'
 				>
-					<Heart className='size-3.5 text-rose-500' /> Olib tashlash
+					<Heart className='size-3.5 text-bad' /> Olib tashlash
 				</button>
 			</div>
 		</article>

@@ -1,6 +1,7 @@
 'use client'
 
 import {
+	BellRing,
 	Bookmark,
 	Clock3,
 	CircleParking,
@@ -24,20 +25,25 @@ import { DrivingRecommendationCard } from '@/components/transport/driving-recomm
 import { LocationCard } from '@/components/transport/location-card'
 import { PublicTransportSection, type PublicTransportTab } from '@/components/transport/public-transport-section'
 import { RouteFiltersSheet, ROUTE_FILTERS, type RouteFilterId } from '@/components/transport/route-filters-sheet'
-import { RouteMap } from '@/components/transport/route-map'
+import { RouteMap, type RouteProblem } from '@/components/transport/route-map'
 import { RouteNotices, type RouteNotice } from '@/components/transport/route-notices'
 import { RouteSummary } from '@/components/transport/route-summary'
 import { RouteTimeline, type TimelineStep } from '@/components/transport/route-timeline'
 import { TransportHeader } from '@/components/transport/transport-header'
+import { TurnByTurn } from '@/components/transport/turn-by-turn'
 import { TransportModeSelector } from '@/components/transport/transport-mode-selector'
+import { BottomSheet } from '@/components/ui/bottom-sheet'
+import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
+import { KeyValue, KeyValueList } from '@/components/ui/key-value'
 import { Toast } from '@/components/ui/toast'
 import { useApp } from '@/context/app-context'
 import { CITY_META } from '@/data/city-meta'
 import {
 	DEMO_ALTERNATIVE_ROUTES,
 	DEMO_BUSES,
+	type DemoBus,
 	DEMO_CURRENT_SITUATION,
-	DEMO_DESTINATIONS,
 	DEMO_DRIVING_TIPS,
 	DEMO_METRO_LINES,
 	DEMO_MICRO_OPTIONS,
@@ -45,7 +51,7 @@ import {
 	DEMO_ROUTE_FACTS,
 	DEMO_ROUTE_TIMELINE,
 } from '@/data/demo-transport'
-import { getParking, PARKINGS } from '@/data/parkings'
+import { getParking } from '@/data/parkings'
 import {
 	estimateFareUZS,
 	estimateMinutesForMode,
@@ -55,6 +61,7 @@ import {
 import { distanceKm } from '@/lib/geo'
 import { isTransportMode, TRANSPORT_MODES, type TransportMode } from '@/lib/transport'
 import { useUserLocation } from '@/lib/use-user-location'
+import { externalNavigationHref, nearestParking, resolveRouteEndpoint } from '@/lib/route-endpoints'
 
 const MODE_COST_LABEL: Record<TransportMode, string> = {
 	car: 'yoqilg‘i',
@@ -73,14 +80,19 @@ export default function TransportPage() {
 	return (
 		<Suspense
 			fallback={
-				<div className='py-24 text-center text-sm text-slate-400'>
+				<div className='py-24 text-center text-sm text-ink-3'>
 					Yuklanmoqda…
 				</div>
 			}
 		>
-			<TransportView />
+			<TransportRoute />
 		</Suspense>
 	)
+}
+
+function TransportRoute() {
+	const params = useSearchParams()
+	return <TransportView key={params.toString()} />
 }
 
 function TransportView() {
@@ -89,11 +101,13 @@ function TransportView() {
 	const searchParams = useSearchParams()
 	const modeParam = searchParams.get('mode')
 	const parkingIdParam = searchParams.get('parkingId')
+	const targetParam = searchParams.get('target')
 
 	const [mode, setMode] = useState<TransportMode>(() =>
 		isTransportMode(modeParam) ? modeParam : 'car',
 	)
 	const [showRoute, setShowRoute] = useState(true)
+	const [locateRevision, setLocateRevision] = useState(0)
 	const [filtersOpen, setFiltersOpen] = useState(false)
 	const [filters, setFilters] = useState<Record<RouteFilterId, boolean>>(
 		() =>
@@ -108,35 +122,27 @@ function TransportView() {
 	// this screen for as long as the user stays in the transport flow.
 	const [selectedDestinationId, setSelectedDestinationId] = useState<
 		string | null
-	>(null)
+	>(() => targetParam ?? (parkingIdParam ? `parking:${parkingIdParam}` : 'magic-city'))
+	// null means "wherever the GPS says I am" — the screen's default, and what
+	// the address book's own "Mening joylashuvim" entry resolves back to.
+	const [selectedOriginId, setSelectedOriginId] = useState('me')
+	const [originSheetOpen, setOriginSheetOpen] = useState(false)
+	const [openProblem, setOpenProblem] = useState<RouteProblem | null>(null)
+	const [openBus, setOpenBus] = useState<DemoBus | null>(null)
+	const [navigating, setNavigating] = useState(false)
 
 	const { location, status, locate } = useUserLocation()
 	useEffect(() => {
 		locate()
 	}, [locate])
 
-	const selectedDestination = useMemo(
-		() => DEMO_DESTINATIONS.find(item => item.id === selectedDestinationId),
-		[selectedDestinationId],
-	)
-
-	const destination = useMemo(() => {
-		// A picked destination decides which real parking this route targets.
-		// Entries with no parking of their own (the driver's own position)
-		// fall through to the closest one — the screen's existing default.
-		if (selectedDestination) {
-			const linked = selectedDestination.parkingId
-				? getParking(selectedDestination.parkingId)
-				: undefined
-			if (linked) return linked
-		} else {
-			const fromParam = parkingIdParam ? getParking(parkingIdParam) : undefined
-			if (fromParam) return fromParam
-		}
-		return [...PARKINGS].sort(
-			(a, b) => distanceKm(location, a) - distanceKm(location, b),
-		)[0]
-	}, [parkingIdParam, location, selectedDestination])
+	const originPoint = useMemo(() =>
+		resolveRouteEndpoint(selectedOriginId, location)!, [selectedOriginId, location])
+	const destinationPoint = useMemo(() =>
+		resolveRouteEndpoint(selectedDestinationId ?? 'magic-city', location) ??
+		resolveRouteEndpoint('magic-city', location)!, [selectedDestinationId, location])
+	const destination = useMemo(() => getParking(destinationPoint.parkingId ?? '') ??
+		nearestParking(destinationPoint), [destinationPoint])
 
 	// Toast. A recalculation only records that it happened — its duration is
 	// read from the live route further down, so the text can never drift
@@ -207,19 +213,38 @@ function TransportView() {
 	)
 
 	const refreshOrigin = useCallback(() => {
+		setLocateRevision(current => current + 1)
 		locate()
 		announceRecalc()
 	}, [locate, announceRecalc])
 
+	const pickOrigin = useCallback(
+		(id: string) => {
+			setSelectedOriginId(id)
+			setOriginSheetOpen(false)
+			announceRecalc()
+		},
+		[announceRecalc],
+	)
+
+	// City Goo's tSwap. 'me' is how the address book spells the GPS fix, so a
+	// swap that sends the current location to the destination slot keeps it
+	// nameable rather than silently becoming "nearest parking".
+	const swapEnds = useCallback(() => {
+		setSelectedOriginId(destinationPoint.id)
+		setSelectedDestinationId(originPoint.id)
+		announceRecalc()
+	}, [originPoint.id, destinationPoint.id, announceRecalc])
+
 	if (!destination) {
 		return (
-			<div className='rounded-3xl bg-rose-50 p-6 text-sm text-rose-700'>
+			<div className='rounded-3xl bg-bad-bg p-6 text-sm text-bad'>
 				Parking topilmadi.
 			</div>
 		)
 	}
 
-	const distanceValue = distanceKm(location, destination)
+	const distanceValue = distanceKm(originPoint, destinationPoint)
 	const minutes = estimateMinutesForMode(distanceValue, mode)
 	const modesOnly = TRANSPORT_MODES.map(item => item.id)
 	const fastest = fastestMode(distanceValue, modesOnly)
@@ -237,29 +262,30 @@ function TransportView() {
 	const tipValue = mode === 'car' ? `${speedRange.low}–${speedRange.high}` : drivingTip.demoValue
 	const tipUnit = mode === 'car' ? 'km/soat' : drivingTip.demoUnit
 
-	const originStatusLabel =
+	const gpsLabel =
 		status === 'ready'
 			? 'Joriy joylashuvingiz (GPS)'
 			: status === 'loading'
 				? 'Joylashuv aniqlanmoqda…'
 				: 'Toshkent markazi (demo joylashuv)'
 
+	const originStatusLabel = originPoint.id === 'me' ? gpsLabel
+		: [originPoint.title, originPoint.address].filter(Boolean).join(', ')
+
 	// City Goo shows the picked place itself in the "Qayerga" row; until
 	// something is picked the row keeps showing the parking this route
 	// already targets.
-	const destinationValue = selectedDestination
-		? selectedDestination.address
-			? `${selectedDestination.title}, ${selectedDestination.address}`
-			: selectedDestination.title
-		: `${destination.name}, ${destination.address}`
+	const destinationValue = destinationPoint.id === 'me' ? gpsLabel
+		: [destinationPoint.title, destinationPoint.address].filter(Boolean).join(', ')
 
 	const timelineSteps: TimelineStep[] = [
 		{
 			icon: LocateFixed,
 			tone: '#6c47e0',
-			title: 'Start',
+			title: 'Boshlanish',
 			subtitle: originStatusLabel,
 			distanceLabel: '0 km',
+			distanceKm: 0,
 		},
 		...DEMO_ROUTE_TIMELINE[mode].map(step => ({
 			icon: step.icon,
@@ -267,14 +293,16 @@ function TransportView() {
 			title: step.title,
 			subtitle: step.subtitle,
 			distanceLabel: `${(step.atFraction * distanceValue).toFixed(1)} km`,
+			distanceKm: step.atFraction * distanceValue,
 			note: step.note,
 		})),
 		{
 			icon: CircleParking,
 			tone: '#6c47e0',
-			title: destination.name,
-			subtitle: destination.address,
+			title: destinationPoint.title,
+			subtitle: destinationPoint.address,
 			distanceLabel: `${distanceValue.toFixed(1)} km`,
+			distanceKm: distanceValue,
 			note: `${destination.availableSpaces} joy bo‘sh — ${destination.address}dan kirish.`,
 		},
 	]
@@ -293,7 +321,7 @@ function TransportView() {
 	const cityMeta = CITY_META[destination.city] ?? CITY_META.Toshkent
 	const WeatherIcon = weatherIconFor(cityMeta.sky)
 
-	const navigateHref = `https://www.google.com/maps/dir/?api=1&destination=${destination.lat},${destination.lng}`
+	const navigateHref = externalNavigationHref(originPoint, destinationPoint, mode)
 
 	const notices: RouteNotice[] = [
 		{
@@ -312,7 +340,7 @@ function TransportView() {
 			icon: CircleParking,
 			tone: 'brand',
 			title: 'Manzildagi parkovka',
-			message: `${destination.availableSpaces} dan ${destination.totalSpaces} joy bo‘sh. Qidirmaslik uchun bron qiling.`,
+			message: `${destination.totalSpaces} dan ${destination.availableSpaces} joy bo‘sh. Qidirmaslik uchun bron qiling.`,
 			href:
 				destination.availableSpaces > 0
 					? undefined
@@ -341,11 +369,13 @@ function TransportView() {
 			<LocationCard
 				originLabel='Qayerdan'
 				originValue={originStatusLabel}
-				onOriginAction={refreshOrigin}
-				originActionLabel='Joylashuvni yangilash'
+				onOriginClick={() => setOriginSheetOpen(true)}
+				onRefreshOrigin={refreshOrigin}
+				refreshing={status === 'loading'}
 				destinationLabel='Qayerga'
 				destinationValue={destinationValue}
 				onDestinationClick={() => setDestinationSheetOpen(true)}
+				onSwap={swapEnds}
 			/>
 
 			<TransportModeSelector
@@ -355,15 +385,21 @@ function TransportView() {
 			/>
 
 			<RouteMap
-				origin={location}
+				origin={originPoint}
 				locating={status === 'loading'}
-				onLocate={() => locate()}
-				destination={destination}
+				locateRevision={locateRevision}
+				onLocate={() => {
+					setLocateRevision(current => current + 1)
+					locate()
+				}}
+				destination={destinationPoint}
 				showRoute={showRoute}
 				onToggleRoute={() => setShowRoute(current => !current)}
+				onOpenProblem={setOpenProblem}
 			/>
 
 			<AiRecommendationCard
+				key={`${mode}:${minutes}`}
 				currentMode={mode}
 				currentMinutes={minutes}
 				fastestMode={fastest.mode}
@@ -385,7 +421,7 @@ function TransportView() {
 				type='button'
 				onClick={() => {
 					saveRoute({
-						title: selectedDestination?.title ?? destination.name,
+						title: destinationPoint.title,
 						from: originStatusLabel,
 						to: destinationValue,
 						mode,
@@ -398,7 +434,10 @@ function TransportView() {
 				<Bookmark className='size-4 text-brand' /> Marshrutni saqlash
 			</button>
 
-			<RouteTimeline steps={timelineSteps} navigateHref={navigateHref} />
+			<RouteTimeline
+				steps={timelineSteps}
+				onStartNavigation={() => setNavigating(true)}
+			/>
 
 			<DrivingRecommendationCard
 				title={drivingTip.title}
@@ -417,6 +456,7 @@ function TransportView() {
 				activeTab={publicTab}
 				onChangeTab={setPublicTab}
 				buses={DEMO_BUSES}
+				onOpenBus={setOpenBus}
 				metroLines={DEMO_METRO_LINES}
 				microOptions={DEMO_MICRO_OPTIONS}
 			/>
@@ -449,7 +489,16 @@ function TransportView() {
 				onClose={closeDestinationSheet}
 				onSelect={pickDestination}
 				selectedId={selectedDestinationId}
-				currentLocationLabel={originStatusLabel}
+				currentLocationLabel={gpsLabel}
+			/>
+
+			<DestinationSheet
+				title='Qayerdan'
+				open={originSheetOpen}
+				onClose={() => setOriginSheetOpen(false)}
+				onSelect={pickOrigin}
+				selectedId={selectedOriginId ?? 'me'}
+				currentLocationLabel={gpsLabel}
 			/>
 
 			<ParkingBookingSheet
@@ -457,6 +506,87 @@ function TransportView() {
 				onClose={closeBookingSheet}
 				onNotify={notifyBooking}
 			/>
+
+			{navigating && (
+				<TurnByTurn
+					steps={timelineSteps.slice(1)}
+					minutes={minutes}
+					navigateHref={navigateHref}
+					onClose={() => {
+						setNavigating(false)
+						notifyBooking('Navigatsiya yopildi')
+					}}
+					onComplete={() => {
+						setNavigating(false)
+						notifyBooking(`Yetib keldingiz · ${destinationPoint.title}`)
+					}}
+				/>
+			)}
+
+			{openProblem && (
+				<BottomSheet
+					title={openProblem.title}
+					onClose={() => setOpenProblem(null)}
+				>
+					<Card>
+						<p className='text-[13px] leading-5 text-ink-2'>
+							{openProblem.detail}
+						</p>
+					</Card>
+					<Button
+						variant='primary'
+						block
+						className='mt-4'
+						onClick={() => {
+							setOpenProblem(null)
+							announceRecalc()
+						}}
+					>
+						Marshrutni qayta hisoblash
+					</Button>
+				</BottomSheet>
+			)}
+
+			{openBus && (
+				<BottomSheet
+					title={`Avtobus ${openBus.number}`}
+					onClose={() => setOpenBus(null)}
+				>
+					<Card>
+						<KeyValueList>
+							<KeyValue label='Yo‘nalish' value={openBus.route} />
+							<KeyValue
+								label='Kelish vaqti'
+								value={`${openBus.arrivalMin} daqiqa`}
+							/>
+							<KeyValue label='Bekatlar' value={`${openBus.stops} ta`} />
+							<KeyValue
+								label='Bandlik'
+								value={`${openBus.occupancyPct}% · ${openBus.passengers} yo‘lovchi`}
+							/>
+							<KeyValue
+								label='Joylar'
+								value={`${openBus.seated} o‘rindiqli / ${openBus.standing} tik`}
+							/>
+						</KeyValueList>
+					</Card>
+					<Button
+						variant='primary'
+						block
+						className='mt-4'
+						onClick={() => {
+							const number = openBus.number
+							const minutes = openBus.arrivalMin
+							setOpenBus(null)
+							notifyBooking(
+								`${number}-avtobus ${minutes} daqiqada kelganda xabar beramiz`,
+							)
+						}}
+					>
+						<BellRing className='size-4' /> Kelganda xabar berish
+					</Button>
+				</BottomSheet>
+			)}
 
 			{/* Duration is read from the live route, never stored with the toast. */}
 			<Toast

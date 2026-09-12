@@ -32,10 +32,10 @@ export function parkingAvailability(parking: Parking): ParkingAvailability {
 
 	const tone: AvailabilityTone =
 		!full && percent >= 30
-			? { text: 'text-emerald-600', bar: 'bg-emerald-500' }
+			? { text: 'text-ok', bar: 'bg-ok' }
 			: !full && percent >= 15
-				? { text: 'text-amber-600', bar: 'bg-amber-500' }
-				: { text: 'text-rose-500', bar: 'bg-rose-500' }
+				? { text: 'text-warn', bar: 'bg-warn' }
+				: { text: 'text-bad', bar: 'bg-bad' }
 
 	return { percent, full, tone }
 }

@@ -19,8 +19,8 @@ export function DrivingRecommendationCard({
 				<p className='text-[11.5px] font-extrabold text-brand'>
 					Tavsiya · AI
 				</p>
-				<p className='mt-1 text-[16px] font-extrabold text-slate-950'>{title}</p>
-				<p className='mt-1 text-[12.5px] leading-5 text-slate-500'>{explain}</p>
+				<p className='mt-1 text-[16px] font-extrabold text-ink'>{title}</p>
+				<p className='mt-1 text-[12.5px] leading-5 text-ink-3'>{explain}</p>
 			</div>
 
 			<div className='grid shrink-0 place-items-center rounded-[16px] bg-ok-bg px-4 py-3 text-center'>

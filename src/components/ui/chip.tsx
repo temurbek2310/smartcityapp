@@ -18,7 +18,7 @@ export function Chip({
 		<button
 			type={type}
 			className={cn(
-				'flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[11px] border px-3.5 text-[13px] font-semibold transition-colors',
+				'flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[11px] border px-3.5 text-[13px] font-semibold transition-colors duration-200',
 				active
 					? 'border-brand bg-brand text-white'
 					: 'border-line bg-white text-ink-2',

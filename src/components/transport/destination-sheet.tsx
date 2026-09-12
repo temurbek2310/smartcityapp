@@ -16,6 +16,8 @@ const CARD_SHADOW =
 
 type DestinationSheetProps = {
 	open: boolean
+	// The same picker serves both ends of the route; only the heading differs.
+	title?: string
 	onClose: () => void
 	onSelect: (id: string) => void
 	// Id of the destination currently driving the route, or null while the
@@ -35,6 +37,7 @@ export function DestinationSheet({ open, ...props }: DestinationSheetProps) {
 }
 
 function DestinationSheetBody({
+	title = 'Qayerga',
 	onClose,
 	onSelect,
 	selectedId,
@@ -61,7 +64,7 @@ function DestinationSheetBody({
 	}, [query, subtitleFor])
 
 	return (
-		<BottomSheet title='Qayerga' onClose={onClose} slideUp>
+		<BottomSheet title={title} onClose={onClose} slideUp>
 			<div
 				className={`mb-3 flex h-12 items-center gap-2.5 rounded-[15px] bg-white px-3.5 ${CARD_SHADOW}`}
 			>

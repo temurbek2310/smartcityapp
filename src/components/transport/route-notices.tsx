@@ -28,7 +28,7 @@ function NoticeCard({ notice }: { notice: RouteNotice }) {
 				<Icon className='size-4.5' />
 			</span>
 			<div className='min-w-0 flex-1'>
-				<p className='text-[13.5px] font-extrabold text-slate-950'>
+				<p className='text-[13.5px] font-extrabold text-ink'>
 					{notice.title}
 				</p>
 				<p className='mt-0.5 text-[12px] leading-5 text-ink-3'>
@@ -55,7 +55,7 @@ function NoticeCard({ notice }: { notice: RouteNotice }) {
 export function RouteNotices({ notices }: { notices: RouteNotice[] }) {
 	return (
 		<section>
-			<h2 className='px-1 text-[18px] font-extrabold tracking-[-0.01em] text-slate-950'>
+			<h2 className='px-1 text-[18px] font-extrabold tracking-[-0.01em] text-ink'>
 				Bildirishnomalar
 			</h2>
 			<div className='mt-2.5 space-y-2.5'>

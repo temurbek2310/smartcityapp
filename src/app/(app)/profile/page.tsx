@@ -15,6 +15,7 @@ import {
 	RotateCcw,
 	ShieldCheck,
 	Sparkles,
+	Trash2,
 	Wallet,
 	type LucideIcon,
 } from 'lucide-react'
@@ -61,6 +62,8 @@ type SheetKind =
 	| 'language'
 	| 'support'
 	| 'privacy'
+	| 'edit'
+	| 'delete'
 	| 'logout'
 
 export default function ProfilePage() {
@@ -165,6 +168,14 @@ export default function ProfilePage() {
 							<Crown className='size-3' /> Premium
 						</Badge>
 					)}
+					<button
+						type='button'
+						aria-label='Profilni ko‘rish'
+						onClick={() => setSheet('edit')}
+						className='grid size-9 shrink-0 place-items-center rounded-xl bg-card-2 text-ink-3'
+					>
+						<ChevronRight className='size-4' />
+					</button>
 				</div>
 			</Card>
 
@@ -576,6 +587,91 @@ export default function ProfilePage() {
 					>
 						<Download className='size-4' /> Ma’lumotlarimni yuklab olish
 					</Button>
+
+					<Button
+						variant='outline'
+						danger
+						block
+						className='mt-2'
+						onClick={() => setSheet('delete')}
+					>
+						<Trash2 className='size-4' /> Hisobni o‘chirish
+					</Button>
+				</BottomSheet>
+			)}
+
+			{sheet === 'edit' && (
+				<BottomSheet title='Profil' onClose={() => setSheet(null)}>
+					<Card>
+						<KeyValueList>
+							<KeyValue label='Ism' value={user.name} />
+							<KeyValue label='Telefon' value={user.phone} />
+							<KeyValue
+								label='Avtomobil'
+								value={formatUzbekPlate(user.vehiclePlate)}
+							/>
+							<KeyValue label='Til' value='O‘zbekcha' />
+							{user.joinedAt && (
+								<KeyValue
+									label='Ro‘yxatdan o‘tgan'
+									value={formatDate(user.joinedAt)}
+								/>
+							)}
+						</KeyValueList>
+					</Card>
+
+					<Card variant='flat' className='mt-3'>
+						<p className='text-[13px] leading-5 text-ink-2'>
+							Ma’lumotlar faqat bronni tasdiqlash uchun ishlatiladi. Avtomobil
+							raqami qo‘riqchi sizni kirishda tanishi uchun joyga uzatiladi.
+						</p>
+					</Card>
+
+					<Button
+						variant='outline'
+						block
+						className='mt-3'
+						onClick={() => setSheet('plate')}
+					>
+						<CarFront className='size-4 text-brand' /> Avtomobil raqamini
+						o‘zgartirish
+					</Button>
+				</BottomSheet>
+			)}
+
+			{sheet === 'delete' && (
+				<BottomSheet
+					title='Hisobni o‘chirasizmi?'
+					onClose={() => setSheet(null)}
+				>
+					<Card>
+						<p className='text-[13px] leading-5 text-ink-2'>
+							Bronlar, tarix va saqlangan joylar o‘chiriladi. Bu amalni
+							ortga qaytarib bo‘lmaydi.
+						</p>
+					</Card>
+					<div className='mt-4 grid grid-cols-2 gap-2'>
+						<Button variant='outline' onClick={() => setSheet(null)}>
+							Bekor qilish
+						</Button>
+						{/* A real deletion, not a toast: the whole local store is what
+						    we actually hold, so clearing it is the honest version of
+						    this control. */}
+						<Button
+							variant='primary'
+							danger
+							onClick={() => {
+								try {
+									resetDemo()
+									router.replace('/welcome')
+								} catch {
+									toast.show('Ma’lumotlar to‘liq o‘chirilmadi. Brauzer saqlash sozlamalarini tekshiring.')
+								}
+							}}
+						>
+							O‘chirish
+						</Button>
+					</div>
 				</BottomSheet>
 			)}
 

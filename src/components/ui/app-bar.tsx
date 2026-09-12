@@ -29,7 +29,7 @@ export function AppBar({
 					type='button'
 					onClick={onBack}
 					aria-label='Ortga'
-					className='grid size-11 shrink-0 place-items-center rounded-2xl bg-white text-ink-2 shadow-card'
+					className='citygo-pressable grid size-11 shrink-0 place-items-center rounded-2xl bg-white text-ink-2 shadow-card'
 				>
 					<ChevronLeft className='size-5' />
 				</button>

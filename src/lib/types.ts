@@ -208,6 +208,12 @@ export type Place = {
   subtitle: string;
   rating: number;
   reviews: number;
+  // Approximate Tashkent coordinates, to be replaced wholesale when the real
+  // dataset lands. They exist so /map can plot places, parkings, queues and
+  // events on one surface — deriving a place's position from its parking put
+  // every venue sharing a lot on the same pixel.
+  lat: number;
+  lng: number;
   distanceKm: number;
   free?: number;
   total?: number;
@@ -266,6 +272,9 @@ export type QueueOrg = {
   // Where this sits in the other catalogs, when it is the same venue.
   placeId?: string;
   parkingId: string;
+  // Approximate, like Place.lat/lng above — see the note there.
+  lat: number;
+  lng: number;
   distanceKm: number;
   rating: number;
   reviewCount: number;

@@ -40,7 +40,7 @@ export function Button({
 		<button
 			type={type}
 			className={cn(
-				'inline-flex items-center justify-center gap-[7px] font-[650] transition-transform active:scale-[.975] disabled:pointer-events-none disabled:opacity-45',
+				'citygo-pressable inline-flex items-center justify-center gap-[7px] font-[650] disabled:pointer-events-none disabled:opacity-45',
 				SIZES[size],
 				VARIANTS[variant],
 				block && 'flex w-full',

@@ -58,6 +58,12 @@ const SEVERITY_LABEL: Record<NewsSeverity, string> = {
 
 type NewsTab = 'all' | 'events' | 'roads' | 'notifications'
 
+const NEWS_TABS: NewsTab[] = ['all', 'events', 'roads', 'notifications']
+
+function isNewsTab(value: string | null): value is NewsTab {
+	return value !== null && (NEWS_TABS as string[]).includes(value)
+}
+
 export default function NewsPage() {
 	return (
 		<Suspense fallback={<LoadingScreen />}>
@@ -78,11 +84,10 @@ function NewsView() {
 	} = useApp()
 
 	// /notifications redirects here with ?tab=notifications, so old bell links
-	// keep landing where the user expects.
+	// keep landing where the user expects; /parking links to ?tab=roads and
+	// /map to ?tab=events, so every tab is addressable rather than just one.
 	const requested = params.get('tab')
-	const [tab, setTab] = useState<NewsTab>(
-		requested === 'notifications' ? 'notifications' : 'all',
-	)
+	const [tab, setTab] = useState<NewsTab>(isNewsTab(requested) ? requested : 'all')
 	const [openItem, setOpenItem] = useState<NewsItem | null>(null)
 
 	const roads = NEWS.filter(item => item.category === 'road')
