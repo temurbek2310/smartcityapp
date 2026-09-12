@@ -27,7 +27,7 @@ export function QrImage({ value, size = 220 }: { value: string; size?: number })
 		return (
 			<div
 				style={{ width: size, height: size }}
-				className='animate-pulse rounded-2xl bg-slate-100'
+				className='citygo-shimmer rounded-2xl'
 			/>
 		)
 	}
@@ -35,7 +35,7 @@ export function QrImage({ value, size = 220 }: { value: string; size?: number })
 	return (
 		<Image
 			src={src}
-			alt='Reservation QR code'
+			alt='Bron QR kodi'
 			width={size}
 			height={size}
 			unoptimized

@@ -15,7 +15,9 @@ export function StructuredData() {
 		operatingSystem: 'Web, Android, iOS',
 
 		description:
-			'Smart parking platform for finding and reserving parking spaces in Uzbekistan.',
+			'Oʻzbekistonda parking joylarini topish va bron qilish uchun smart parking platformasi.',
+
+		inLanguage: 'uz',
 
 		areaServed: {
 			'@type': 'Country',

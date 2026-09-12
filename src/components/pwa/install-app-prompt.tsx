@@ -134,6 +134,7 @@ export function InstallAppPrompt() {
 		<div className='fixed bottom-24 left-1/2 z-100 w-[calc(100%-24px)] max-w-sm -translate-x-1/2'>
 			<div
 				className='
+				  animate-fade-up
           overflow-hidden
           rounded-[26px]
           border border-white/80
@@ -149,7 +150,7 @@ export function InstallAppPrompt() {
               flex h-12 w-12 shrink-0
               items-center justify-center
               rounded-2xl
-              bg-slate-950
+              bg-ink
               text-white
               shadow-lg
             '
@@ -160,11 +161,11 @@ export function InstallAppPrompt() {
 					<div className='min-w-0 flex-1'>
 						<div className='flex items-start justify-between gap-3'>
 							<div>
-								<p className='font-bold text-slate-950'>
+								<p className='font-bold text-ink'>
 									B SPACE ilovasini o‘rnating
 								</p>
 
-								<p className='mt-1 text-sm leading-5 text-slate-500'>
+								<p className='mt-1 text-sm leading-5 text-ink-3'>
 									Tezroq kirish va mobil app ko‘rinishida foydalaning.
 								</p>
 							</div>
@@ -177,10 +178,10 @@ export function InstallAppPrompt() {
                   flex h-8 w-8 shrink-0
                   items-center justify-center
                   rounded-full
-                  bg-slate-100
-                  text-slate-500
-                  transition
-                  hover:bg-slate-200
+                  bg-card-2
+                  text-ink-3
+				  citygo-pressable
+                  hover:bg-line
                 '
 							>
 								<X size={15} />
@@ -203,8 +204,7 @@ export function InstallAppPrompt() {
                   text-sm font-bold
                   text-white
                   shadow-sm
-                  transition
-                  active:scale-[0.98]
+				  citygo-pressable
                 '
 							>
 								{isIOS ? (
@@ -219,18 +219,18 @@ export function InstallAppPrompt() {
 								)}
 							</button>
 						) : (
-							<div className='mt-4 rounded-2xl bg-slate-50 p-3'>
+							<div className='mt-4 rounded-2xl bg-canvas p-3'>
 								{isIOS ? (
 									<>
-										<p className='text-sm font-bold text-slate-900'>
+										<p className='text-sm font-bold text-ink'>
 											iPhone / iPad
 										</p>
 
-										<p className='mt-1 text-sm leading-5 text-slate-500'>
+										<p className='mt-1 text-sm leading-5 text-ink-3'>
 											Safari pastidagi{' '}
-											<strong className='text-slate-800'>Share</strong>{' '}
+											<strong className='text-ink'>Share</strong>{' '}
 											tugmasini bosing va{' '}
-											<strong className='text-slate-800'>
+											<strong className='text-ink'>
 												Add to Home Screen
 											</strong>{' '}
 											ni tanlang.
@@ -238,11 +238,11 @@ export function InstallAppPrompt() {
 									</>
 								) : (
 									<>
-										<p className='text-sm font-bold text-slate-900'>
+										<p className='text-sm font-bold text-ink'>
 											Install hali tayyor emas
 										</p>
 
-										<p className='mt-1 text-sm leading-5 text-slate-500'>
+										<p className='mt-1 text-sm leading-5 text-ink-3'>
 											PWA service worker va manifest to‘liq ishga tushgandan
 											keyin brauzerning native install oynasi shu tugma orqali
 											ochiladi.

@@ -2,75 +2,72 @@
 
 import {
 	Bell,
-	Bike,
 	Building2,
-	CalendarDays,
-	Car,
 	Check,
 	ChevronDown,
 	ChevronRight,
 	CircleParking,
 	Clock3,
-	Footprints,
 	Heart,
 	History,
-	Hospital,
+	Layers,
 	LocateFixed,
-	Map,
 	MapPin,
 	Mic,
-	Minus,
 	Navigation,
 	Phone,
-	Plus,
 	Search,
 	Share2,
-	ShoppingBag,
 	Sparkles,
 	Star,
-	Store,
 	Sun,
 	Ticket,
-	TrainFront,
-	Utensils,
 	WandSparkles,
-	Wrench,
 	X,
-	type LucideIcon,
 } from 'lucide-react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
-import {
-	useEffect,
-	useMemo,
-	useRef,
-	useState,
-	type MouseEvent as ReactMouseEvent,
-	type ReactNode,
-	type PointerEvent as ReactPointerEvent,
-	type WheelEvent as ReactWheelEvent,
-} from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { Suspense, useMemo, useRef, useState } from 'react'
 
-import { ParkingMap } from '@/components/map/parking-map'
+import { BottomSheet } from '@/components/ui/bottom-sheet'
+import { Switch } from '@/components/ui/switch'
+import { LoadingScreen } from '@/components/ui/loading-screen'
+import { Toast } from '@/components/ui/toast'
+import { HorizontalRail } from '@/components/ui/horizontal-rail'
+import { CityMap } from '@/components/map/city-map'
+import { ServiceBookingSheet } from '@/components/booking/service-booking-sheet'
+import { ParkingBookingSheet } from '@/components/parking/parking-booking-sheet'
 import { useApp } from '@/context/app-context'
+import { useMapLayers } from '@/hooks/use-map-layers'
+import { usePlaceFavorites } from '@/hooks/use-place-favorites'
+import { useToast } from '@/hooks/use-toast'
+import { CITY_META } from '@/data/city-meta'
 import { PARKINGS } from '@/data/parkings'
-import { formatUZS } from '@/lib/format'
+import { EVENTS } from '@/data/events'
+import { PLACES } from '@/data/places'
+import { formatNumber, formatUZS } from '@/lib/format'
+import type { Place, PlaceCategory, ServiceBookingKind } from '@/lib/types'
 import { distanceKm } from '@/lib/geo'
-import { useUserLocation, type LocationError } from '@/lib/use-user-location'
+import {
+	AI_TIPS,
+	CATEGORIES,
+	QUICK_ROUTES,
+	SERVICES,
+} from '@/data/home-content'
+import {
+	findAddresses,
+	highlightParts,
+	locationMessage,
+	searchMatches,
+} from '@/lib/search'
+import { buildHomeMapObjects, HOME_BIKE_LINES } from '@/lib/home-map'
+import { useRefreshSignal } from '@/components/ui/pull-to-refresh'
+import { liveAvailabilityAll } from '@/lib/live-availability'
+import { MAP_LAYERS, activeLayerCount } from '@/lib/map-layers'
+import { TRANSPORT_MODES, type TransportMode } from '@/lib/transport'
+import { useUserLocation } from '@/lib/use-user-location'
 
 type SortMode = 'distance' | 'rating' | 'free'
-type TransportMode = 'car' | 'metro' | 'scooter' | 'walk'
-type CategoryId =
-	| 'all'
-	| 'food'
-	| 'parking'
-	| 'health'
-	| 'shops'
-	| 'fun'
-	| 'buildings'
-	| 'services'
-	| 'tourism'
-
 type SheetState =
 	| { type: 'city' }
 	| { type: 'weather' }
@@ -80,654 +77,35 @@ type SheetState =
 	| { type: 'categories' }
 	| { type: 'nearby' }
 	| { type: 'place'; placeId: string }
-	| { type: 'parkingBook' }
-	| { type: 'parkingBay' }
-	| { type: 'service'; serviceId: string }
 	| { type: 'servicesAll' }
 	| { type: 'event'; eventId: string }
 	| { type: 'events' }
 	| { type: 'recommendations' }
+	| { type: 'layers' }
 	| null
 
-type DemoPlace = {
-	id: string
-	title: string
-	category: CategoryId
-	subtitle: string
-	rating: number
-	reviews: number
-	distanceKm: number
-	free?: number
-	total?: number
-	queue?: number
-	busy: number
-	address: string
-	phone: string
-	tags: string[]
-	accent: string
-	parkingId?: string
-}
-
-type CityMeta = {
-	temp: number
-	sky: string
-	population: string
-}
-
-type ServiceItem = {
-	id: string
-	label: string
-	subtitle: string
-	icon: LucideIcon
-	tone: string
-}
-
-type EventItem = {
-	id: string
-	when: string
-	time: string
-	title: string
-	place: string
-	category: string
-	price: string
-	description: string
-	accent: string
-	parkingId: string
-}
-
-type ParkingBookingDraft = {
-	parkingId: string
-	dayIndex: number
-	dayLabels: string[]
-	slot: string
-	hours: number
-	bay: string
-	level: number
-	nowLabel: string
-}
-
-const CITY_META: Record<string, CityMeta> = {
-	Toshkent: { temp: 26, sky: 'Ochiq', population: '2,9 mln' },
-	Samarqand: { temp: 24, sky: 'Bulutli', population: '560 ming' },
-	Buxoro: { temp: 29, sky: 'Ochiq', population: '280 ming' },
-	Namangan: { temp: 23, sky: 'Yengil yomg‘ir', population: '650 ming' },
-}
-
-const TRANSPORT_MODES: {
-	id: TransportMode
-	label: string
-	time: number
-	icon: LucideIcon
-}[] = [
-	{ id: 'car', label: 'Avto', time: 15, icon: Car },
-	{ id: 'metro', label: 'Metro', time: 22, icon: TrainFront },
-	{ id: 'scooter', label: 'Skuter', time: 18, icon: Bike },
-	{ id: 'walk', label: 'Piyoda', time: 27, icon: Footprints },
-]
-
-const QUICK_ROUTES = [
-	{
-		id: 'home' as const,
-		title: 'Uy',
-		address: 'Mirzo Ulug‘bek tumani, Buyuk Ipak Yo‘li',
-		minutes: 18,
-		distance: 8.4,
-		parkingId: 'amir-temur',
-		icon: Navigation,
-	},
-	{
-		id: 'work' as const,
-		title: 'Ish',
-		address: 'Tashkent City, Islom Karimov ko‘chasi',
-		minutes: 22,
-		distance: 12.6,
-		parkingId: 'tashkent-city',
-		icon: Building2,
-	},
-]
-
-const CATEGORIES: {
-	id: CategoryId | 'transport' | 'queues' | 'more'
-	label: string
-	icon: LucideIcon
-	tone: string
-}[] = [
-	{
-		id: 'all',
-		label: 'Barchasi',
-		icon: Store,
-		tone: 'bg-violet-50 text-violet-600',
-	},
-	{
-		id: 'food',
-		label: 'Ovqat',
-		icon: Utensils,
-		tone: 'bg-amber-50 text-amber-600',
-	},
-	{
-		id: 'parking',
-		label: 'Parking',
-		icon: CircleParking,
-		tone: 'bg-violet-50 text-violet-600',
-	},
-	{
-		id: 'health',
-		label: 'Sog‘liq',
-		icon: Hospital,
-		tone: 'bg-rose-50 text-rose-600',
-	},
-	{
-		id: 'shops',
-		label: 'Do‘konlar',
-		icon: ShoppingBag,
-		tone: 'bg-emerald-50 text-emerald-600',
-	},
-	{
-		id: 'fun',
-		label: 'Ko‘ngilochar',
-		icon: Ticket,
-		tone: 'bg-fuchsia-50 text-fuchsia-600',
-	},
-	{
-		id: 'buildings',
-		label: 'Binolar',
-		icon: Building2,
-		tone: 'bg-indigo-50 text-indigo-600',
-	},
-	{
-		id: 'services',
-		label: 'Xizmatlar',
-		icon: Wrench,
-		tone: 'bg-pink-50 text-pink-600',
-	},
-	{
-		id: 'tourism',
-		label: 'Turizm',
-		icon: MapPin,
-		tone: 'bg-emerald-50 text-emerald-600',
-	},
-	{
-		id: 'transport',
-		label: 'Transport',
-		icon: Car,
-		tone: 'bg-sky-50 text-sky-600',
-	},
-	{
-		id: 'queues',
-		label: 'Navbatlar',
-		icon: History,
-		tone: 'bg-orange-50 text-orange-600',
-	},
-	{
-		id: 'more',
-		label: 'Yana',
-		icon: Sparkles,
-		tone: 'bg-slate-100 text-slate-600',
-	},
-]
-
-const DEMO_PLACES: DemoPlace[] = [
-	{
-		id: 'coffee-lab',
-		title: 'Coffee Lab',
-		category: 'food',
-		subtitle: 'Kafe · Yevropa oshxonasi',
-		rating: 4.8,
-		reviews: 1243,
-		distanceKm: 0.3,
-		free: 15,
-		total: 60,
-		queue: 35,
-		busy: 72,
-		address: 'Amir Temur ko‘chasi, 88',
-		phone: '+998 71 200 11 22',
-		tags: ['Wi-Fi', 'Veranda', 'Nonushta'],
-		accent: 'from-amber-700 to-slate-950',
-		parkingId: 'amir-temur',
-	},
-	{
-		id: 'urban-food',
-		title: 'Urban Food',
-		category: 'food',
-		subtitle: 'Restoran · Osiyo oshxonasi',
-		rating: 4.4,
-		reviews: 640,
-		distanceKm: 0.27,
-		free: 6,
-		total: 20,
-		queue: 15,
-		busy: 52,
-		address: 'Sayilgoh ko‘chasi, 3',
-		phone: '+998 71 201 11 22',
-		tags: ['Yetkazib berish', 'Veranda'],
-		accent: 'from-orange-800 to-slate-950',
-		parkingId: 'amir-temur',
-	},
-	{
-		id: 'plov-center',
-		title: 'Plov Center',
-		category: 'food',
-		subtitle: 'Milliy oshxona',
-		rating: 4.9,
-		reviews: 5120,
-		distanceKm: 0.48,
-		free: 20,
-		total: 60,
-		queue: 25,
-		busy: 88,
-		address: 'Iftixor ko‘chasi, 1',
-		phone: '+998 71 201 55 66',
-		tags: ['Parking', 'Banket'],
-		accent: 'from-yellow-800 to-slate-950',
-		parkingId: 'tashkent-city',
-	},
-	{
-		id: 'medical-plaza',
-		title: 'Medical Plaza',
-		category: 'health',
-		subtitle: 'Klinika · Diagnostika',
-		rating: 4.7,
-		reviews: 1120,
-		distanceKm: 0.85,
-		free: 18,
-		total: 50,
-		queue: 30,
-		busy: 66,
-		address: 'Shota Rustaveli ko‘chasi, 15',
-		phone: '+998 71 203 55 66',
-		tags: ['MRT', 'Tahlillar', 'Onlayn yozilish'],
-		accent: 'from-sky-800 to-slate-950',
-		parkingId: 'next-mall',
-	},
-	{
-		id: 'magic-city-place',
-		title: 'Magic City',
-		category: 'shops',
-		subtitle: 'Savdo va ko‘ngilochar markaz',
-		rating: 4.7,
-		reviews: 8420,
-		distanceKm: 1.2,
-		free: 85,
-		total: 250,
-		queue: 8,
-		busy: 64,
-		address: 'Bobur ko‘chasi, Toshkent',
-		phone: '+998 71 200 33 44',
-		tags: ['Parking', 'Kinoteatr', 'Food court'],
-		accent: 'from-indigo-700 to-slate-950',
-		parkingId: 'magic-city',
-	},
-	{
-		id: 'tashkent-city-bc',
-		title: 'Tashkent City BC',
-		category: 'buildings',
-		subtitle: 'A+ klass biznes markaz',
-		rating: 4.8,
-		reviews: 256,
-		distanceKm: 1.2,
-		free: 42,
-		total: 120,
-		busy: 64,
-		address: 'Islom Karimov ko‘chasi, 107',
-		phone: '+998 71 203 11 22',
-		tags: ['Ofislar', 'Kafe', 'Wi-Fi'],
-		accent: 'from-slate-700 to-indigo-950',
-		parkingId: 'tashkent-city',
-	},
-	{
-		id: 'bank-office',
-		title: 'Bank xizmatlari',
-		category: 'services',
-		subtitle: 'Bank · Valyuta ayirboshlash',
-		rating: 4.2,
-		reviews: 340,
-		distanceKm: 0.4,
-		free: 8,
-		total: 20,
-		queue: 22,
-		busy: 74,
-		address: 'Amir Temur ko‘chasi, 60',
-		phone: '+998 71 203 77 88',
-		tags: ['Valyuta', 'Bankomat'],
-		accent: 'from-slate-700 to-slate-950',
-		parkingId: 'amir-temur',
-	},
-	{
-		id: 'history-museum',
-		title: 'Tarix muzeyi',
-		category: 'tourism',
-		subtitle: 'Muzey · Ekskursiyalar',
-		rating: 4.7,
-		reviews: 2100,
-		distanceKm: 1.8,
-		free: 25,
-		total: 40,
-		queue: 10,
-		busy: 35,
-		address: 'Sayilgoh ko‘chasi, 3',
-		phone: '+998 71 204 33 44',
-		tags: ['Ekskursiya', 'Audiogid'],
-		accent: 'from-purple-800 to-slate-950',
-		parkingId: 'amir-temur',
-	},
-	{
-		id: 'cinema-magic',
-		title: 'Magic Cinema',
-		category: 'fun',
-		subtitle: 'Kinoteatr · 8 zal',
-		rating: 4.6,
-		reviews: 2800,
-		distanceKm: 1.2,
-		free: 85,
-		total: 250,
-		queue: 6,
-		busy: 48,
-		address: 'Magic City, 3-qavat',
-		phone: '+998 71 204 55 66',
-		tags: ['IMAX', 'Parking'],
-		accent: 'from-fuchsia-800 to-slate-950',
-		parkingId: 'magic-city',
-	},
-]
-
-const SERVICES: ServiceItem[] = [
-	{
-		id: 'table',
-		label: 'Stol bron qilish',
-		subtitle: 'Stol va parkingni birga rejalang',
-		icon: CalendarDays,
-		tone: 'text-amber-600',
-	},
-	{
-		id: 'parking',
-		label: 'Parking',
-		subtitle: 'Joyni oldindan band qiling',
-		icon: CircleParking,
-		tone: 'text-violet-600',
-	},
-	{
-		id: 'cinema',
-		label: 'Kino chiptasi',
-		subtitle: 'Joy tanlash va bron',
-		icon: Ticket,
-		tone: 'text-sky-600',
-	},
-	{
-		id: 'clinic',
-		label: 'Klinikaga yozilish',
-		subtitle: 'Bugungi bo‘sh vaqtlar',
-		icon: Hospital,
-		tone: 'text-rose-600',
-	},
-	{
-		id: 'queue',
-		label: 'Elektron navbat',
-		subtitle: 'Uydan turib navbat oling',
-		icon: History,
-		tone: 'text-orange-600',
-	},
-	{
-		id: 'taxi',
-		label: 'Taksi',
-		subtitle: 'Kelish vaqti 3–5 daqiqa',
-		icon: Car,
-		tone: 'text-emerald-600',
-	},
-]
-
-const EVENTS: EventItem[] = [
-	{
-		id: 'concert',
-		when: 'Bugun',
-		time: '19:00',
-		title: 'Konsert',
-		place: 'Humo Arena',
-		category: 'Musiqa',
-		price: '150 000 so‘mdan',
-		description:
-			'Kechki konsert. Tadbir boshlanishidan oldin yaqin parkingni band qilish tavsiya etiladi.',
-		accent: 'from-purple-900 via-violet-700 to-slate-950',
-		parkingId: 'magic-city',
-	},
-	{
-		id: 'fair',
-		when: 'Ertaga',
-		time: '10:00',
-		title: 'Hunarmandlar yarmarkasi',
-		place: 'Markaziy bog‘',
-		category: 'Yarmarka',
-		price: 'Kirish bepul',
-		description:
-			'Mahalliy hunarmandlar, taomlar va oilaviy dastur bilan shahar yarmarkasi.',
-		accent: 'from-amber-900 via-orange-700 to-slate-950',
-		parkingId: 'tashkent-city',
-	},
-	{
-		id: 'cinema',
-		when: 'Juma',
-		time: '20:00',
-		title: 'Ochiq osmon ostida kino',
-		place: 'Magic City',
-		category: 'Kino',
-		price: '40 000 so‘m',
-		description:
-			'Ochiq maydondagi kechki kino seansi. Parking oldindan to‘lishi mumkin.',
-		accent: 'from-sky-900 via-indigo-700 to-slate-950',
-		parkingId: 'magic-city',
-	},
-	{
-		id: 'run',
-		when: 'Yakshanba',
-		time: '09:00',
-		title: 'Shahar yugurishi',
-		place: 'Tashkent City',
-		category: 'Sport',
-		price: '50 000 so‘m',
-		description:
-			'5 va 10 km masofali shahar yugurishi. Ayrim ko‘chalar vaqtincha yopilishi mumkin.',
-		accent: 'from-emerald-900 via-teal-700 to-slate-950',
-		parkingId: 'tashkent-city',
-	},
-]
-
-const AI_TIPS = [
-	{
-		title: 'Parkingni hozirroq band qiling',
-		text: 'Kechki payt markazdagi parkinglar tezroq to‘ladi. Hozir bo‘sh joy ko‘proq.',
-		action: 'Parking tanlash',
-		parkingId: 'tashkent-city',
-	},
-	{
-		title: 'Magic City uchun yaxshi vaqt',
-		text: 'Hozir mavjud joylar yetarli, kechga yaqin yuklama oshadi.',
-		action: 'Bron qilish',
-		parkingId: 'magic-city',
-	},
-	{
-		title: 'Markazga yo‘l',
-		text: 'Tashkent City Parking markazdagi eng ko‘p bo‘sh joyga ega variantlardan biri.',
-		action: 'Yo‘nalish',
-		parkingId: 'tashkent-city',
-	},
-	{
-		title: 'Yaqin alternativ',
-		text: 'Agar parking FULL bo‘lsa, ilova mavjud bo‘sh joyli alternativni ko‘rsatadi.',
-		action: 'Xaritada ko‘rish',
-		parkingId: 'amir-temur',
-	},
-]
-
-const BOOKING_SLOTS = ['11:30', '12:00', '12:30', '13:00', '18:00', '19:00']
-
-function locationMessage(error: LocationError) {
-	switch (error) {
-		case 'denied':
-			return 'Joylashuvga ruxsat berilmadi. Masofa demo Toshkent markazidan hisoblanmoqda.'
-		case 'timeout':
-			return 'GPS javob bermadi. Masofa demo Toshkent markazidan hisoblanmoqda.'
-		case 'unavailable':
-			return 'Qurilma joylashuvni aniqlay olmadi. Demo joylashuv ishlatilmoqda.'
-		case 'outside-uzbekistan':
-			return 'Joylashuv O‘zbekiston hududidan tashqarida. Demo Toshkent markazi ishlatilmoqda.'
-		case 'unsupported':
-			return 'Bu brauzer geolokatsiyani qo‘llamaydi. Demo joylashuv ishlatilmoqda.'
-		default:
-			return 'GPS hozir mavjud emas. Demo joylashuv ishlatilmoqda.'
-	}
-}
-
-function HorizontalRail({
-	children,
-	className = '',
-}: {
-	children: ReactNode
-	className?: string
-}) {
-	const ref = useRef<HTMLDivElement>(null)
-	const drag = useRef({
-		down: false,
-		pointerId: -1,
-		x: 0,
-		scroll: 0,
-		moved: false,
-	})
-
-	function onWheel(event: ReactWheelEvent<HTMLDivElement>) {
-		const element = ref.current
-		if (!element || element.scrollWidth <= element.clientWidth) return
-		if (Math.abs(event.deltaY) > Math.abs(event.deltaX)) {
-			event.preventDefault()
-			element.scrollLeft += event.deltaY
-		}
-	}
-
-	function onPointerDown(event: ReactPointerEvent<HTMLDivElement>) {
-		if (event.pointerType !== 'mouse' || event.button !== 0) return
-		const element = ref.current
-		if (!element) return
-
-		// Do not capture here. Immediate pointer capture steals clicks from
-		// cards and heart buttons. Capture only once a real drag begins.
-		drag.current = {
-			down: true,
-			pointerId: event.pointerId,
-			x: event.clientX,
-			scroll: element.scrollLeft,
-			moved: false,
-		}
-	}
-
-	function onPointerMove(event: ReactPointerEvent<HTMLDivElement>) {
-		const element = ref.current
-		if (
-			!element ||
-			!drag.current.down ||
-			drag.current.pointerId !== event.pointerId
-		)
-			return
-
-		const delta = event.clientX - drag.current.x
-		if (!drag.current.moved && Math.abs(delta) > 6) {
-			drag.current.moved = true
-			element.setPointerCapture(event.pointerId)
-		}
-
-		if (drag.current.moved) {
-			element.scrollLeft = drag.current.scroll - delta
-		}
-	}
-
-	function stopPointer(event: ReactPointerEvent<HTMLDivElement>) {
-		const element = ref.current
-		drag.current.down = false
-		if (element?.hasPointerCapture(event.pointerId)) {
-			element.releasePointerCapture(event.pointerId)
-		}
-	}
-
-	function onClickCapture(event: ReactMouseEvent<HTMLDivElement>) {
-		// A true drag should not open a card. An ordinary click must pass through.
-		if (!drag.current.moved) return
-		event.preventDefault()
-		event.stopPropagation()
-		drag.current.moved = false
-	}
-
-	return (
-		<div
-			ref={ref}
-			onWheel={onWheel}
-			onPointerDown={onPointerDown}
-			onPointerMove={onPointerMove}
-			onPointerUp={stopPointer}
-			onPointerCancel={stopPointer}
-			onClickCapture={onClickCapture}
-			onDragStart={event => event.preventDefault()}
-			className={`flex w-full min-w-0 gap-3 overflow-x-auto overflow-y-hidden overscroll-x-contain pb-2 scrollbar-none [&::-webkit-scrollbar]:hidden ${className}`}
-			style={{ touchAction: 'pan-x', WebkitOverflowScrolling: 'touch' }}
-		>
-			{children}
-		</div>
-	)
-}
-
-function BottomSheet({
-	title,
-	onClose,
-	children,
-}: {
-	title: string
-	onClose: () => void
-	children: ReactNode
-}) {
-	return (
-		<>
-			<button
-				type='button'
-				aria-label='Oynani yopish'
-				className='fixed inset-0 z-70 bg-slate-950/45 backdrop-blur-[2px]'
-				onClick={onClose}
-			/>
-			<section className='fixed inset-x-0 bottom-0 z-80 mx-auto max-h-[88dvh] w-full max-w-md overflow-hidden rounded-t-[28px] bg-slate-50 shadow-2xl'>
-				<div className='mx-auto mt-2.5 h-1 w-10 rounded-full bg-slate-300' />
-				<div className='flex items-center justify-between gap-3 px-4 pb-3 pt-3'>
-					<h2 className='text-xl font-black tracking-tight text-slate-950'>
-						{title}
-					</h2>
-					<button
-						type='button'
-						onClick={onClose}
-						className='grid size-10 place-items-center rounded-xl bg-white text-slate-700 shadow-sm ring-1 ring-slate-200'
-						aria-label='Yopish'
-					>
-						<X className='size-5' />
-					</button>
-				</div>
-				<div className='max-h-[calc(88dvh-68px)] overflow-y-auto px-4 pb-7'>
-					{children}
-				</div>
-			</section>
-		</>
-	)
-}
-
-function searchMatches(text: string, query: string) {
-	const normalized = query.trim().toLowerCase()
-	if (!normalized) return false
-	const haystack = text.toLowerCase()
-	if (haystack.includes(normalized)) return true
-	const tokens = normalized.split(/\s+/).filter(token => token.length > 2)
-	return tokens.some(token => haystack.includes(token))
-}
-
 export default function HomePage() {
+	return (
+		<Suspense fallback={<LoadingScreen />}>
+			<HomeRoute />
+		</Suspense>
+	)
+}
+
+function HomeRoute() {
+	const params = useSearchParams()
+	return <HomeView key={params.toString()} />
+}
+
+function HomeView() {
 	const router = useRouter()
 	const {
 		user,
 		reservations,
 		favorites,
 		toggleFavorite,
-		createReservation,
+		favoriteEvents,
+		toggleEventFavorite,
 		unreadCount,
 	} = useApp()
 	const { location, status, error: locationError, locate } = useUserLocation()
@@ -737,20 +115,24 @@ export default function HomePage() {
 		null,
 	)
 	const [transportMode, setTransportMode] = useState<TransportMode>('car')
-	const [activeCategory, setActiveCategory] = useState<CategoryId>('all')
+	const [activeCategory, setActiveCategory] = useState<PlaceCategory>('all')
 	const [sortMode, setSortMode] = useState<SortMode>('distance')
 	const [favoriteOnly, setFavoriteOnly] = useState(false)
-	const [favoritePlaceIds, setFavoritePlaceIds] = useState<string[]>(() => {
-		if (typeof window === 'undefined') return ['coffee-lab']
-		try {
-			const saved = window.localStorage.getItem('citygoo-place-favorites')
-			const parsed = saved ? JSON.parse(saved) : null
-			return Array.isArray(parsed) ? parsed : ['coffee-lab']
-		} catch {
-			return ['coffee-lab']
-		}
-	})
-	const [sheet, setSheet] = useState<SheetState>(null)
+	const placeFavorites = usePlaceFavorites()
+	const { layers, toggle: toggleLayer } = useMapLayers()
+	const { tick } = useRefreshSignal()
+	const liveParkings = useMemo(() => liveAvailabilityAll(PARKINGS, tick), [tick])
+	const [locateRevision, setLocateRevision] = useState(0)
+	const favoritePlaceIds = placeFavorites.ids
+	// /map's "Ochish" on a place lands here with its detail sheet open.
+	const requestedPlace = useSearchParams().get('place')
+	const requestedEvent = useSearchParams().get('event')
+	const [sheet, setSheet] = useState<SheetState>(
+		requestedPlace && PLACES.some(place => place.id === requestedPlace)
+			? { type: 'place', placeId: requestedPlace }
+			: requestedEvent && EVENTS.some(event => event.id === requestedEvent)
+				? { type: 'event', eventId: requestedEvent } : null,
+	)
 	const [searchOpen, setSearchOpen] = useState(false)
 	const [searchQuery, setSearchQuery] = useState('')
 	const [recentQueries, setRecentQueries] = useState([
@@ -761,38 +143,20 @@ export default function HomePage() {
 	])
 	const [voiceOpen, setVoiceOpen] = useState(false)
 	const [voiceText, setVoiceText] = useState('Gapiring…')
-	const [toast, setToast] = useState<string | null>(null)
-	const [toastRevision, setToastRevision] = useState(0)
+	const toast = useToast<string>()
 	const [aiIndex, setAiIndex] = useState(0)
-	const [bookingSlot, setBookingSlot] = useState('12:30')
-	const [bookingCount, setBookingCount] = useState(2)
-	const [parkingBooking, setParkingBooking] = useState<ParkingBookingDraft>({
-		parkingId: '',
-		dayIndex: 0,
-		dayLabels: ['Bugun', 'Ertaga', '3-kun', '4-kun'],
-		slot: 'Hozir',
-		hours: 2,
-		bay: 'A-01',
-		level: 1,
-		nowLabel: 'Hozir',
-	})
+	const [serviceBooking, setServiceBooking] = useState<{
+		kind: ServiceBookingKind
+		refId: string
+	} | null>(null)
+	const [bookingParkingId, setBookingParkingId] = useState<string | null>(
+		null,
+	)
 	const [updatedLabel, setUpdatedLabel] = useState('hozirgina')
 
 	const voiceTimer = useRef<number | null>(null)
 	const voiceDoneTimer = useRef<number | null>(null)
 	const nearbyRef = useRef<HTMLElement>(null)
-
-	useEffect(() => {
-		if (!toast) return
-
-		const timerId = window.setTimeout(() => {
-			setToast(null)
-		}, 2200)
-
-		return () => {
-			window.clearTimeout(timerId)
-		}
-	}, [toast, toastRevision])
 
 	const cities = useMemo(
 		() => Array.from(new Set(PARKINGS.map(parking => parking.city))),
@@ -800,7 +164,7 @@ export default function HomePage() {
 	)
 
 	const parkingResults = useMemo(() => {
-		let list = PARKINGS.filter(parking => parking.city === selectedCity)
+		let list = liveParkings.filter(parking => parking.city === selectedCity)
 			.filter(parking => !favoriteOnly || favorites.includes(parking.id))
 			.map(parking => ({ parking, distance: distanceKm(location, parking) }))
 
@@ -810,27 +174,34 @@ export default function HomePage() {
 			)
 		} else if (sortMode === 'rating') {
 			list = [...list].sort(
-				(a, b) => b.parking.totalSpaces - a.parking.totalSpaces,
+				(a, b) => b.parking.rating - a.parking.rating,
 			)
 		} else {
 			list = [...list].sort((a, b) => a.distance - b.distance)
 		}
 
 		return list
-	}, [favorites, favoriteOnly, location, selectedCity, sortMode])
+	}, [favorites, favoriteOnly, location, selectedCity, sortMode, liveParkings])
 
 	const mapParkings = useMemo(
 		() => parkingResults.map(({ parking }) => parking),
 		[parkingResults],
 	)
 
+	// What the map is allowed to draw, per City Goo's layer switches. Places
+	// always show (they are the category the user picked); the rest are opt-in.
+	const mapObjects = useMemo(() => buildHomeMapObjects({
+		parkings: mapParkings, origin: location, layers, city: selectedCity,
+		category: activeCategory, favoritePlaceIds: favoriteOnly ? favoritePlaceIds : undefined,
+	}), [mapParkings, location, layers, selectedCity, activeCategory, favoriteOnly, favoritePlaceIds])
+
 	const selectedParking = useMemo(
-		() => PARKINGS.find(parking => parking.id === selectedParkingId),
-		[selectedParkingId],
+		() => layers.parking ? mapParkings.find(parking => parking.id === selectedParkingId) : undefined,
+		[selectedParkingId, mapParkings, layers.parking],
 	)
 
 	const visiblePlaces = useMemo(() => {
-		let list = DEMO_PLACES.filter(
+		let list = PLACES.filter(
 			place => activeCategory === 'all' || place.category === activeCategory,
 		)
 		if (favoriteOnly)
@@ -850,8 +221,7 @@ export default function HomePage() {
 	const aiTip = AI_TIPS[aiIndex]
 
 	function showToast(message: string) {
-		setToast(message)
-		setToastRevision(current => current + 1)
+		toast.show(message)
 	}
 
 	function rememberQuery(value: string) {
@@ -907,7 +277,7 @@ export default function HomePage() {
 		}, 60)
 	}
 
-	function chooseCategory(id: CategoryId | 'transport' | 'queues' | 'more') {
+	function chooseCategory(id: PlaceCategory | 'transport' | 'queues' | 'more') {
 		if (id === 'more') {
 			setSheet({ type: 'categories' })
 			return
@@ -916,10 +286,12 @@ export default function HomePage() {
 			setSheet({ type: 'route', routeId: 'work' })
 			return
 		}
+		if (id === 'parking') {
+			router.push('/parking')
+			return
+		}
 		if (id === 'queues') {
-			setBookingSlot('12:30')
-			setBookingCount(1)
-			setSheet({ type: 'service', serviceId: 'queue' })
+			router.push('/queues')
 			return
 		}
 
@@ -936,22 +308,10 @@ export default function HomePage() {
 	}
 
 	function togglePlaceFavorite(placeId: string) {
-		const place = DEMO_PLACES.find(item => item.id === placeId)
-		const isFavorite = favoritePlaceIds.includes(placeId)
-		const next = isFavorite
-			? favoritePlaceIds.filter(id => id !== placeId)
-			: [...favoritePlaceIds, placeId]
+		const place = PLACES.find(item => item.id === placeId)
+		const isFavorite = placeFavorites.has(placeId)
 
-		setFavoritePlaceIds(next)
-
-		try {
-			window.localStorage.setItem(
-				'citygoo-place-favorites',
-				JSON.stringify(next),
-			)
-		} catch {
-			// The UI still works if localStorage is unavailable.
-		}
+		placeFavorites.toggle(placeId)
 
 		showToast(
 			place
@@ -966,28 +326,6 @@ export default function HomePage() {
 		setSheet({ type: 'place', placeId })
 	}
 
-	function makeBookingDayLabels() {
-		const labels = ['Bugun', 'Ertaga']
-		const formatter = new Intl.DateTimeFormat('uz-UZ', {
-			day: 'numeric',
-			month: 'short',
-		})
-		const now = new Date()
-		for (let offset = 2; offset <= 3; offset += 1) {
-			const date = new Date(now)
-			date.setDate(now.getDate() + offset)
-			labels.push(formatter.format(date).replace('.', ''))
-		}
-		return labels
-	}
-
-	function suggestedBay(parkingId: string) {
-		const code = parkingId
-			.split('')
-			.reduce((sum, ch) => sum + ch.charCodeAt(0), 0)
-		return `A-${String((code % 18) + 1).padStart(2, '0')}`
-	}
-
 	function openParkingBooking(parkingId: string) {
 		const parking = PARKINGS.find(item => item.id === parkingId)
 		if (!parking) {
@@ -998,112 +336,22 @@ export default function HomePage() {
 			showToast('Bu parking hozir to‘la')
 			return
 		}
-
-		const now = new Date()
-		now.setMinutes(now.getMinutes() + 15)
-		now.setMinutes(Math.ceil(now.getMinutes() / 15) * 15, 0, 0)
-		const nowLabel = new Intl.DateTimeFormat('uz-UZ', {
-			hour: '2-digit',
-			minute: '2-digit',
-		}).format(now)
-
-		setParkingBooking({
-			parkingId,
-			dayIndex: 0,
-			dayLabels: makeBookingDayLabels(),
-			slot: 'Hozir',
-			hours: 2,
-			bay: suggestedBay(parkingId),
-			level: 1,
-			nowLabel,
-		})
-		setSheet({ type: 'parkingBook' })
-	}
-
-	function bookingStartDate(draft: ParkingBookingDraft) {
-		const start = new Date()
-		start.setSeconds(0, 0)
-		start.setDate(start.getDate() + draft.dayIndex)
-
-		if (draft.slot === 'Hozir') {
-			start.setMinutes(start.getMinutes() + 15)
-			start.setMinutes(Math.ceil(start.getMinutes() / 15) * 15, 0, 0)
-			return start
-		}
-
-		const [hour, minute] = draft.slot.split(':').map(Number)
-		start.setHours(hour, minute, 0, 0)
-		return start
-	}
-
-	function confirmParkingBooking() {
-		const parking = PARKINGS.find(item => item.id === parkingBooking.parkingId)
-		if (!parking) {
-			showToast('Parking topilmadi')
-			return
-		}
-		if (parking.availableSpaces <= 0) {
-			showToast('Bu parking hozir to‘la')
-			return
-		}
-
-		const start = bookingStartDate(parkingBooking)
-		const currentTime = new Date().getTime()
-		if (start.getTime() < currentTime - 60_000) {
-			showToast('Tanlangan kelish vaqti o‘tib ketgan')
-			return
-		}
-
-		try {
-			const reservation = createReservation({
-				parkingId: parking.id,
-				startAt: start.toISOString(),
-				durationHours: parkingBooking.hours,
-				pricePerHour: parking.pricePerHour,
-			})
-
-			try {
-				window.localStorage.setItem(
-					`citygoo-parking-meta-${reservation.id}`,
-					JSON.stringify({
-						bay: parkingBooking.bay,
-						level: parkingBooking.level,
-						holdMinutes: 15,
-					}),
-				)
-			} catch {
-				// Reservation remains valid even if extra CITY GO metadata cannot be persisted.
-			}
-
-			// CITY GO-style post-booking behavior: keep the booked parking in favorites
-			// and open the Favorites screen on the Parking tab.
-			if (!favorites.includes(parking.id)) {
-				toggleFavorite(parking.id)
-			}
-
-			try {
-				window.localStorage.setItem('citygoo-favorites-active-tab', 'parking')
-				window.localStorage.setItem('citygoo-last-booked-parking', parking.id)
-				window.localStorage.setItem('citygoo-last-booking-id', reservation.id)
-			} catch {
-				// Navigation still works if localStorage is unavailable.
-			}
-
-			setSheet(null)
-			router.push(
-				`/favorites?tab=parking&booked=${encodeURIComponent(parking.id)}`,
-			)
-		} catch {
-			showToast('Bron yaratilmadi. Profilga qayta kirib ko‘ring.')
-		}
+		// Booking replaces whatever sheet asked for it (the place sheet), the
+		// way the old setSheet({ type: 'parkingBook' }) did.
+		setSheet(null)
+		setBookingParkingId(parkingId)
 	}
 
 	function openService(serviceId: string) {
+		if (serviceId === 'queue') {
+			router.push('/queues')
+			return
+		}
 		if (serviceId === 'parking') {
 			const target = parkingResults.find(
 				({ parking }) => parking.availableSpaces > 0,
 			)?.parking
-			if (target) router.push(`/reserve/${target.id}`)
+			if (target) openParkingBooking(target.id)
 			else showToast('Hozir bo‘sh parking topilmadi')
 			return
 		}
@@ -1111,18 +359,19 @@ export default function HomePage() {
 			showToast('Taksi: kelish vaqti 3–5 daqiqa · taxminiy 18 000 so‘m')
 			return
 		}
-		setBookingSlot('12:30')
-		setBookingCount(serviceId === 'queue' ? 1 : 2)
-		setSheet({ type: 'service', serviceId })
-	}
-
-	function confirmService(serviceId: string) {
-		const service = SERVICES.find(item => item.id === serviceId)
+		// table / cinema / clinic. These used to open a slot picker that ended
+		// in a toast and stored nothing, so the booking never existed.
+		const venue =
+			serviceId === 'table'
+				? 'urban-food'
+				: serviceId === 'cinema'
+					? 'cinema-magic'
+					: 'medical-plaza'
 		setSheet(null)
-		showToast(`${service?.label ?? 'Bron'} tasdiqlandi · ${bookingSlot}`)
+		setServiceBooking({ kind: serviceId as ServiceBookingKind, refId: venue })
 	}
 
-	function sharePlace(place: DemoPlace) {
+	function sharePlace(place: Place) {
 		if (navigator.share) {
 			void navigator
 				.share({ title: place.title, text: place.address })
@@ -1151,7 +400,7 @@ export default function HomePage() {
 			)
 		: []
 	const searchPlaces = searchLower
-		? DEMO_PLACES.filter(place =>
+		? PLACES.filter(place =>
 				searchMatches(
 					`${place.title} ${place.subtitle} ${place.address} ${place.tags.join(' ')}`,
 					searchLower,
@@ -1171,11 +420,26 @@ export default function HomePage() {
 				),
 			)
 		: []
+	// Streets, derived from the catalogs rather than hardcoded, so the group
+	// can only ever offer somewhere the app can actually route to.
+	const searchAddresses = searchLower
+		? findAddresses(searchLower, [
+				...PLACES.map(place => ({
+					address: place.address,
+					parkingId: place.parkingId,
+				})),
+				...PARKINGS.map(parking => ({
+					address: parking.address,
+					parkingId: parking.id,
+				})),
+			])
+		: []
 	const searchTotal =
 		searchParkings.length +
 		searchPlaces.length +
 		searchServices.length +
-		searchEvents.length
+		searchEvents.length +
+		searchAddresses.length
 
 	const nearbyTitle =
 		activeCategory === 'parking'
@@ -1198,30 +462,30 @@ export default function HomePage() {
 						onClick={() => setSheet({ type: 'city' })}
 						className='inline-flex min-w-0 items-center gap-2 text-left'
 					>
-						<LocateFixed className='size-5 shrink-0 text-violet-600' />
-						<span className='truncate text-lg font-black tracking-tight text-slate-950'>
+						<LocateFixed className='size-5 shrink-0 text-brand' />
+						<span className='truncate text-lg font-black tracking-tight text-ink'>
 							{selectedCity}
 						</span>
-						<ChevronDown className='size-4 shrink-0 text-slate-400' />
+						<ChevronDown className='size-4 shrink-0 text-ink-3' />
 					</button>
 
 					<div className='flex items-center gap-2'>
 						<button
 							type='button'
 							onClick={() => setSheet({ type: 'weather' })}
-							className='inline-flex h-10 items-center gap-2 rounded-xl bg-amber-50 px-3 text-sm font-black text-amber-700'
+							className='inline-flex h-10 items-center gap-2 rounded-xl bg-warn-bg px-3 text-sm font-black text-warn'
 						>
 							<Sun className='size-5' />
 							{meta.temp}°
 						</button>
 						<Link
 							href='/notifications'
-							className='relative grid size-10 place-items-center rounded-xl bg-white text-slate-700 shadow-sm ring-1 ring-slate-200'
+							className='relative grid size-10 place-items-center rounded-xl bg-white text-ink-2 shadow-card'
 							aria-label='Bildirishnomalar'
 						>
 							<Bell className='size-5' />
 							{unreadCount > 0 && (
-								<span className='absolute -right-1 -top-1 grid min-w-5 place-items-center rounded-full bg-rose-500 px-1 text-[10px] font-black leading-5 text-white'>
+								<span className='absolute -right-1 -top-1 grid min-w-5 place-items-center rounded-full bg-bad px-1 text-[10px] font-black leading-5 text-white'>
 									{Math.min(unreadCount, 9)}
 								</span>
 							)}
@@ -1229,30 +493,23 @@ export default function HomePage() {
 					</div>
 				</div>
 
-				<div>
-					<p className='text-xs font-semibold text-slate-400'>
-						Assalomu alaykum, {user?.name ?? 'B SPACE'}
-					</p>
-					<h1 className='mt-1 text-2xl font-black tracking-tight text-slate-950'>
-						Shahar siz uchun
-					</h1>
-				</div>
+				<h1 className='sr-only'>B SPACE · {selectedCity}</h1>
 
-				<div className='flex h-14 w-full items-center gap-2 rounded-2xl bg-white px-3 shadow-sm ring-1 ring-slate-200'>
+				<div className='flex h-14 w-full items-center gap-2 rounded-2xl bg-white px-3 shadow-card'>
 					<button
 						type='button'
 						onClick={openSearch}
 						className='flex min-w-0 flex-1 items-center gap-3 text-left'
 					>
-						<Search className='size-5 shrink-0 text-slate-400' />
-						<span className='min-w-0 flex-1 truncate text-sm text-slate-400'>
+						<Search className='size-5 shrink-0 text-ink-3' />
+						<span className='min-w-0 flex-1 truncate text-sm text-ink-3'>
 							Joy, xizmat yoki manzil qidiring…
 						</span>
 					</button>
 					<button
 						type='button'
 						onClick={startVoice}
-						className='grid size-9 shrink-0 place-items-center rounded-xl bg-violet-50 text-violet-600'
+						className='grid size-9 shrink-0 place-items-center rounded-xl bg-brand-50 text-brand'
 						aria-label='Ovozli qidiruv'
 					>
 						<Mic className='size-4' />
@@ -1267,10 +524,10 @@ export default function HomePage() {
 								key={route.id}
 								type='button'
 								onClick={() => setSheet({ type: 'route', routeId: route.id })}
-								className='inline-flex h-10 shrink-0 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700'
+								className='inline-flex h-10 shrink-0 items-center gap-2 rounded-xl border border-line bg-white px-3 text-xs font-bold text-ink-2'
 							>
-								<Icon className='size-4 text-violet-600' />
-								{route.title} · {route.minutes} min
+								<Icon className='size-4 text-brand' />
+								{route.title} · {route.minutes} daq
 							</button>
 						)
 					})}
@@ -1279,8 +536,8 @@ export default function HomePage() {
 						onClick={() => setFavoriteOnly(value => !value)}
 						className={`inline-flex h-10 shrink-0 items-center gap-2 rounded-xl border px-3 text-xs font-bold ${
 							favoriteOnly
-								? 'border-violet-600 bg-violet-600 text-white'
-								: 'border-slate-200 bg-white text-slate-700'
+								? 'border-brand bg-brand text-white'
+								: 'border-line bg-white text-ink-2'
 						}`}
 					>
 						<Heart className='size-4' />
@@ -1289,21 +546,31 @@ export default function HomePage() {
 					<button
 						type='button'
 						onClick={() => setSheet({ type: 'history' })}
-						className='inline-flex h-10 shrink-0 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700'
+						className='inline-flex h-10 shrink-0 items-center gap-2 rounded-xl border border-line bg-white px-3 text-xs font-bold text-ink-2'
 					>
-						<History className='size-4 text-slate-500' />
+						<History className='size-4 text-ink-3' />
 						Tarix
 					</button>
 				</HorizontalRail>
 			</section>
 
 			{/* Map + transport strip */}
-			<section className='overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-slate-200'>
+			<section className='overflow-hidden rounded-3xl bg-white shadow-card'>
 				<div id='parking-map' className='relative scroll-mt-4'>
-					<ParkingMap
-						parkings={mapParkings}
-						selectedParkingId={selectedParkingId}
-						onSelect={selectParking}
+					<CityMap
+						objects={mapObjects}
+						selectedKey={
+							selectedParkingId ? `parking:${selectedParkingId}` : null
+						}
+						onSelect={object => {
+							if (object.kind === 'parking') selectParking(object.id)
+							else if (object.kind === 'place') setSheet({ type: 'place', placeId: object.id })
+							else if (object.kind === 'event') setSheet({ type: 'event', eventId: object.id })
+							else router.push(object.href)
+						}}
+						lines={layers.bike && selectedCity === 'Toshkent' ? HOME_BIKE_LINES : undefined}
+						viewportKey={`${selectedCity}:${activeCategory}:${favoriteOnly}`}
+						locateRevision={locateRevision}
 						userLocation={
 							status === 'ready' || status === 'fallback' ? location : undefined
 						}
@@ -1315,52 +582,66 @@ export default function HomePage() {
 							type='button'
 							onClick={() => {
 								locate()
+								setLocateRevision(value => value + 1)
 								showToast('Joylashuvingiz yangilanmoqda')
 							}}
-							className='grid size-9 place-items-center rounded-xl bg-white text-violet-600 shadow-md ring-1 ring-slate-200'
+							className='citygo-pressable grid size-9 place-items-center rounded-xl bg-white text-brand shadow-card'
 							aria-label='Joylashuvim'
 						>
 							<LocateFixed
-								className={`size-4 ${status === 'loading' ? 'animate-pulse' : ''}`}
+								className={`size-4 ${status === 'loading' ? 'citygo-refresh-spinner is-refreshing' : ''}`}
 							/>
 						</button>
-						<Link
-							href='/map'
-							className='grid size-9 place-items-center rounded-xl bg-white text-slate-700 shadow-md ring-1 ring-slate-200'
-							aria-label='To‘liq xarita'
+						<button
+							type='button'
+							onClick={() => setSheet({ type: 'layers' })}
+							className='relative grid size-9 place-items-center rounded-xl bg-white text-ink-2 shadow-card'
+							aria-label='Xarita qatlamlari'
 						>
-							<Map className='size-4' />
-						</Link>
+							<Layers className='size-4' />
+							<span className='absolute -right-1 -top-1 grid min-w-4 place-items-center rounded-full bg-brand px-1 text-[9px] font-black leading-4 text-white'>
+								{activeLayerCount(layers)}
+							</span>
+						</button>
 					</div>
 
+					{layers.eco && (
+						<div className='absolute right-3 top-3 z-20 rounded-xl bg-white/95 px-2.5 py-1.5 shadow-md'>
+							<p className='text-[10px] font-semibold text-ink-3'>AQI · namuna</p>
+							<p className='text-[13px] font-black text-ok'>
+								32 · Yaxshi
+							</p>
+						</div>
+					)}
+
 					{selectedParking && (
-						<div className='absolute inset-x-3 bottom-14 z-20 flex items-center gap-2 rounded-2xl bg-white p-3 shadow-xl ring-1 ring-slate-200'>
+						<div className='animate-map-card-in absolute inset-x-3 bottom-14 z-20 flex items-center gap-2 rounded-2xl bg-white p-3 shadow-xl ring-1 ring-line'>
 							<span
 								className={`grid size-10 shrink-0 place-items-center rounded-xl bg-linear-to-br ${selectedParking.accent} text-white`}
 							>
 								<CircleParking className='size-5' />
 							</span>
 							<div className='min-w-0 flex-1'>
-								<p className='truncate text-sm font-black text-slate-950'>
+								<p className='truncate text-sm font-black text-ink'>
 									{selectedParking.name}
 								</p>
-								<p className='mt-0.5 text-[10px] font-semibold text-slate-400'>
+								<p className='mt-0.5 text-[10px] font-semibold text-ink-3'>
 									{selectedParking.availableSpaces > 0
 										? `${selectedParking.availableSpaces} bo‘sh joy`
-										: 'FULL'}{' '}
+										: 'TO‘LA'}{' '}
 									· {formatUZS(selectedParking.pricePerHour)}/soat
 								</p>
 							</div>
 							<Link
 								href={`/parking/${selectedParking.id}`}
-								className='inline-flex h-9 shrink-0 items-center rounded-xl bg-violet-600 px-3 text-[11px] font-black text-white'
+								className='inline-flex h-9 shrink-0 items-center rounded-xl bg-brand px-3 text-[11px] font-black text-white'
 							>
 								Ochish
 							</Link>
 							<button
 								type='button'
 								onClick={() => setSelectedParkingId(null)}
-								className='grid size-8 shrink-0 place-items-center rounded-lg bg-slate-100 text-slate-500'
+								className='grid size-8 shrink-0 place-items-center rounded-lg bg-card-2 text-ink-3'
 								aria-label='Kartani yopish'
 							>
 								<X className='size-4' />
@@ -1376,18 +657,19 @@ export default function HomePage() {
 								if (!target) return showToast('Yo‘nalish uchun parking tanlang')
 								router.push(`/navigate/parking/${target.id}`)
 							}}
-							className='pointer-events-auto inline-flex h-9 items-center gap-2 rounded-xl bg-violet-600 px-3 text-xs font-black text-white shadow-lg shadow-violet-600/25'
+							className='pointer-events-auto inline-flex h-9 items-center gap-2 rounded-xl bg-brand px-3 text-xs font-black text-white shadow-lg shadow-[0_6px_16px_rgb(108_71_224/.28)]'
 						>
 							<Navigation className='size-4' />
 							Yo‘nalish
 						</button>
-						<Link
-							href='/map'
-							className='pointer-events-auto inline-flex h-9 items-center gap-2 rounded-xl bg-white px-3 text-xs font-black text-slate-800 shadow-md ring-1 ring-slate-200'
+						<button
+							type='button'
+							onClick={() => router.push('/map')}
+							className='pointer-events-auto inline-flex h-9 items-center gap-2 rounded-xl bg-white px-3 text-xs font-black text-ink shadow-card'
 						>
-							<Map className='size-4 text-violet-600' />
-							To‘liq xarita
-						</Link>
+							<Layers className='size-4 text-brand' />
+							Butun xarita
+						</button>
 					</div>
 				</div>
 
@@ -1401,14 +683,18 @@ export default function HomePage() {
 								type='button'
 								onClick={() => {
 									setTransportMode(mode.id)
-									showToast(`${mode.label}: ${mode.time} min`)
+									const target = selectedParking ?? parkingResults[0]?.parking
+									const query = target
+										? `?mode=${mode.id}&parkingId=${target.id}`
+										: `?mode=${mode.id}`
+									router.push(`/transport${query}`)
 								}}
 								className={`rounded-2xl px-1 py-2.5 text-center transition ${
-									selected ? 'bg-violet-50 text-violet-700' : 'text-slate-500'
+									selected ? 'bg-brand-50 text-brand-600' : 'text-ink-3'
 								}`}
 							>
 								<Icon className='mx-auto size-5' />
-								<p className='mt-1 text-xs font-black'>{mode.time} min</p>
+								<p className='mt-1 text-xs font-black'>{mode.time} daq</p>
 								<p className='mt-0.5 text-[10px] font-semibold'>{mode.label}</p>
 							</button>
 						)
@@ -1417,7 +703,7 @@ export default function HomePage() {
 			</section>
 
 			{status === 'fallback' && (
-				<p className='rounded-2xl bg-amber-50 p-3 text-xs leading-5 text-amber-800'>
+				<p className='rounded-2xl bg-warn-bg p-3 text-xs leading-5 text-warn'>
 					{locationMessage(locationError)}
 				</p>
 			)}
@@ -1426,10 +712,10 @@ export default function HomePage() {
 			{activeReservation && (
 				<Link
 					href={`/session/${activeReservation.id}`}
-					className='flex items-center justify-between gap-3 rounded-2xl bg-emerald-500 p-4 text-white shadow-lg shadow-emerald-500/15'
+					className='flex items-center justify-between gap-3 rounded-2xl bg-ok p-4 text-white shadow-lg shadow-[0_8px_24px_rgb(18_183_106/.22)]'
 				>
 					<div>
-						<p className='text-[10px] font-black uppercase tracking-[.18em] text-emerald-50'>
+						<p className='text-[10px] font-black uppercase tracking-[.18em] text-ok-bg'>
 							Faol parking
 						</p>
 						<p className='mt-1 text-sm font-black'>
@@ -1443,13 +729,13 @@ export default function HomePage() {
 			{/* Categories */}
 			<section>
 				<div className='mb-3 flex items-end justify-between'>
-					<h2 className='text-lg font-black tracking-tight text-slate-950'>
+					<h2 className='text-lg font-black tracking-tight text-ink'>
 						Kategoriyalar
 					</h2>
 					<button
 						type='button'
 						onClick={() => setSheet({ type: 'categories' })}
-						className='inline-flex items-center gap-1 text-xs font-black text-violet-600'
+						className='inline-flex items-center gap-1 text-xs font-black text-brand'
 					>
 						Barchasi <ChevronRight className='size-4' />
 					</button>
@@ -1467,12 +753,12 @@ export default function HomePage() {
 								className='flex min-w-0 flex-col items-center gap-2 text-center'
 							>
 								<span
-									className={`grid size-12 place-items-center rounded-2xl ${category.tone} ${selected ? 'ring-2 ring-violet-500 ring-offset-2' : ''}`}
+									className={`grid size-12 place-items-center rounded-2xl ${category.tone} ${selected ? 'ring-2 ring-brand ring-offset-2' : ''}`}
 								>
 									<Icon className='size-5' />
 								</span>
 								<span
-									className={`text-[10px] font-bold leading-3 ${selected ? 'text-violet-700' : 'text-slate-600'}`}
+									className={`text-[10px] font-bold leading-3 ${selected ? 'text-brand-600' : 'text-ink-2'}`}
 								>
 									{category.label}
 								</span>
@@ -1486,17 +772,17 @@ export default function HomePage() {
 			<section ref={nearbyRef} className='scroll-mt-4'>
 				<div className='mb-3 flex items-center justify-between gap-3'>
 					<div className='flex min-w-0 items-center gap-2'>
-						<h2 className='truncate text-lg font-black tracking-tight text-slate-950'>
+						<h2 className='truncate text-lg font-black tracking-tight text-ink'>
 							{nearbyTitle}
 						</h2>
-						<span className='rounded-lg bg-slate-100 px-2 py-1 text-[10px] font-black text-slate-500'>
+						<span className='rounded-lg bg-card-2 px-2 py-1 text-[10px] font-black text-ink-3'>
 							{nearbyCount}
 						</span>
 					</div>
 					<button
 						type='button'
 						onClick={() => setSheet({ type: 'sort' })}
-						className='shrink-0 text-xs font-black text-violet-600'
+						className='shrink-0 text-xs font-black text-brand'
 					>
 						{sortMode === 'distance'
 							? 'Yaqinroq'
@@ -1514,7 +800,7 @@ export default function HomePage() {
 								return (
 									<article
 										key={parking.id}
-										className='w-44.5 shrink-0 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200'
+										className='w-44.5 shrink-0 overflow-hidden rounded-2xl bg-white shadow-card'
 									>
 										<div
 											className={`relative h-24 bg-linear-to-br ${parking.accent} p-3 text-white`}
@@ -1522,15 +808,15 @@ export default function HomePage() {
 											<button
 												type='button'
 												onClick={() => toggleFavorite(parking.id)}
-												className='absolute right-2 top-2 grid size-8 place-items-center rounded-full bg-white/90 text-slate-700 shadow-sm'
+												className='absolute right-2 top-2 grid size-8 place-items-center rounded-full bg-white/90 text-ink-2 shadow-sm'
 												aria-label='Sevimlilar'
 											>
 												<Heart
-													className={`size-4 ${favorite ? 'fill-rose-500 text-rose-500' : ''}`}
+													className={`size-4 ${favorite ? 'fill-bad text-bad' : ''}`}
 												/>
 											</button>
-											<span className='absolute bottom-2 left-2 inline-flex items-center gap-1 rounded-lg bg-white/90 px-2 py-1 text-[10px] font-black text-slate-800'>
-												<Star className='size-3 fill-amber-400 text-amber-400' />
+											<span className='absolute bottom-2 left-2 inline-flex items-center gap-1 rounded-lg bg-white/90 px-2 py-1 text-[10px] font-black text-ink'>
+												<Star className='size-3 fill-star text-star' />
 												4.
 												{Math.max(4, Math.min(9, parking.availableSpaces % 10))}
 											</span>
@@ -1541,28 +827,28 @@ export default function HomePage() {
 												onClick={() => selectParking(parking.id)}
 												className='block w-full text-left'
 											>
-												<h3 className='truncate text-sm font-black text-slate-950'>
+												<h3 className='truncate text-sm font-black text-ink'>
 													{parking.name}
 												</h3>
-												<p className='mt-1 truncate text-[11px] text-slate-400'>
+												<p className='mt-1 truncate text-[11px] text-ink-3'>
 													{parking.district} · {parking.city}
 												</p>
 											</button>
 											<div className='mt-3 flex items-center justify-between gap-2 text-[10px] font-bold'>
-												<span className='text-slate-400'>
+												<span className='text-ink-3'>
 													{distance.toFixed(1)} km
 												</span>
 												<span
 													className={
 														parking.availableSpaces === 0
-															? 'text-rose-500'
+															? 'text-bad'
 															: parking.availableSpaces <= 5
-																? 'text-amber-600'
-																: 'text-emerald-600'
+																? 'text-warn'
+																: 'text-ok'
 													}
 												>
 													{parking.availableSpaces === 0
-														? 'FULL'
+														? 'TO‘LA'
 														: `${parking.availableSpaces} joy`}
 												</span>
 											</div>
@@ -1570,20 +856,26 @@ export default function HomePage() {
 												<button
 													type='button'
 													onClick={() => selectParking(parking.id)}
-													className='inline-flex h-9 items-center justify-center rounded-xl border border-violet-200 text-[10px] font-black text-violet-700'
+													className='inline-flex h-9 items-center justify-center rounded-xl border border-brand-100 text-[10px] font-black text-brand-600'
 												>
 													Xarita
 												</button>
-												<Link
-													href={
-														parking.availableSpaces > 0
-															? `/reserve/${parking.id}`
-															: `/parking/${parking.id}`
-													}
-													className='inline-flex h-9 items-center justify-center rounded-xl bg-violet-600 text-[10px] font-black text-white'
-												>
-													{parking.availableSpaces > 0 ? 'Bron' : 'Ochish'}
-												</Link>
+												{parking.availableSpaces > 0 ? (
+													<button
+														type='button'
+														onClick={() => openParkingBooking(parking.id)}
+														className='inline-flex h-9 items-center justify-center rounded-xl bg-brand text-[10px] font-black text-white'
+													>
+														Bron
+													</button>
+												) : (
+													<Link
+														href={`/parking/${parking.id}`}
+														className='inline-flex h-9 items-center justify-center rounded-xl bg-brand text-[10px] font-black text-white'
+													>
+														Ochish
+													</Link>
+												)}
 											</div>
 										</div>
 									</article>
@@ -1592,16 +884,16 @@ export default function HomePage() {
 							<button
 								type='button'
 								onClick={() => setSheet({ type: 'nearby' })}
-								className='flex w-29.5 shrink-0 flex-col items-center justify-center gap-2 rounded-2xl bg-white px-3 text-center shadow-sm ring-1 ring-slate-200'
+								className='flex w-29.5 shrink-0 flex-col items-center justify-center gap-2 rounded-2xl bg-white px-3 text-center shadow-card'
 							>
-								<ChevronRight className='size-5 text-violet-600' />
-								<span className='text-xs font-black text-violet-700'>
+								<ChevronRight className='size-5 text-brand' />
+								<span className='text-xs font-black text-brand-600'>
 									Barchasini ko‘rish
 								</span>
 							</button>
 						</HorizontalRail>
 					) : (
-						<div className='rounded-2xl border border-dashed border-slate-300 p-7 text-center text-sm text-slate-500'>
+						<div className='rounded-2xl border border-dashed border-line-2 p-7 text-center text-sm text-ink-3'>
 							Mos parking topilmadi.
 						</div>
 					)
@@ -1621,7 +913,7 @@ export default function HomePage() {
 											openPlace(place.id)
 										}
 									}}
-									className='w-44 shrink-0 cursor-pointer overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200 transition active:scale-[0.985]'
+									className='w-44 shrink-0 cursor-pointer overflow-hidden rounded-2xl bg-white shadow-card transition active:scale-[0.985]'
 									aria-label={`${place.title} tafsilotlarini ochish`}
 								>
 									<div
@@ -1635,7 +927,7 @@ export default function HomePage() {
 												event.stopPropagation()
 												togglePlaceFavorite(place.id)
 											}}
-											className='absolute right-2 top-2 z-10 grid size-8 place-items-center rounded-full bg-white/90 text-slate-700 shadow-sm transition active:scale-95'
+											className='absolute right-2 top-2 z-10 grid size-8 place-items-center rounded-full bg-white/90 text-ink-2 shadow-sm transition active:scale-95'
 											aria-label={
 												favorite
 													? `${place.title}ni sevimlilardan olib tashlash`
@@ -1643,33 +935,33 @@ export default function HomePage() {
 											}
 										>
 											<Heart
-												className={`size-4 ${favorite ? 'fill-rose-500 text-rose-500' : ''}`}
+												className={`size-4 ${favorite ? 'fill-bad text-bad' : ''}`}
 											/>
 										</button>
-										<span className='absolute bottom-2 left-2 inline-flex items-center gap-1 rounded-lg bg-white/90 px-2 py-1 text-[10px] font-black text-slate-800'>
-											<Star className='size-3 fill-amber-400 text-amber-400' />{' '}
+										<span className='absolute bottom-2 left-2 inline-flex items-center gap-1 rounded-lg bg-white/90 px-2 py-1 text-[10px] font-black text-ink'>
+											<Star className='size-3 fill-star text-star' />{' '}
 											{place.rating}
 										</span>
 									</div>
 									<div className='w-full p-3 text-left'>
-										<h3 className='truncate text-sm font-black text-slate-950'>
+										<h3 className='truncate text-sm font-black text-ink'>
 											{place.title}
 										</h3>
-										<p className='mt-1 truncate text-[11px] text-slate-400'>
+										<p className='mt-1 truncate text-[11px] text-ink-3'>
 											{place.subtitle}
 										</p>
 										<div className='mt-3 flex items-center gap-3 text-[10px] font-bold'>
-											<span className='text-slate-400'>
+											<span className='text-ink-3'>
 												{place.distanceKm.toFixed(1)} km
 											</span>
 											{place.free !== undefined && (
-												<span className='text-emerald-600'>
+												<span className='text-ok'>
 													{place.free} joy
 												</span>
 											)}
 											{place.queue !== undefined && (
-												<span className='text-slate-600'>
-													{place.queue} min
+												<span className='text-ink-2'>
+													{place.queue} daq
 												</span>
 											)}
 										</div>
@@ -1680,16 +972,16 @@ export default function HomePage() {
 						<button
 							type='button'
 							onClick={() => setSheet({ type: 'nearby' })}
-							className='flex w-29.5 shrink-0 flex-col items-center justify-center gap-2 rounded-2xl bg-white px-3 text-center shadow-sm ring-1 ring-slate-200'
+							className='flex w-29.5 shrink-0 flex-col items-center justify-center gap-2 rounded-2xl bg-white px-3 text-center shadow-card'
 						>
-							<ChevronRight className='size-5 text-violet-600' />
-							<span className='text-xs font-black text-violet-700'>
+							<ChevronRight className='size-5 text-brand' />
+							<span className='text-xs font-black text-brand-600'>
 								Barchasini ko‘rish
 							</span>
 						</button>
 					</HorizontalRail>
 				) : (
-					<div className='rounded-2xl border border-dashed border-slate-300 p-7 text-center text-sm text-slate-500'>
+					<div className='rounded-2xl border border-dashed border-line-2 p-7 text-center text-sm text-ink-3'>
 						Bu kategoriyada sevimli joy topilmadi.
 					</div>
 				)}
@@ -1698,13 +990,13 @@ export default function HomePage() {
 			{/* Services — CITY GO layout */}
 			<section>
 				<div className='mb-2 flex items-baseline justify-between gap-3'>
-					<h2 className='text-lg font-[750] tracking-[-0.3px] text-slate-950'>
+					<h2 className='text-lg font-[750] tracking-[-0.3px] text-ink'>
 						Mashhur xizmatlar
 					</h2>
 					<button
 						type='button'
 						onClick={() => setSheet({ type: 'servicesAll' })}
-						className='inline-flex shrink-0 items-center gap-1 text-[13px] font-semibold text-violet-600'
+						className='inline-flex shrink-0 items-center gap-1 text-[13px] font-semibold text-brand'
 					>
 						Barchasi
 						<ChevronRight className='size-3.25' strokeWidth={1.8} />
@@ -1720,7 +1012,7 @@ export default function HomePage() {
 									key={service.id}
 									type='button'
 									onClick={() => openService(service.id)}
-									className='inline-flex shrink-0 items-center gap-2.5 rounded-[18px] bg-white px-3.5 py-3 text-[13px] font-semibold text-slate-700 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_4px_14px_rgba(16,24,40,0.06)]'
+									className='inline-flex shrink-0 items-center gap-2.5 rounded-[18px] bg-white px-3.5 py-3 text-[13px] font-semibold text-ink-2 shadow-card'
 								>
 									<Icon
 										className={`size-5 shrink-0 ${service.tone}`}
@@ -1735,13 +1027,13 @@ export default function HomePage() {
 			</section>
 
 			{/* For you */}
-			<section className='overflow-hidden rounded-3xl bg-linear-to-br from-violet-600 to-indigo-700 p-5 text-white shadow-xl shadow-violet-600/15'>
+			<section className='overflow-hidden rounded-3xl bg-linear-[130deg,#6c47e0,#4c2fb0] p-5 text-white shadow-xl shadow-[0_8px_24px_rgb(108_71_224/.22)]'>
 				<div className='flex items-start justify-between gap-3'>
 					<div>
 						<p className='text-lg font-black'>
 							Siz uchun, {user?.name ?? 'B SPACE'}
 						</p>
-						<p className='mt-1 text-xs leading-5 text-violet-100'>
+						<p className='mt-1 text-xs leading-5 text-brand-100'>
 							Safarlaringiz va parking odatlaringiz asosida
 						</p>
 					</div>
@@ -1760,13 +1052,13 @@ export default function HomePage() {
 					className='mt-5 flex w-full items-center gap-4 text-left'
 				>
 					<div className='min-w-0 flex-1'>
-						<p className='text-[10px] font-bold text-violet-200'>
+						<p className='text-[10px] font-bold text-brand-100'>
 							BUGUN · 19:00
 						</p>
 						<p className='mt-1 truncate text-base font-black'>
 							{EVENTS[0].title}
 						</p>
-						<p className='mt-2 text-xs text-violet-100'>
+						<p className='mt-2 text-xs text-brand-100'>
 							{EVENTS[0].place} · yaqin parking mavjud.
 						</p>
 					</div>
@@ -1779,13 +1071,13 @@ export default function HomePage() {
 			{/* Events */}
 			<section>
 				<div className='mb-3 flex items-center justify-between'>
-					<h2 className='text-lg font-black tracking-tight text-slate-950'>
+					<h2 className='text-lg font-black tracking-tight text-ink'>
 						Shahardagi voqealar
 					</h2>
 					<button
 						type='button'
 						onClick={() => setSheet({ type: 'events' })}
-						className='text-xs font-black text-violet-600'
+						className='text-xs font-black text-brand'
 					>
 						Barchasi
 					</button>
@@ -1796,21 +1088,21 @@ export default function HomePage() {
 							key={event.id}
 							type='button'
 							onClick={() => setSheet({ type: 'event', eventId: event.id })}
-							className='w-40 shrink-0 overflow-hidden rounded-2xl bg-white text-left shadow-sm ring-1 ring-slate-200'
+							className='w-40 shrink-0 overflow-hidden rounded-2xl bg-white text-left shadow-card'
 						>
 							<div className={`h-24 bg-linear-to-br ${event.accent} p-3`}>
-								<span className='rounded-lg bg-white/90 px-2 py-1 text-[10px] font-black text-slate-800'>
+								<span className='rounded-lg bg-white/90 px-2 py-1 text-[10px] font-black text-ink'>
 									{event.when}
 								</span>
 							</div>
 							<div className='p-3'>
-								<p className='text-[10px] font-bold text-slate-400'>
+								<p className='text-[10px] font-bold text-ink-3'>
 									{event.time} · {event.category}
 								</p>
-								<p className='mt-1 truncate text-sm font-black text-slate-900'>
+								<p className='mt-1 truncate text-sm font-black text-ink'>
 									{event.title}
 								</p>
-								<p className='mt-2 truncate text-[10px] text-slate-400'>
+								<p className='mt-2 truncate text-[10px] text-ink-3'>
 									{event.place}
 								</p>
 							</div>
@@ -1820,14 +1112,14 @@ export default function HomePage() {
 			</section>
 
 			{/* AI recommendation */}
-			<section className='rounded-2xl border border-violet-100 bg-linear-to-br from-violet-50 to-sky-50 p-4'>
+			<section key={aiIndex} className='animate-fade-up rounded-card-lg border border-brand-100 bg-brand-50 p-4'>
 				<div className='flex gap-3'>
-					<span className='grid size-10 shrink-0 place-items-center rounded-xl bg-violet-600 text-white'>
+					<span className='grid size-10 shrink-0 place-items-center rounded-xl bg-brand text-white'>
 						<WandSparkles className='size-5' />
 					</span>
 					<div className='min-w-0 flex-1'>
 						<div className='flex items-center justify-between gap-2'>
-							<span className='inline-flex items-center gap-1 text-xs font-black text-violet-700'>
+							<span className='inline-flex items-center gap-1 text-xs font-black text-brand-600'>
 								<Sparkles className='size-3.5' /> AI tavsiya
 							</span>
 							<button
@@ -1835,27 +1127,27 @@ export default function HomePage() {
 								onClick={() =>
 									setAiIndex(index => (index + 1) % AI_TIPS.length)
 								}
-								className='inline-flex items-center gap-1 text-[10px] font-bold text-slate-400'
+								className='inline-flex items-center gap-1 text-[10px] font-bold text-ink-3'
 							>
 								{aiIndex + 1}/{AI_TIPS.length}{' '}
-								<History className='size-3.5 text-violet-600' />
+								<History className='size-3.5 text-brand' />
 							</button>
 						</div>
-						<p className='mt-2 text-sm font-black text-slate-900'>
+						<p className='mt-2 text-sm font-black text-ink'>
 							{aiTip.title}
 						</p>
-						<p className='mt-1 text-xs leading-5 text-slate-500'>
+						<p className='mt-1 text-xs leading-5 text-ink-3'>
 							{aiTip.text}
 						</p>
 						<button
 							type='button'
 							onClick={() => {
-								if (aiIndex === 1) router.push(`/reserve/${aiTip.parkingId}`)
+								if (aiIndex === 1) openParkingBooking(aiTip.parkingId)
 								else if (aiIndex === 2)
 									router.push(`/navigate/parking/${aiTip.parkingId}`)
 								else selectParking(aiTip.parkingId)
 							}}
-							className='mt-3 inline-flex h-9 items-center gap-2 rounded-xl bg-violet-600 px-3 text-xs font-black text-white'
+							className='mt-3 inline-flex h-9 items-center gap-2 rounded-xl bg-brand px-3 text-xs font-black text-white'
 						>
 							<CircleParking className='size-4' /> {aiTip.action}
 						</button>
@@ -1866,7 +1158,7 @@ export default function HomePage() {
 			<button
 				type='button'
 				onClick={refreshHome}
-				className='flex w-full items-center justify-center gap-2 px-1 text-[10px] font-semibold text-slate-400'
+				className='flex w-full items-center justify-center gap-2 px-1 text-[10px] font-semibold text-ink-3'
 			>
 				<History className='size-3.5' /> Ma’lumotlar {updatedLabel} yangilandi ·
 				yangilash uchun bosing
@@ -1874,29 +1166,29 @@ export default function HomePage() {
 
 			{/* SEARCH OVERLAY */}
 			{searchOpen && (
-				<section className='fixed inset-0 z-90 mx-auto flex w-full max-w-md flex-col bg-slate-50'>
+				<section className='fixed inset-x-0 top-0 z-90 mx-auto flex h-dvh w-full max-w-md flex-col bg-canvas'>
 					<div className='flex items-center gap-2 px-4 pb-3 pt-[max(1rem,env(safe-area-inset-top))]'>
 						<button
 							type='button'
 							onClick={() => setSearchOpen(false)}
-							className='grid size-11 shrink-0 place-items-center rounded-xl bg-white text-slate-600 shadow-sm ring-1 ring-slate-200'
+							className='grid size-11 shrink-0 place-items-center rounded-xl bg-white text-ink-2 shadow-card'
 						>
 							<X className='size-5' />
 						</button>
-						<div className='flex h-12 min-w-0 flex-1 items-center gap-2 rounded-2xl bg-white px-3 shadow-sm ring-1 ring-slate-200'>
-							<Search className='size-5 shrink-0 text-slate-400' />
+						<div className='flex h-12 min-w-0 flex-1 items-center gap-2 rounded-2xl bg-white px-3 shadow-card'>
+							<Search className='size-5 shrink-0 text-ink-3' />
 							<input
 								autoFocus
 								value={searchQuery}
 								onChange={event => setSearchQuery(event.target.value)}
-								className='min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-slate-400'
+								className='min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-ink-3'
 								placeholder='Joy, xizmat, parking…'
 							/>
 							{searchQuery && (
 								<button
 									type='button'
 									onClick={() => setSearchQuery('')}
-									className='grid size-7 place-items-center text-slate-400'
+									className='grid size-7 place-items-center text-ink-3'
 								>
 									<X className='size-4' />
 								</button>
@@ -1904,7 +1196,7 @@ export default function HomePage() {
 							<button
 								type='button'
 								onClick={startVoice}
-								className='grid size-8 place-items-center text-violet-600'
+								className='grid size-8 place-items-center text-brand'
 							>
 								<Mic className='size-4' />
 							</button>
@@ -1915,27 +1207,27 @@ export default function HomePage() {
 						{!searchQuery.trim() ? (
 							<div className='space-y-5'>
 								<div>
-									<p className='mb-2 text-[11px] font-black uppercase tracking-[.14em] text-slate-400'>
+									<p className='mb-2 text-[11px] font-black uppercase tracking-[.14em] text-ink-3'>
 										So‘nggi qidiruvlar
 									</p>
-									<div className='overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200'>
+									<div className='overflow-hidden rounded-2xl bg-white shadow-card'>
 										{recentQueries.map((query, index) => (
 											<button
 												key={query}
 												type='button'
 												onClick={() => setSearchQuery(query)}
-												className={`flex w-full items-center gap-3 px-4 py-3 text-left text-sm font-semibold text-slate-700 ${index ? 'border-t border-slate-100' : ''}`}
+												className={`flex w-full items-center gap-3 px-4 py-3 text-left text-sm font-semibold text-ink-2 ${index ? 'border-t border-line' : ''}`}
 											>
-												<History className='size-4 text-slate-400' />
+												<History className='size-4 text-ink-3' />
 												<span className='min-w-0 flex-1 truncate'>{query}</span>
-												<ChevronRight className='size-4 text-slate-300' />
+												<ChevronRight className='size-4 text-ink-3' />
 											</button>
 										))}
 									</div>
 								</div>
 
 								<div>
-									<p className='mb-2 text-[11px] font-black uppercase tracking-[.14em] text-slate-400'>
+									<p className='mb-2 text-[11px] font-black uppercase tracking-[.14em] text-ink-3'>
 										Hozir mashhur
 									</p>
 									<HorizontalRail className='gap-2'>
@@ -1950,7 +1242,7 @@ export default function HomePage() {
 												key={query}
 												type='button'
 												onClick={() => setSearchQuery(query)}
-												className='h-10 shrink-0 rounded-xl bg-white px-3 text-xs font-bold text-slate-700 shadow-sm ring-1 ring-slate-200'
+												className='h-10 shrink-0 rounded-xl bg-white px-3 text-xs font-bold text-ink-2 shadow-card'
 											>
 												{query}
 											</button>
@@ -1959,7 +1251,7 @@ export default function HomePage() {
 								</div>
 
 								<div>
-									<p className='mb-3 text-[11px] font-black uppercase tracking-[.14em] text-slate-400'>
+									<p className='mb-3 text-[11px] font-black uppercase tracking-[.14em] text-ink-3'>
 										Kategoriyalar
 									</p>
 									<div className='grid grid-cols-4 gap-3'>
@@ -1980,7 +1272,7 @@ export default function HomePage() {
 													>
 														<Icon className='size-5' />
 													</span>
-													<span className='text-[10px] font-bold text-slate-600'>
+													<span className='text-[10px] font-bold text-ink-2'>
 														{category.label}
 													</span>
 												</button>
@@ -1993,10 +1285,10 @@ export default function HomePage() {
 							<div className='space-y-5'>
 								{searchParkings.length > 0 && (
 									<div>
-										<p className='mb-2 text-[11px] font-black uppercase tracking-[.14em] text-slate-400'>
+										<p className='mb-2 text-[11px] font-black uppercase tracking-[.14em] text-ink-3'>
 											Parking · {searchParkings.length}
 										</p>
-										<div className='overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200'>
+										<div className='overflow-hidden rounded-2xl bg-white shadow-card'>
 											{searchParkings.map((parking, index) => (
 												<button
 													key={parking.id}
@@ -2007,7 +1299,7 @@ export default function HomePage() {
 														setSelectedCity(parking.city)
 														selectParking(parking.id)
 													}}
-													className={`flex w-full items-center gap-3 px-4 py-3 text-left ${index ? 'border-t border-slate-100' : ''}`}
+													className={`flex w-full items-center gap-3 px-4 py-3 text-left ${index ? 'border-t border-line' : ''}`}
 												>
 													<span
 														className={`grid size-10 shrink-0 place-items-center rounded-xl bg-linear-to-br ${parking.accent} text-white`}
@@ -2015,19 +1307,19 @@ export default function HomePage() {
 														<CircleParking className='size-5' />
 													</span>
 													<span className='min-w-0 flex-1'>
-														<span className='block truncate text-sm font-black text-slate-900'>
-															{parking.name}
-														</span>
-														<span className='mt-0.5 block truncate text-[11px] text-slate-400'>
-															{parking.address}
-														</span>
+									<span className='block truncate text-sm font-black text-ink'>
+										<Mark text={parking.name} query={searchQuery} />
+									</span>
+									<span className='mt-0.5 block truncate text-[11px] text-ink-3'>
+										<Mark text={parking.address} query={searchQuery} />
+									</span>
 													</span>
 													<span
-														className={`text-[10px] font-black ${parking.availableSpaces > 0 ? 'text-emerald-600' : 'text-rose-500'}`}
+														className={`text-[10px] font-black ${parking.availableSpaces > 0 ? 'text-ok' : 'text-bad'}`}
 													>
 														{parking.availableSpaces > 0
 															? `${parking.availableSpaces} joy`
-															: 'FULL'}
+															: 'TO‘LA'}
 													</span>
 												</button>
 											))}
@@ -2037,10 +1329,10 @@ export default function HomePage() {
 
 								{searchPlaces.length > 0 && (
 									<div>
-										<p className='mb-2 text-[11px] font-black uppercase tracking-[.14em] text-slate-400'>
+										<p className='mb-2 text-[11px] font-black uppercase tracking-[.14em] text-ink-3'>
 											Joylar · {searchPlaces.length}
 										</p>
-										<div className='overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200'>
+										<div className='overflow-hidden rounded-2xl bg-white shadow-card'>
 											{searchPlaces.map((place, index) => (
 												<button
 													key={place.id}
@@ -2050,7 +1342,7 @@ export default function HomePage() {
 														setSearchOpen(false)
 														setSheet({ type: 'place', placeId: place.id })
 													}}
-													className={`flex w-full items-center gap-3 px-4 py-3 text-left ${index ? 'border-t border-slate-100' : ''}`}
+													className={`flex w-full items-center gap-3 px-4 py-3 text-left ${index ? 'border-t border-line' : ''}`}
 												>
 													<span
 														className={`grid size-10 shrink-0 place-items-center rounded-xl bg-linear-to-br ${place.accent} text-white`}
@@ -2058,14 +1350,14 @@ export default function HomePage() {
 														<MapPin className='size-5' />
 													</span>
 													<span className='min-w-0 flex-1'>
-														<span className='block truncate text-sm font-black text-slate-900'>
-															{place.title}
-														</span>
-														<span className='mt-0.5 block truncate text-[11px] text-slate-400'>
-															{place.subtitle}
-														</span>
+									<span className='block truncate text-sm font-black text-ink'>
+										<Mark text={place.title} query={searchQuery} />
+									</span>
+									<span className='mt-0.5 block truncate text-[11px] text-ink-3'>
+										<Mark text={place.subtitle} query={searchQuery} />
+									</span>
 													</span>
-													<Star className='size-4 fill-amber-400 text-amber-400' />
+													<Star className='size-4 fill-star text-star' />
 												</button>
 											))}
 										</div>
@@ -2074,10 +1366,10 @@ export default function HomePage() {
 
 								{searchServices.length > 0 && (
 									<div>
-										<p className='mb-2 text-[11px] font-black uppercase tracking-[.14em] text-slate-400'>
+										<p className='mb-2 text-[11px] font-black uppercase tracking-[.14em] text-ink-3'>
 											Xizmatlar · {searchServices.length}
 										</p>
-										<div className='overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200'>
+										<div className='overflow-hidden rounded-2xl bg-white shadow-card'>
 											{searchServices.map((service, index) => {
 												const Icon = service.icon
 												return (
@@ -2089,15 +1381,15 @@ export default function HomePage() {
 															setSearchOpen(false)
 															openService(service.id)
 														}}
-														className={`flex w-full items-center gap-3 px-4 py-3 text-left ${index ? 'border-t border-slate-100' : ''}`}
+														className={`flex w-full items-center gap-3 px-4 py-3 text-left ${index ? 'border-t border-line' : ''}`}
 													>
-														<span className='grid size-10 shrink-0 place-items-center rounded-xl bg-violet-50'>
+														<span className='grid size-10 shrink-0 place-items-center rounded-xl bg-brand-50'>
 															<Icon className={`size-5 ${service.tone}`} />
 														</span>
-														<span className='min-w-0 flex-1 text-sm font-black text-slate-900'>
-															{service.label}
+														<span className='min-w-0 flex-1 text-sm font-black text-ink'>
+															<Mark text={service.label} query={searchQuery} />
 														</span>
-														<ChevronRight className='size-4 text-slate-300' />
+														<ChevronRight className='size-4 text-ink-3' />
 													</button>
 												)
 											})}
@@ -2107,10 +1399,10 @@ export default function HomePage() {
 
 								{searchEvents.length > 0 && (
 									<div>
-										<p className='mb-2 text-[11px] font-black uppercase tracking-[.14em] text-slate-400'>
+										<p className='mb-2 text-[11px] font-black uppercase tracking-[.14em] text-ink-3'>
 											Voqealar · {searchEvents.length}
 										</p>
-										<div className='overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200'>
+										<div className='overflow-hidden rounded-2xl bg-white shadow-card'>
 											{searchEvents.map((event, index) => (
 												<button
 													key={event.id}
@@ -2120,16 +1412,16 @@ export default function HomePage() {
 														setSearchOpen(false)
 														setSheet({ type: 'event', eventId: event.id })
 													}}
-													className={`flex w-full items-center gap-3 px-4 py-3 text-left ${index ? 'border-t border-slate-100' : ''}`}
+													className={`flex w-full items-center gap-3 px-4 py-3 text-left ${index ? 'border-t border-line' : ''}`}
 												>
-													<span className='grid size-10 shrink-0 place-items-center rounded-xl bg-fuchsia-50 text-fuchsia-600'>
+													<span className='grid size-10 shrink-0 place-items-center rounded-xl bg-brand-100 text-brand'>
 														<Ticket className='size-5' />
 													</span>
 													<span className='min-w-0 flex-1'>
-														<span className='block truncate text-sm font-black text-slate-900'>
-															{event.title}
+														<span className='block truncate text-sm font-black text-ink'>
+															<Mark text={event.title} query={searchQuery} />
 														</span>
-														<span className='mt-0.5 block text-[11px] text-slate-400'>
+														<span className='mt-0.5 block text-[11px] text-ink-3'>
 															{event.when} · {event.time}
 														</span>
 													</span>
@@ -2138,20 +1430,55 @@ export default function HomePage() {
 										</div>
 									</div>
 								)}
+
+								{searchAddresses.length > 0 && (
+									<div>
+										<p className='mb-2 text-[11px] font-black uppercase tracking-[.14em] text-ink-3'>
+											Manzillar · {searchAddresses.length}
+										</p>
+										<div className='overflow-hidden rounded-2xl bg-white shadow-card'>
+											{searchAddresses.map((hit, index) => (
+												<button
+													key={hit.street}
+													type='button'
+													onClick={() => {
+														rememberQuery(searchQuery)
+														setSearchOpen(false)
+														router.push(`/transport?parkingId=${hit.parkingId}`)
+													}}
+													className={`flex w-full items-center gap-3 px-4 py-3 text-left ${index ? 'border-t border-line' : ''}`}
+												>
+													<span className='grid size-10 shrink-0 place-items-center rounded-xl bg-card-2 text-ink-3'>
+														<LocateFixed className='size-5' />
+													</span>
+													<span className='min-w-0 flex-1'>
+														<span className='block truncate text-sm font-black text-ink'>
+															<Mark text={hit.street} query={searchQuery} />
+														</span>
+														<span className='mt-0.5 block text-[11px] text-ink-3'>
+															{hit.count} ta obyekt
+														</span>
+													</span>
+													<Navigation className='size-4 text-brand' />
+												</button>
+											))}
+										</div>
+									</div>
+								)}
 							</div>
 						) : (
-							<div className='mt-10 rounded-3xl bg-white p-8 text-center shadow-sm ring-1 ring-slate-200'>
-								<Search className='mx-auto size-8 text-slate-300' />
-								<p className='mt-3 text-sm font-black text-slate-900'>
+							<div className='mt-10 rounded-3xl bg-white p-8 text-center shadow-card'>
+								<Search className='mx-auto size-8 text-ink-3' />
+								<p className='mt-3 text-sm font-black text-ink'>
 									Hech narsa topilmadi
 								</p>
-								<p className='mt-2 text-xs leading-5 text-slate-400'>
+								<p className='mt-2 text-xs leading-5 text-ink-3'>
 									Qidiruvni qisqartirib yoki boshqa so‘z bilan sinab ko‘ring.
 								</p>
 								<button
 									type='button'
 									onClick={() => setSearchQuery('')}
-									className='mt-4 h-10 rounded-xl border border-slate-200 px-4 text-xs font-black text-slate-700'
+									className='mt-4 h-10 rounded-xl border border-line px-4 text-xs font-black text-ink-2'
 								>
 									Tozalash
 								</button>
@@ -2163,8 +1490,8 @@ export default function HomePage() {
 
 			{/* VOICE OVERLAY */}
 			{voiceOpen && (
-				<div className='fixed inset-0 z-100 mx-auto flex w-full max-w-md flex-col items-center justify-center gap-6 bg-slate-950/75 px-8 text-center text-white backdrop-blur-md'>
-					<div className='grid size-28 place-items-center rounded-full bg-violet-600 shadow-2xl shadow-violet-500/30'>
+				<div className='fixed inset-x-0 top-0 z-100 mx-auto flex h-dvh w-full max-w-md flex-col items-center justify-center gap-6 bg-ink/75 px-8 text-center text-white backdrop-blur-md'>
+					<div className='citygo-voice-ring grid size-28 place-items-center rounded-full bg-brand shadow-2xl shadow-[0_10px_30px_rgb(108_71_224/.3)]'>
 						<Mic className='size-11' />
 					</div>
 					<div>
@@ -2186,11 +1513,11 @@ export default function HomePage() {
 			{/* SHEETS */}
 			{sheet?.type === 'city' && (
 				<BottomSheet title='Shaharni tanlang' onClose={() => setSheet(null)}>
-					<p className='mb-3 text-xs leading-5 text-slate-500'>
+					<p className='mb-3 text-xs leading-5 text-ink-3'>
 						Parkinglar, masofalar va shahar ma’lumotlari tanlangan shaharga
 						moslashadi.
 					</p>
-					<div className='overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200'>
+					<div className='overflow-hidden rounded-2xl bg-white shadow-card'>
 						{cities.map((city, index) => {
 							const cityMeta = CITY_META[city] ?? CITY_META.Toshkent
 							return (
@@ -2203,27 +1530,62 @@ export default function HomePage() {
 										setSheet(null)
 										showToast(`Shahar: ${city}`)
 									}}
-									className={`flex w-full items-center gap-3 px-4 py-3 text-left ${index ? 'border-t border-slate-100' : ''}`}
+									className={`flex w-full items-center gap-3 px-4 py-3 text-left ${index ? 'border-t border-line' : ''}`}
 								>
-									<span className='grid size-10 shrink-0 place-items-center rounded-xl bg-amber-50 text-amber-600'>
+									<span className='grid size-10 shrink-0 place-items-center rounded-xl bg-warn-bg text-warn'>
 										<Sun className='size-5' />
 									</span>
 									<span className='min-w-0 flex-1'>
-										<span className='block text-sm font-black text-slate-900'>
+										<span className='block text-sm font-black text-ink'>
 											{city}
 										</span>
-										<span className='mt-0.5 block text-[11px] text-slate-400'>
+										<span className='mt-0.5 block text-[11px] text-ink-3'>
 											{cityMeta.temp}° · {cityMeta.sky} · {cityMeta.population}
 										</span>
 									</span>
 									{selectedCity === city ? (
-										<Check className='size-5 text-violet-600' />
+										<Check className='size-5 text-brand' />
 									) : (
-										<ChevronRight className='size-4 text-slate-300' />
+										<ChevronRight className='size-4 text-ink-3' />
 									)}
 								</button>
 							)
 						})}
+					</div>
+				</BottomSheet>
+			)}
+
+			{sheet?.type === 'layers' && (
+				<BottomSheet title='Xarita qatlamlari' onClose={() => setSheet(null)}>
+					<p className='mb-3 text-xs text-ink-3'>
+						Yoqilgan qatlamlar darhol bosh sahifadagi xaritada ko‘rinadi.
+					</p>
+					<div className='overflow-hidden rounded-2xl bg-white shadow-card'>
+						{MAP_LAYERS.map((layer, index) => (
+							<div
+								key={layer.id}
+								className={`flex items-center gap-3 px-4 py-3 ${index ? 'border-t border-line' : ''}`}
+							>
+								<span
+									className={`grid size-10 shrink-0 place-items-center rounded-xl ${layer.tone}`}
+								>
+									<layer.icon className='size-5' />
+								</span>
+								<div className='min-w-0 flex-1'>
+									<p className='text-sm font-black text-ink'>
+										{layer.label}
+									</p>
+									<p className='mt-0.5 text-[11px] text-ink-3'>
+										{layer.description}
+									</p>
+								</div>
+								<Switch
+									checked={layers[layer.id]}
+									onChange={() => toggleLayer(layer.id)}
+									label={layer.label}
+								/>
+							</div>
+						))}
 					</div>
 				</BottomSheet>
 			)}
@@ -2233,12 +1595,12 @@ export default function HomePage() {
 					title={`${selectedCity} ob-havosi`}
 					onClose={() => setSheet(null)}
 				>
-					<div className='rounded-3xl bg-white p-5 text-center shadow-sm ring-1 ring-slate-200'>
-						<Sun className='mx-auto size-12 text-amber-500' />
-						<p className='mt-3 text-4xl font-black text-slate-950'>
+					<div className='rounded-3xl bg-white p-5 text-center shadow-card'>
+						<Sun className='mx-auto size-12 text-warn' />
+						<p className='mt-3 text-4xl font-black text-ink'>
 							{meta.temp}°
 						</p>
-						<p className='mt-1 text-sm text-slate-500'>
+						<p className='mt-1 text-sm text-ink-3'>
 							{meta.sky} · his qilinishi {meta.temp + 2}°
 						</p>
 					</div>
@@ -2253,23 +1615,23 @@ export default function HomePage() {
 						].map(([label, value]) => (
 							<div
 								key={label}
-								className='rounded-2xl bg-white p-3 text-center shadow-sm ring-1 ring-slate-200'
+								className='rounded-2xl bg-white p-3 text-center shadow-card'
 							>
-								<Sun className='mx-auto size-4 text-violet-600' />
-								<p className='mt-2 text-sm font-black text-slate-900'>
+								<Sun className='mx-auto size-4 text-brand' />
+								<p className='mt-2 text-sm font-black text-ink'>
 									{value}
 								</p>
-								<p className='mt-1 text-[10px] leading-4 text-slate-400'>
+								<p className='mt-1 text-[10px] leading-4 text-ink-3'>
 									{label}
 								</p>
 							</div>
 						))}
 					</div>
-					<div className='mt-3 rounded-2xl border border-violet-100 bg-violet-50 p-4'>
-						<p className='text-xs font-black text-violet-700'>
+					<div className='mt-3 rounded-2xl border border-brand-100 bg-brand-50 p-4'>
+						<p className='text-xs font-black text-brand-600'>
 							Bugungi tavsiya
 						</p>
-						<p className='mt-1 text-xs leading-5 text-slate-600'>
+						<p className='mt-1 text-xs leading-5 text-ink-2'>
 							Ertalab piyoda va skuter uchun qulay. Tush payti issiqroq bo‘ladi.
 						</p>
 					</div>
@@ -2286,15 +1648,15 @@ export default function HomePage() {
 							title={`Marshrut: ${route.title}`}
 							onClose={() => setSheet(null)}
 						>
-							<div className='flex items-center gap-3 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200'>
-								<span className='grid size-11 shrink-0 place-items-center rounded-xl bg-violet-50 text-violet-600'>
+							<div className='flex items-center gap-3 rounded-2xl bg-white p-4 shadow-card'>
+								<span className='grid size-11 shrink-0 place-items-center rounded-xl bg-brand-50 text-brand'>
 									<Building2 className='size-5' />
 								</span>
 								<div className='min-w-0'>
-									<p className='text-sm font-black text-slate-900'>
+									<p className='text-sm font-black text-ink'>
 										{route.title}
 									</p>
-									<p className='mt-1 text-xs leading-5 text-slate-400'>
+									<p className='mt-1 text-xs leading-5 text-ink-3'>
 										{route.address}
 									</p>
 								</div>
@@ -2308,24 +1670,24 @@ export default function HomePage() {
 											key={mode.id}
 											type='button'
 											onClick={() => setTransportMode(mode.id)}
-											className={`rounded-2xl bg-white p-4 text-center shadow-sm ring-1 ${transportMode === mode.id ? 'ring-violet-500' : 'ring-slate-200'}`}
+											className={`rounded-2xl bg-white p-4 text-center shadow-sm ring-1 ${transportMode === mode.id ? 'ring-brand' : 'ring-line'}`}
 										>
-											<Icon className='mx-auto size-5 text-violet-600' />
-											<p className='mt-2 text-lg font-black text-slate-950'>
-												{minutes} min
+											<Icon className='mx-auto size-5 text-brand' />
+											<p className='mt-2 text-lg font-black text-ink'>
+												{minutes} daq
 											</p>
-											<p className='mt-1 text-xs text-slate-400'>
+											<p className='mt-1 text-xs text-ink-3'>
 												{mode.label}
 											</p>
 										</button>
 									)
 								})}
 							</div>
-							<div className='mt-3 rounded-2xl border border-violet-100 bg-violet-50 p-4'>
-								<p className='text-xs font-black text-violet-700'>
+							<div className='mt-3 rounded-2xl border border-brand-100 bg-brand-50 p-4'>
+								<p className='text-xs font-black text-brand-600'>
 									Eng tez — avto
 								</p>
-								<p className='mt-1 text-xs leading-5 text-slate-600'>
+								<p className='mt-1 text-xs leading-5 text-ink-2'>
 									{route.distance} km, tirbandlik o‘rtacha. Maqsad yaqinida
 									parking mavjud.
 								</p>
@@ -2336,7 +1698,7 @@ export default function HomePage() {
 									setSheet(null)
 									router.push(`/navigate/parking/${route.parkingId}`)
 								}}
-								className='mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-violet-600 text-sm font-black text-white'
+								className='mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-brand text-sm font-black text-white'
 							>
 								<Navigation className='size-5' /> Marshrutni ochish
 							</button>
@@ -2347,7 +1709,7 @@ export default function HomePage() {
 			{sheet?.type === 'history' && (
 				<BottomSheet title='Tarix' onClose={() => setSheet(null)}>
 					{reservations.length ? (
-						<div className='overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200'>
+						<div className='overflow-hidden rounded-2xl bg-white shadow-card'>
 							{reservations.slice(0, 6).map((reservation, index) => {
 								const parking = PARKINGS.find(
 									item => item.id === reservation.parkingId,
@@ -2357,35 +1719,35 @@ export default function HomePage() {
 										key={reservation.id}
 										href='/bookings'
 										onClick={() => setSheet(null)}
-										className={`flex items-center gap-3 px-4 py-3 ${index ? 'border-t border-slate-100' : ''}`}
+										className={`flex items-center gap-3 px-4 py-3 ${index ? 'border-t border-line' : ''}`}
 									>
 										<span
-											className={`grid size-10 shrink-0 place-items-center rounded-xl bg-linear-to-br ${parking?.accent ?? 'from-slate-500 to-slate-800'} text-white`}
+											className={`grid size-10 shrink-0 place-items-center rounded-xl bg-linear-to-br ${parking?.accent ?? 'from-ink-3 to-ink'} text-white`}
 										>
 											<CircleParking className='size-5' />
 										</span>
 										<span className='min-w-0 flex-1'>
-											<span className='block truncate text-sm font-black text-slate-900'>
+											<span className='block truncate text-sm font-black text-ink'>
 												{parking?.name ?? 'Parking'}
 											</span>
-											<span className='mt-0.5 block text-[11px] text-slate-400'>
+											<span className='mt-0.5 block text-[11px] text-ink-3'>
 												{reservation.status} · {reservation.durationHours} soat
 											</span>
 										</span>
-										<ChevronRight className='size-4 text-slate-300' />
+										<ChevronRight className='size-4 text-ink-3' />
 									</Link>
 								)
 							})}
 						</div>
 					) : (
-						<div className='rounded-2xl bg-white p-6 text-center text-sm text-slate-500 shadow-sm ring-1 ring-slate-200'>
+						<div className='rounded-2xl bg-white p-6 text-center text-sm text-ink-3 shadow-card'>
 							Hali bron tarixi yo‘q.
 						</div>
 					)}
 					<Link
 						href='/bookings'
 						onClick={() => setSheet(null)}
-						className='mt-4 flex h-12 items-center justify-center rounded-2xl bg-violet-600 text-sm font-black text-white'
+						className='mt-4 flex h-12 items-center justify-center rounded-2xl bg-brand text-sm font-black text-white'
 					>
 						Barcha bronlar
 					</Link>
@@ -2394,7 +1756,7 @@ export default function HomePage() {
 
 			{sheet?.type === 'sort' && (
 				<BottomSheet title='Saralash va filtr' onClose={() => setSheet(null)}>
-					<div className='overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200'>
+					<div className='overflow-hidden rounded-2xl bg-white shadow-card'>
 						{(
 							[
 								['distance', 'Eng yaqin'],
@@ -2410,16 +1772,16 @@ export default function HomePage() {
 									setSheet(null)
 									showToast('Ro‘yxat saralandi')
 								}}
-								className={`flex w-full items-center gap-3 px-4 py-3 text-left ${index ? 'border-t border-slate-100' : ''}`}
+								className={`flex w-full items-center gap-3 px-4 py-3 text-left ${index ? 'border-t border-line' : ''}`}
 							>
-								<span className='grid size-10 shrink-0 place-items-center rounded-xl bg-violet-50 text-violet-600'>
+								<span className='grid size-10 shrink-0 place-items-center rounded-xl bg-brand-50 text-brand'>
 									<Sparkles className='size-5' />
 								</span>
-								<span className='min-w-0 flex-1 text-sm font-black text-slate-900'>
+								<span className='min-w-0 flex-1 text-sm font-black text-ink'>
 									{label}
 								</span>
 								{sortMode === id && (
-									<Check className='size-5 text-violet-600' />
+									<Check className='size-5 text-brand' />
 								)}
 							</button>
 						))}
@@ -2427,16 +1789,16 @@ export default function HomePage() {
 					<button
 						type='button'
 						onClick={() => setFavoriteOnly(value => !value)}
-						className='mt-3 flex w-full items-center justify-between rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200'
+						className='mt-3 flex w-full items-center justify-between rounded-2xl bg-white p-4 shadow-card'
 					>
-						<span className='text-sm font-black text-slate-900'>
+						<span className='text-sm font-black text-ink'>
 							Faqat sevimlilar
 						</span>
 						<span
-							className={`relative h-7 w-12 rounded-full transition ${favoriteOnly ? 'bg-violet-600' : 'bg-slate-200'}`}
+								className={`relative h-7 w-12 rounded-full transition duration-200 ${favoriteOnly ? 'bg-brand' : 'bg-line'}`}
 						>
 							<span
-								className={`absolute top-1 size-5 rounded-full bg-white shadow transition ${favoriteOnly ? 'left-6' : 'left-1'}`}
+								className={`absolute top-1 size-5 rounded-full bg-white shadow transition duration-200 ${favoriteOnly ? 'left-6' : 'left-1'}`}
 							/>
 						</span>
 					</button>
@@ -2466,7 +1828,7 @@ export default function HomePage() {
 									>
 										<Icon className='size-5' />
 									</span>
-									<span className='text-[11px] font-bold text-slate-600'>
+									<span className='text-[11px] font-bold text-ink-2'>
 										{category.label}
 									</span>
 								</button>
@@ -2486,7 +1848,7 @@ export default function HomePage() {
 							? parkingResults.map(({ parking, distance }) => (
 									<div
 										key={parking.id}
-										className='flex items-center gap-3 rounded-2xl bg-white p-3 shadow-sm ring-1 ring-slate-200'
+										className='flex items-center gap-3 rounded-2xl bg-white p-3 shadow-card'
 									>
 										<span
 											className={`grid size-14 shrink-0 place-items-center rounded-2xl bg-linear-to-br ${parking.accent} text-white`}
@@ -2501,25 +1863,25 @@ export default function HomePage() {
 											}}
 											className='min-w-0 flex-1 text-left'
 										>
-											<p className='truncate text-sm font-black text-slate-900'>
+											<p className='truncate text-sm font-black text-ink'>
 												{parking.name}
 											</p>
-											<p className='mt-1 text-[11px] text-slate-400'>
+											<p className='mt-1 text-[11px] text-ink-3'>
 												{distance.toFixed(1)} km ·{' '}
 												{formatUZS(parking.pricePerHour)}/soat
 											</p>
 											<p
-												className={`mt-1 text-[11px] font-black ${parking.availableSpaces > 0 ? 'text-emerald-600' : 'text-rose-500'}`}
+												className={`mt-1 text-[11px] font-black ${parking.availableSpaces > 0 ? 'text-ok' : 'text-bad'}`}
 											>
 												{parking.availableSpaces > 0
 													? `${parking.availableSpaces} bo‘sh joy`
-													: 'FULL'}
+													: 'TO‘LA'}
 											</p>
 										</button>
 										<Link
 											href={`/parking/${parking.id}`}
 											onClick={() => setSheet(null)}
-											className='grid size-9 shrink-0 place-items-center rounded-xl bg-violet-50 text-violet-600'
+											className='grid size-9 shrink-0 place-items-center rounded-xl bg-brand-50 text-brand'
 										>
 											<ChevronRight className='size-4' />
 										</Link>
@@ -2532,7 +1894,7 @@ export default function HomePage() {
 										onClick={() =>
 											setSheet({ type: 'place', placeId: place.id })
 										}
-										className='flex w-full items-center gap-3 rounded-2xl bg-white p-3 text-left shadow-sm ring-1 ring-slate-200'
+										className='flex w-full items-center gap-3 rounded-2xl bg-white p-3 text-left shadow-card'
 									>
 										<span
 											className={`grid size-14 shrink-0 place-items-center rounded-2xl bg-linear-to-br ${place.accent} text-white`}
@@ -2540,14 +1902,14 @@ export default function HomePage() {
 											<MapPin className='size-6' />
 										</span>
 										<span className='min-w-0 flex-1'>
-											<span className='block truncate text-sm font-black text-slate-900'>
+											<span className='block truncate text-sm font-black text-ink'>
 												{place.title}
 											</span>
-											<span className='mt-1 block truncate text-[11px] text-slate-400'>
+											<span className='mt-1 block truncate text-[11px] text-ink-3'>
 												{place.subtitle} · {place.distanceKm.toFixed(1)} km
 											</span>
 										</span>
-										<ChevronRight className='size-4 text-slate-300' />
+										<ChevronRight className='size-4 text-ink-3' />
 									</button>
 								))}
 					</div>
@@ -2556,23 +1918,23 @@ export default function HomePage() {
 
 			{sheet?.type === 'place' &&
 				(() => {
-					const place = DEMO_PLACES.find(item => item.id === sheet.placeId)
+					const place = PLACES.find(item => item.id === sheet.placeId)
 					if (!place) return null
 					const favorite = favoritePlaceIds.includes(place.id)
 					const bars = [35, 42, 55, 68, 82, 74, 58, 40]
 					return (
 						<BottomSheet title={place.title} onClose={() => setSheet(null)}>
-							<div className='overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-slate-200'>
+							<div className='overflow-hidden rounded-3xl bg-white shadow-card'>
 								<div className={`h-32 bg-linear-to-br ${place.accent}`} />
 								<div className='p-4'>
 									<div className='flex items-start justify-between gap-3'>
 										<div className='min-w-0'>
-											<p className='text-xl font-black text-slate-950'>
+											<p className='text-xl font-black text-ink'>
 												{place.title}
 											</p>
-											<p className='mt-1 flex items-center gap-2 text-xs text-slate-400'>
-												<Star className='size-4 fill-amber-400 text-amber-400' />{' '}
-												{place.rating} · {place.reviews.toLocaleString('ru-RU')}{' '}
+											<p className='mt-1 flex items-center gap-2 text-xs text-ink-3'>
+												<Star className='size-4 fill-star text-star' />{' '}
+												{place.rating} · {formatNumber(place.reviews)}{' '}
 												sharh
 											</p>
 										</div>
@@ -2581,8 +1943,8 @@ export default function HomePage() {
 											onClick={() => togglePlaceFavorite(place.id)}
 											className={`inline-flex h-10 shrink-0 items-center gap-2 rounded-xl px-3 text-xs font-black transition active:scale-95 ${
 												favorite
-													? 'bg-rose-50 text-rose-600'
-													: 'bg-slate-100 text-slate-600'
+													? 'bg-bad-bg text-bad'
+													: 'bg-card-2 text-ink-2'
 											}`}
 											aria-label={
 												favorite
@@ -2591,60 +1953,60 @@ export default function HomePage() {
 											}
 										>
 											<Heart
-												className={`size-4 ${favorite ? 'fill-rose-500 text-rose-500' : 'text-slate-500'}`}
+												className={`size-4 ${favorite ? 'fill-bad text-bad' : 'text-ink-3'}`}
 											/>
 											{favorite ? 'Sevimlilarda' : 'Sevimlilarga'}
 										</button>
 									</div>
-									<p className='mt-3 flex items-center gap-2 text-xs text-slate-500'>
+									<p className='mt-3 flex items-center gap-2 text-xs text-ink-3'>
 										<MapPin className='size-4 shrink-0' /> {place.address}
 									</p>
-									<p className='mt-2 flex items-center gap-2 text-xs text-slate-500'>
+									<p className='mt-2 flex items-center gap-2 text-xs text-ink-3'>
 										<Clock3 className='size-4 shrink-0' /> {place.subtitle}
 									</p>
 								</div>
 							</div>
 
 							<div className='mt-3 grid grid-cols-3 gap-2'>
-								<div className='rounded-2xl bg-white p-3 text-center shadow-sm ring-1 ring-slate-200'>
-									<Navigation className='mx-auto size-4 text-violet-600' />
-									<p className='mt-2 text-lg font-black text-slate-950'>
-										{Math.max(3, Math.round(place.distanceKm * 5))} min
+								<div className='rounded-2xl bg-white p-3 text-center shadow-card'>
+									<Navigation className='mx-auto size-4 text-brand' />
+									<p className='mt-2 text-lg font-black text-ink'>
+										{Math.max(3, Math.round(place.distanceKm * 5))} daq
 									</p>
-									<p className='text-[10px] text-slate-400'>
+									<p className='text-[10px] text-ink-3'>
 										{place.distanceKm.toFixed(1)} km
 									</p>
 								</div>
-								<div className='rounded-2xl bg-white p-3 text-center shadow-sm ring-1 ring-slate-200'>
-									<CircleParking className='mx-auto size-4 text-violet-600' />
-									<p className='mt-2 text-lg font-black text-emerald-600'>
+								<div className='rounded-2xl bg-white p-3 text-center shadow-card'>
+									<CircleParking className='mx-auto size-4 text-brand' />
+									<p className='mt-2 text-lg font-black text-ok'>
 										{place.free ?? '—'}
 									</p>
-									<p className='text-[10px] text-slate-400'>
+									<p className='text-[10px] text-ink-3'>
 										{place.total ? `${place.total} tadan` : 'parking'}
 									</p>
 								</div>
-								<div className='rounded-2xl bg-white p-3 text-center shadow-sm ring-1 ring-slate-200'>
-									<History className='mx-auto size-4 text-violet-600' />
-									<p className='mt-2 text-lg font-black text-slate-950'>
+								<div className='rounded-2xl bg-white p-3 text-center shadow-card'>
+									<History className='mx-auto size-4 text-brand' />
+									<p className='mt-2 text-lg font-black text-ink'>
 										{place.queue ? `${place.queue} m` : '—'}
 									</p>
-									<p className='text-[10px] text-slate-400'>navbat</p>
+									<p className='text-[10px] text-ink-3'>navbat</p>
 								</div>
 							</div>
 
-							<div className='mt-3 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200'>
+							<div className='mt-3 rounded-2xl bg-white p-4 shadow-card'>
 								<div className='flex items-center justify-between'>
-									<p className='text-sm font-black text-slate-900'>
+									<p className='text-sm font-black text-ink'>
 										Hozirgi yuklama
 									</p>
-									<p className='text-sm font-black text-orange-500'>
+									<p className='text-sm font-black text-load-high'>
 										{place.busy}%
 									</p>
 								</div>
-								<div className='mt-2 h-2 overflow-hidden rounded-full bg-slate-100'>
+								<div className='mt-2 h-2 overflow-hidden rounded-full bg-card-2'>
 									<div
-										className='h-full rounded-full bg-orange-500'
+										className='h-full rounded-full bg-load-high'
 										style={{ width: `${place.busy}%` }}
 									/>
 								</div>
@@ -2655,10 +2017,10 @@ export default function HomePage() {
 											className='flex flex-1 flex-col items-center justify-end gap-1'
 										>
 											<span
-												className='w-full rounded-t-md bg-violet-500'
+												className='w-full rounded-t-md bg-brand'
 												style={{ height: `${height}%` }}
 											/>
-											<span className='text-[8px] text-slate-400'>
+											<span className='text-[8px] text-ink-3'>
 												{10 + index * 2}
 											</span>
 										</div>
@@ -2670,7 +2032,7 @@ export default function HomePage() {
 								{place.tags.map(tag => (
 									<span
 										key={tag}
-										className='inline-flex h-9 shrink-0 items-center rounded-xl bg-white px-3 text-xs font-bold text-slate-600 shadow-sm ring-1 ring-slate-200'
+										className='inline-flex h-9 shrink-0 items-center rounded-xl bg-white px-3 text-xs font-bold text-ink-2 shadow-card'
 									>
 										{tag}
 									</span>
@@ -2685,22 +2047,22 @@ export default function HomePage() {
 											router.push(`/navigate/parking/${place.parkingId}`)
 										else showToast('Marshrut tayyorlandi')
 									}}
-									className='flex flex-col items-center gap-2 rounded-2xl bg-white p-3 text-[10px] font-bold text-slate-600 shadow-sm ring-1 ring-slate-200'
+									className='flex flex-col items-center gap-2 rounded-2xl bg-white p-3 text-[10px] font-bold text-ink-2 shadow-card'
 								>
-									<Navigation className='size-5 text-violet-600' /> Yo‘nalish
+									<Navigation className='size-5 text-brand' /> Yo‘nalish
 								</button>
 								<a
 									href={`tel:${place.phone.replace(/\s/g, '')}`}
-									className='flex flex-col items-center gap-2 rounded-2xl bg-white p-3 text-[10px] font-bold text-slate-600 shadow-sm ring-1 ring-slate-200'
+									className='flex flex-col items-center gap-2 rounded-2xl bg-white p-3 text-[10px] font-bold text-ink-2 shadow-card'
 								>
-									<Phone className='size-5 text-violet-600' /> Qo‘ng‘iroq
+									<Phone className='size-5 text-brand' /> Qo‘ng‘iroq
 								</a>
 								<button
 									type='button'
 									onClick={() => sharePlace(place)}
-									className='flex flex-col items-center gap-2 rounded-2xl bg-white p-3 text-[10px] font-bold text-slate-600 shadow-sm ring-1 ring-slate-200'
+									className='flex flex-col items-center gap-2 rounded-2xl bg-white p-3 text-[10px] font-bold text-ink-2 shadow-card'
 								>
-									<Share2 className='size-5 text-violet-600' /> Ulashish
+									<Share2 className='size-5 text-brand' /> Ulashish
 								</button>
 								<button
 									type='button'
@@ -2710,9 +2072,9 @@ export default function HomePage() {
 											selectParking(place.parkingId)
 										} else showToast('Xaritada ko‘rsatildi')
 									}}
-									className='flex flex-col items-center gap-2 rounded-2xl bg-white p-3 text-[10px] font-bold text-slate-600 shadow-sm ring-1 ring-slate-200'
+									className='flex flex-col items-center gap-2 rounded-2xl bg-white p-3 text-[10px] font-bold text-ink-2 shadow-card'
 								>
-									<MapPin className='size-5 text-violet-600' /> Xaritada
+									<MapPin className='size-5 text-brand' /> Xaritada
 								</button>
 							</div>
 
@@ -2722,7 +2084,7 @@ export default function HomePage() {
 									if (place.parkingId) openParkingBooking(place.parkingId)
 									else openService('table')
 								}}
-								className='mt-4 h-12 w-full rounded-2xl bg-violet-600 text-sm font-black text-white'
+								className='mt-4 h-12 w-full rounded-2xl bg-brand text-sm font-black text-white'
 							>
 								{place.parkingId
 									? 'Yaqin parkingni bron qilish'
@@ -2732,322 +2094,20 @@ export default function HomePage() {
 					)
 				})()}
 
-			{sheet?.type === 'parkingBook' &&
-				(() => {
-					const parking = PARKINGS.find(
-						item => item.id === parkingBooking.parkingId,
-					)
-					if (!parking) return null
-					const total = parking.pricePerHour * parkingBooking.hours
-					const arrival =
-						parkingBooking.slot === 'Hozir'
-							? parkingBooking.nowLabel
-							: parkingBooking.slot
-					const hasAnpr = parking.amenities.includes('CCTV')
-					const slots = [
-						'Hozir',
-						'11:30',
-						'12:00',
-						'12:30',
-						'13:00',
-						'14:00',
-						'18:00',
-						'19:00',
-					]
+			{serviceBooking && (
+				<ServiceBookingSheet
+					kind={serviceBooking.kind}
+					refId={serviceBooking.refId}
+					onClose={() => setServiceBooking(null)}
+					onNotify={showToast}
+				/>
+			)}
 
-					return (
-						<BottomSheet
-							title='Parkingni bron qilish'
-							onClose={() => setSheet(null)}
-						>
-							<div className='rounded-2xl bg-white p-3 shadow-sm ring-1 ring-slate-200'>
-								<div className='flex items-center gap-3'>
-									<span className='grid size-12 shrink-0 place-items-center rounded-2xl bg-slate-900 text-white'>
-										<CircleParking className='size-5' strokeWidth={2} />
-									</span>
-									<div className='min-w-0 flex-1'>
-										<p className='truncate text-sm font-black text-slate-950'>
-											{parking.name}
-										</p>
-										<p className='mt-1 truncate text-xs text-slate-400'>
-											{parking.address} · {parking.availableSpaces} ta bo‘sh
-										</p>
-									</div>
-								</div>
-							</div>
-
-							<div className='mt-3 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200'>
-								<p className='text-sm font-black text-slate-900'>Sana</p>
-								<HorizontalRail className='mt-3 gap-2'>
-									{parkingBooking.dayLabels.map((label, index) => (
-										<button
-											key={`${label}-${index}`}
-											type='button'
-											onClick={() =>
-												setParkingBooking(current => ({
-													...current,
-													dayIndex: index,
-												}))
-											}
-											className={`h-11 shrink-0 rounded-xl px-4 text-xs font-black transition ${
-												parkingBooking.dayIndex === index
-													? 'bg-violet-600 text-white shadow-lg shadow-violet-600/20'
-													: 'bg-white text-slate-600 ring-1 ring-slate-200'
-											}`}
-										>
-											{label}
-										</button>
-									))}
-								</HorizontalRail>
-							</div>
-
-							<div className='mt-3 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200'>
-								<p className='text-sm font-black text-slate-900'>
-									Kelish vaqti
-								</p>
-								<div className='mt-3 grid grid-cols-4 gap-2'>
-									{slots.map(slot => (
-										<button
-											key={slot}
-											type='button'
-											onClick={() =>
-												setParkingBooking(current => ({ ...current, slot }))
-											}
-											className={`h-11 rounded-xl text-[11px] font-black transition ${
-												parkingBooking.slot === slot
-													? 'bg-violet-600 text-white shadow-lg shadow-violet-600/20'
-													: 'bg-white text-slate-600 ring-1 ring-slate-200'
-											}`}
-										>
-											{slot}
-										</button>
-									))}
-								</div>
-							</div>
-
-							<div className='mt-3 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200'>
-								<div className='flex items-center justify-between gap-3'>
-									<p className='text-sm font-black text-slate-900'>
-										Davomiyligi
-									</p>
-									<div className='flex items-center gap-3'>
-										<button
-											type='button'
-											onClick={() =>
-												setParkingBooking(current => ({
-													...current,
-													hours: Math.max(1, current.hours - 1),
-												}))
-											}
-											className='grid size-11 place-items-center rounded-xl bg-slate-50 text-slate-800'
-											aria-label='Bir soat kamaytirish'
-										>
-											<Minus className='size-5' />
-										</button>
-										<strong className='min-w-12 text-center text-lg font-black text-slate-950'>
-											{parkingBooking.hours} s
-										</strong>
-										<button
-											type='button'
-											onClick={() =>
-												setParkingBooking(current => ({
-													...current,
-													hours: Math.min(24, current.hours + 1),
-												}))
-											}
-											className='grid size-11 place-items-center rounded-xl bg-slate-50 text-slate-800'
-											aria-label='Bir soat qo‘shish'
-										>
-											<Plus className='size-5' />
-										</button>
-									</div>
-								</div>
-								<div className='mt-3 grid grid-cols-5 gap-2'>
-									{[1, 2, 3, 5, 24].map(hours => (
-										<button
-											key={hours}
-											type='button'
-											onClick={() =>
-												setParkingBooking(current => ({ ...current, hours }))
-											}
-											className={`h-10 rounded-xl text-[11px] font-black transition ${
-												parkingBooking.hours === hours
-													? 'bg-violet-600 text-white'
-													: 'bg-white text-slate-600 ring-1 ring-slate-200'
-											}`}
-										>
-											{hours === 24 ? 'sutka' : `${hours} s`}
-										</button>
-									))}
-								</div>
-							</div>
-
-							<div className='mt-3 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200'>
-								<div className='flex items-center justify-between gap-3'>
-									<p className='text-sm font-black text-slate-900'>Joy</p>
-									<button
-										type='button'
-										onClick={() => setSheet({ type: 'parkingBay' })}
-										className='h-9 rounded-xl bg-white px-3 text-[11px] font-black text-slate-700 ring-1 ring-slate-200'
-									>
-										Boshqasini tanlash
-									</button>
-								</div>
-								<div className='mt-3 flex items-center gap-3'>
-									<div className='w-22 shrink-0 rounded-2xl bg-violet-50 px-2 py-3 text-center'>
-										<p className='font-mono text-xl font-black text-violet-600'>
-											{parkingBooking.bay}
-										</p>
-										<p className='mt-1 text-[10px] text-slate-400'>
-											{parkingBooking.level}-daraja
-										</p>
-									</div>
-									<p className='text-xs leading-5 text-slate-500'>
-										Joy siz uchun biriktiriladi. Shlagbaum{' '}
-										{hasAnpr
-											? 'avtomobil raqami yoki QR orqali'
-											: 'QR-kod orqali'}{' '}
-										ochiladi.
-									</p>
-								</div>
-							</div>
-
-							<div className='mt-3 rounded-2xl bg-white px-4 shadow-sm ring-1 ring-slate-200'>
-								{[
-									['Tarif', `${formatUZS(parking.pricePerHour)}/soat`],
-									['Davomiyligi', `${parkingBooking.hours} soat`],
-									['Kelish', arrival],
-									['Joyni ushlab turamiz', 'kelishdan keyin 15 daqiqa'],
-								].map(([label, value], index) => (
-									<div
-										key={label}
-										className={`flex items-center justify-between gap-4 py-3 text-xs ${index ? 'border-t border-slate-100' : ''}`}
-									>
-										<span className='text-slate-500'>{label}</span>
-										<strong className='text-right text-slate-900'>
-											{value}
-										</strong>
-									</div>
-								))}
-								<div className='flex items-center justify-between gap-4 border-t border-slate-100 py-3'>
-									<span className='text-xs text-slate-500'>Jami</span>
-									<strong className='text-lg font-black text-slate-950'>
-										{total ? formatUZS(total) : 'Bepul'}
-									</strong>
-								</div>
-							</div>
-
-							<button
-								type='button'
-								onClick={confirmParkingBooking}
-								className='mt-4 h-13 w-full rounded-2xl bg-violet-600 px-4 text-sm font-black text-white shadow-lg shadow-violet-600/25'
-							>
-								{total ? 'To‘lash va bron qilish' : 'Bron qilish'}
-							</button>
-							<p className='mt-2 text-center text-[11px] text-slate-400'>
-								Kelishdan 1 soat oldin bepul bekor qilish mumkin
-							</p>
-						</BottomSheet>
-					)
-				})()}
-
-			{sheet?.type === 'parkingBay' &&
-				(() => {
-					const parking = PARKINGS.find(
-						item => item.id === parkingBooking.parkingId,
-					)
-					if (!parking) return null
-					const prefix = String.fromCharCode(64 + parkingBooking.level)
-					const bays = Array.from(
-						{ length: 20 },
-						(_, index) => `${prefix}-${String(index + 1).padStart(2, '0')}`,
-					)
-
-					return (
-						<BottomSheet
-							title='Parking joyini tanlang'
-							onClose={() => setSheet({ type: 'parkingBook' })}
-						>
-							<div className='rounded-2xl bg-white p-3 shadow-sm ring-1 ring-slate-200'>
-								<p className='text-sm font-black text-slate-950'>
-									{parking.name}
-								</p>
-								<p className='mt-1 text-xs text-slate-400'>
-									Bo‘sh joylardan birini tanlang
-								</p>
-							</div>
-
-							<div className='mt-3 grid grid-cols-3 gap-2 rounded-2xl bg-white p-2 shadow-sm ring-1 ring-slate-200'>
-								{[1, 2, 3].map(level => (
-									<button
-										key={level}
-										type='button'
-										onClick={() =>
-											setParkingBooking(current => ({
-												...current,
-												level,
-												bay: `${String.fromCharCode(64 + level)}-01`,
-											}))
-										}
-										className={`h-11 rounded-xl text-xs font-black ${
-											parkingBooking.level === level
-												? 'bg-violet-600 text-white'
-												: 'bg-slate-50 text-slate-600'
-										}`}
-									>
-										{level}-daraja
-									</button>
-								))}
-							</div>
-
-							<div className='mt-3 flex items-center gap-4 px-1 text-[10px] font-bold text-slate-500'>
-								<span className='flex items-center gap-1.5'>
-									<i className='size-2 rounded-full bg-emerald-500' /> Bo‘sh
-								</span>
-								<span className='flex items-center gap-1.5'>
-									<i className='size-2 rounded-full bg-slate-300' /> Band
-								</span>
-								<span className='flex items-center gap-1.5'>
-									<i className='size-2 rounded-full bg-violet-600' /> Tanlangan
-								</span>
-							</div>
-
-							<div className='mt-3 grid grid-cols-4 gap-2 rounded-2xl bg-white p-3 shadow-sm ring-1 ring-slate-200'>
-								{bays.map((bay, index) => {
-									const busy = index % 6 === 2 || index % 9 === 4
-									const selected = parkingBooking.bay === bay
-									return (
-										<button
-											key={bay}
-											type='button'
-											disabled={busy}
-											onClick={() =>
-												setParkingBooking(current => ({ ...current, bay }))
-											}
-											className={`h-11 rounded-xl text-[11px] font-black transition ${
-												selected
-													? 'bg-violet-600 text-white shadow-md'
-													: busy
-														? 'cursor-not-allowed bg-slate-100 text-slate-300'
-														: 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100'
-											}`}
-										>
-											{bay}
-										</button>
-									)
-								})}
-							</div>
-
-							<button
-								type='button'
-								onClick={() => setSheet({ type: 'parkingBook' })}
-								className='mt-4 h-12 w-full rounded-2xl bg-violet-600 text-sm font-black text-white'
-							>
-								{parkingBooking.bay} joyini tanlash
-							</button>
-						</BottomSheet>
-					)
-				})()}
+			<ParkingBookingSheet
+				parkingId={bookingParkingId}
+				onClose={() => setBookingParkingId(null)}
+				onNotify={showToast}
+			/>
 
 			{sheet?.type === 'servicesAll' && (
 				<BottomSheet title='Barcha xizmatlar' onClose={() => setSheet(null)}>
@@ -3061,21 +2121,21 @@ export default function HomePage() {
 									onClick={() => openService(service.id)}
 									className='flex w-full items-center gap-3 rounded-2xl bg-white p-3 text-left shadow-sm'
 								>
-									<span className='grid size-11 shrink-0 place-items-center rounded-xl bg-slate-50'>
+									<span className='grid size-11 shrink-0 place-items-center rounded-xl bg-canvas'>
 										<Icon
 											className={`size-5 ${service.tone}`}
 											strokeWidth={1.8}
 										/>
 									</span>
 									<span className='min-w-0 flex-1'>
-										<span className='block text-sm font-bold text-slate-900'>
+										<span className='block text-sm font-bold text-ink'>
 											{service.label}
 										</span>
-										<span className='mt-0.5 block text-xs text-slate-400'>
+										<span className='mt-0.5 block text-xs text-ink-3'>
 											{service.subtitle}
 										</span>
 									</span>
-									<ChevronRight className='size-4 shrink-0 text-slate-300' />
+									<ChevronRight className='size-4 shrink-0 text-ink-3' />
 								</button>
 							)
 						})}
@@ -3083,127 +2143,64 @@ export default function HomePage() {
 				</BottomSheet>
 			)}
 
-			{sheet?.type === 'service' &&
-				(() => {
-					const service = SERVICES.find(item => item.id === sheet.serviceId)
-					if (!service) return null
-					const Icon = service.icon
-					return (
-						<BottomSheet title={service.label} onClose={() => setSheet(null)}>
-							<div className='flex items-center gap-3 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200'>
-								<span className='grid size-11 shrink-0 place-items-center rounded-xl bg-violet-50'>
-									<Icon className={`size-5 ${service.tone}`} />
-								</span>
-								<div>
-									<p className='text-sm font-black text-slate-900'>
-										{service.label}
-									</p>
-									<p className='mt-1 text-xs text-slate-400'>
-										{service.subtitle}
-									</p>
-								</div>
-							</div>
-							<div className='mt-3 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200'>
-								<p className='text-sm font-black text-slate-900'>Vaqt</p>
-								<div className='mt-3 grid grid-cols-3 gap-2'>
-									{BOOKING_SLOTS.map(slot => (
-										<button
-											key={slot}
-											type='button'
-											onClick={() => setBookingSlot(slot)}
-											className={`h-10 rounded-xl text-xs font-black ${bookingSlot === slot ? 'bg-violet-600 text-white' : 'bg-slate-100 text-slate-600'}`}
-										>
-											{slot}
-										</button>
-									))}
-								</div>
-							</div>
-							{sheet.serviceId !== 'queue' && (
-								<div className='mt-3 flex items-center justify-between rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200'>
-									<span className='text-sm font-black text-slate-900'>
-										Soni
-									</span>
-									<div className='flex items-center gap-3'>
-										<button
-											type='button'
-											onClick={() =>
-												setBookingCount(count => Math.max(1, count - 1))
-											}
-											className='grid size-9 place-items-center rounded-xl bg-slate-100 text-lg font-black'
-										>
-											−
-										</button>
-										<span className='w-6 text-center text-lg font-black'>
-											{bookingCount}
-										</span>
-										<button
-											type='button'
-											onClick={() =>
-												setBookingCount(count => Math.min(10, count + 1))
-											}
-											className='grid size-9 place-items-center rounded-xl bg-slate-100 text-lg font-black'
-										>
-											+
-										</button>
-									</div>
-								</div>
-							)}
-							<button
-								type='button'
-								onClick={() => confirmService(service.id)}
-								className='mt-4 h-12 w-full rounded-2xl bg-violet-600 text-sm font-black text-white'
-							>
-								Tasdiqlash
-							</button>
-						</BottomSheet>
-					)
-				})()}
-
 			{sheet?.type === 'event' &&
 				(() => {
 					const event = EVENTS.find(item => item.id === sheet.eventId)
 					if (!event) return null
 					return (
 						<BottomSheet title={event.title} onClose={() => setSheet(null)}>
-							<div className='overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-slate-200'>
+							<div className='overflow-hidden rounded-3xl bg-white shadow-card'>
 								<div className={`h-36 bg-linear-to-br ${event.accent} p-4`}>
-									<span className='rounded-xl bg-white/90 px-3 py-1.5 text-[10px] font-black text-slate-800'>
+									<span className='rounded-xl bg-white/90 px-3 py-1.5 text-[10px] font-black text-ink'>
 										{event.category}
 									</span>
 								</div>
 								<div className='p-4'>
-									<p className='text-xl font-black text-slate-950'>
+									<p className='text-xl font-black text-ink'>
 										{event.title}
 									</p>
-									<p className='mt-2 flex items-center gap-2 text-xs text-slate-500'>
+									<p className='mt-2 flex items-center gap-2 text-xs text-ink-3'>
 										<Clock3 className='size-4' /> {event.when} · {event.time}
 									</p>
-									<p className='mt-2 flex items-center gap-2 text-xs text-slate-500'>
+									<p className='mt-2 flex items-center gap-2 text-xs text-ink-3'>
 										<MapPin className='size-4' /> {event.place}
 									</p>
-									<p className='mt-3 text-xs leading-5 text-slate-600'>
+									<p className='mt-3 text-xs leading-5 text-ink-2'>
 										{event.description}
 									</p>
 								</div>
 							</div>
-							<div className='mt-3 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200'>
+							<div className='mt-3 rounded-2xl bg-white p-4 shadow-card'>
 								<div className='flex items-center justify-between text-sm'>
-									<span className='text-slate-500'>Narx</span>
+									<span className='text-ink-3'>Narx</span>
 									<strong>{event.price}</strong>
 								</div>
-								<div className='my-3 h-px bg-slate-100' />
+								<div className='my-3 h-px bg-card-2' />
 								<div className='flex items-center justify-between text-sm'>
-									<span className='text-slate-500'>Yaqin parking</span>
-									<strong className='text-emerald-600'>mavjud</strong>
+									<span className='text-ink-3'>Yaqin parking</span>
+									<strong className='text-ok'>mavjud</strong>
 								</div>
 							</div>
 							<div className='mt-4 grid grid-cols-2 gap-2'>
+								{/* Was a toast that scheduled nothing. Saving the event is
+								    the thing this app can actually honour — it puts it in
+								    the Voqealar tab, which had no other source. */}
 								<button
 									type='button'
-									onClick={() => showToast('Eslatma qo‘shildi')}
-									className='h-12 rounded-2xl border border-slate-200 bg-white text-sm font-black text-slate-700'
+									onClick={() => {
+										toggleEventFavorite(event.id)
+										showToast(
+											favoriteEvents.includes(event.id)
+												? 'Sevimlilardan olib tashlandi'
+												: 'Voqea sevimlilarga saqlandi',
+										)
+									}}
+									className='flex h-12 items-center justify-center gap-2 rounded-2xl border border-line-2 bg-white text-sm font-black text-ink'
 								>
-									Eslatish
+									<Heart
+										className={`size-4 ${favoriteEvents.includes(event.id) ? 'fill-bad text-bad' : 'text-ink-3'}`}
+									/>
+									{favoriteEvents.includes(event.id) ? 'Saqlangan' : 'Saqlash'}
 								</button>
 								<button
 									type='button'
@@ -3211,7 +2208,7 @@ export default function HomePage() {
 										setSheet(null)
 										router.push(`/navigate/parking/${event.parkingId}`)
 									}}
-									className='h-12 rounded-2xl bg-violet-600 text-sm font-black text-white'
+									className='h-12 rounded-2xl bg-brand text-sm font-black text-white'
 								>
 									Marshrut va parking
 								</button>
@@ -3228,18 +2225,18 @@ export default function HomePage() {
 								key={event.id}
 								type='button'
 								onClick={() => setSheet({ type: 'event', eventId: event.id })}
-								className='w-full overflow-hidden rounded-2xl bg-white text-left shadow-sm ring-1 ring-slate-200'
+								className='w-full overflow-hidden rounded-2xl bg-white text-left shadow-card'
 							>
 								<div className={`h-24 bg-linear-to-br ${event.accent} p-3`}>
-									<span className='rounded-lg bg-white/90 px-2 py-1 text-[10px] font-black text-slate-800'>
+									<span className='rounded-lg bg-white/90 px-2 py-1 text-[10px] font-black text-ink'>
 										{event.when} · {event.time}
 									</span>
 								</div>
 								<div className='p-3'>
-									<p className='text-sm font-black text-slate-900'>
+									<p className='text-sm font-black text-ink'>
 										{event.title}
 									</p>
-									<p className='mt-1 text-xs text-slate-400'>
+									<p className='mt-1 text-xs text-ink-3'>
 										{event.place} · {event.price}
 									</p>
 								</div>
@@ -3251,7 +2248,7 @@ export default function HomePage() {
 
 			{sheet?.type === 'recommendations' && (
 				<BottomSheet title='Siz uchun tanlandi' onClose={() => setSheet(null)}>
-					<p className='mb-3 text-xs leading-5 text-slate-500'>
+					<p className='mb-3 text-xs leading-5 text-ink-3'>
 						Safarlar, vaqt va parking mavjudligi asosidagi tezkor tavsiyalar.
 					</p>
 					<div className='space-y-2'>
@@ -3264,20 +2261,20 @@ export default function HomePage() {
 									setSheet(null)
 									showToast(tip.title)
 								}}
-								className='flex w-full items-center gap-3 rounded-2xl bg-white p-4 text-left shadow-sm ring-1 ring-slate-200'
+								className='flex w-full items-center gap-3 rounded-2xl bg-white p-4 text-left shadow-card'
 							>
-								<span className='grid size-10 shrink-0 place-items-center rounded-xl bg-violet-50 text-violet-600'>
+								<span className='grid size-10 shrink-0 place-items-center rounded-xl bg-brand-50 text-brand'>
 									<Sparkles className='size-5' />
 								</span>
 								<span className='min-w-0 flex-1'>
-									<span className='block text-sm font-black text-slate-900'>
+									<span className='block text-sm font-black text-ink'>
 										{tip.title}
 									</span>
-									<span className='mt-1 block text-xs leading-5 text-slate-400'>
+									<span className='mt-1 block text-xs leading-5 text-ink-3'>
 										{tip.text}
 									</span>
 								</span>
-								<ChevronRight className='size-4 text-slate-300' />
+								<ChevronRight className='size-4 text-ink-3' />
 							</button>
 						))}
 					</div>
@@ -3285,12 +2282,20 @@ export default function HomePage() {
 			)}
 
 			{/* Toast */}
-			{toast && (
-				<div className='fixed inset-x-4 bottom-24 z-110 mx-auto flex max-w-100 items-center gap-3 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-bold text-white shadow-2xl'>
-					<Check className='size-5 shrink-0 text-emerald-400' />
-					<span className='min-w-0 flex-1'>{toast}</span>
-				</div>
-			)}
+			<Toast open={toast.open} message={toast.payload ?? ''} />
 		</div>
+	)
+}
+
+// City Goo's hl(): show which part of the row the query actually hit.
+function Mark({ text, query }: { text: string; query: string }) {
+	const [before, match, after] = highlightParts(text, query)
+	if (!match) return <>{text}</>
+	return (
+		<>
+			{before}
+			<mark className='rounded-[3px] bg-brand-100 text-brand-600'>{match}</mark>
+			{after}
+		</>
 	)
 }

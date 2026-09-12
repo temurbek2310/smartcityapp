@@ -3,6 +3,10 @@
 import { LoadingScreen } from '@/components/ui/loading-screen'
 import { useApp } from '@/context/app-context'
 import {
+	formatUzbekPlate,
+	normalizeUzbekPlate,
+} from '@/lib/plate'
+import {
 	CarFront,
 	Check,
 	MapPinned,
@@ -10,8 +14,16 @@ import {
 	ShieldCheck,
 	Smartphone,
 } from 'lucide-react'
-import { useRouter } from 'next/navigation'
-import { useEffect, useMemo, useState } from 'react'
+import { resolveNextPath } from '@/lib/safe-next'
+import { useRouter, useSearchParams } from 'next/navigation'
+import {
+	Suspense,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+	type ChangeEvent,
+} from 'react'
 import { z } from 'zod'
 
 const profileSchema = z.object({
@@ -53,9 +65,21 @@ function normalizeUzPhone(digits: string) {
 	return `+998${digits}`
 }
 
+// useSearchParams() opts the subtree into client-side rendering, so the
+// reader lives behind its own Suspense boundary — the pattern /transport
+// already uses.
 export default function WelcomePage() {
+	return (
+		<Suspense fallback={<LoadingScreen />}>
+			<WelcomeView />
+		</Suspense>
+	)
+}
+
+function WelcomeView() {
 	const router = useRouter()
-	const next = '/home'
+	// AuthGate sends the page the user was actually trying to reach.
+	const next = resolveNextPath(useSearchParams().get('next'))
 	const { hydrated, onboardingDone, user, completeOnboarding, login } = useApp()
 	const [slide, setSlide] = useState(0)
 	const [step, setStep] = useState<'phone' | 'otp' | 'profile'>('phone')
@@ -63,11 +87,23 @@ export default function WelcomePage() {
 	const [otp, setOtp] = useState('')
 	const [name, setName] = useState('')
 	const [vehiclePlate, setVehiclePlate] = useState('01 A 777 AA')
+	const plateInputRef = useRef<HTMLInputElement>(null)
+	const plateCaretRef = useRef<number | null>(null)
 	const [error, setError] = useState('')
 
 	useEffect(() => {
 		if (hydrated && user) router.replace(next)
 	}, [hydrated, user, router, next])
+
+	// Re-place the caret once React has written the reformatted value, so
+	// inserted spaces never push it to the end of the field.
+	useEffect(() => {
+		const input = plateInputRef.current
+		const caret = plateCaretRef.current
+		if (!input || caret === null) return
+		plateCaretRef.current = null
+		input.setSelectionRange(caret, caret)
+	}, [vehiclePlate])
 	const current = slides[slide]
 	const Icon = current.icon
 	const title = useMemo(
@@ -84,25 +120,25 @@ export default function WelcomePage() {
 
 	if (!onboardingDone) {
 		return (
-			<div className='min-h-dvh bg-slate-950 px-6 py-8 text-white'>
+			<div className='min-h-dvh bg-ink px-6 py-8 text-white'>
 				<div className='mx-auto flex min-h-[calc(100dvh-4rem)] max-w-md flex-col'>
 					<div className='flex items-center gap-3'>
-						<span className='grid size-11 place-items-center rounded-2xl bg-white font-black text-slate-950'>
+						<span className='grid size-11 place-items-center rounded-card bg-white text-[17px] font-black text-ink'>
 							B
 						</span>
 						<strong>B SPACE</strong>
 					</div>
 					<div className='flex flex-1 flex-col justify-center'>
-						<div className='grid size-24 place-items-center rounded-[2rem] bg-white/10'>
+						<div className='grid size-24 place-items-center rounded-card-xl bg-white/10'>
 							<Icon className='size-11' />
 						</div>
-						<p className='mt-8 text-xs font-bold uppercase tracking-[.25em] text-sky-300'>
+						<p className='mt-8 text-[11px] font-bold uppercase tracking-[.2em] text-brand-100'>
 							MVP · Uzbekistan
 						</p>
-						<h1 className='mt-3 text-4xl font-black tracking-tight'>
+						<h1 className='mt-3 text-[34px] font-black leading-[1.1] tracking-[-0.02em]'>
 							{current.title}
 						</h1>
-						<p className='mt-4 max-w-sm text-base leading-7 text-slate-300'>
+						<p className='mt-4 max-w-sm text-[15px] leading-7 text-white/70'>
 							{current.text}
 						</p>
 					</div>
@@ -120,13 +156,50 @@ export default function WelcomePage() {
 								? setSlide(slide + 1)
 								: completeOnboarding()
 						}
-						className='mt-6 h-14 rounded-2xl bg-white font-bold text-slate-950'
+						className='mt-6 h-14 rounded-xl bg-white text-[15px] font-[650] text-ink'
 					>
 						{slide < slides.length - 1 ? 'Keyingi' : 'Boshlash'}
 					</button>
 				</div>
 			</div>
 		)
+	}
+
+	function handlePlateChange(event: ChangeEvent<HTMLInputElement>) {
+		const typed = event.target.value
+		const caret = event.target.selectionStart ?? typed.length
+		const previousRaw = normalizeUzbekPlate(vehiclePlate)
+
+		let raw = normalizeUzbekPlate(typed)
+		let charsBeforeCaret = normalizeUzbekPlate(typed.slice(0, caret)).length
+
+		// Backspacing onto one of the inserted spaces would otherwise delete
+		// only that space, which formatting puts straight back. Remove the
+		// plate character in front of it instead, so Backspace always moves.
+		// Exactly one character must have gone, or a paste that merely drops
+		// spaces ("01A777AA" over "01 A 777 AA") would lose a character too.
+		if (
+			vehiclePlate.length - typed.length === 1 &&
+			raw === previousRaw &&
+			charsBeforeCaret > 0
+		) {
+			raw = raw.slice(0, charsBeforeCaret - 1) + raw.slice(charsBeforeCaret)
+			charsBeforeCaret -= 1
+		}
+
+		const formatted = formatUzbekPlate(raw)
+
+		// Caret goes after the same number of plate characters it was after.
+		let position = 0
+		let seen = 0
+		while (position < formatted.length && seen < charsBeforeCaret) {
+			if (formatted[position] !== ' ') seen += 1
+			position += 1
+		}
+
+		plateCaretRef.current = position
+		setVehiclePlate(formatted)
+		setError('')
 	}
 
 	function submitPhone() {
@@ -165,25 +238,25 @@ export default function WelcomePage() {
 	}
 
 	return (
-		<div className='min-h-dvh bg-slate-100 px-5 py-8'>
+		<div className='min-h-dvh bg-canvas px-5 py-8'>
 			<div className='mx-auto max-w-md'>
 				<div className='flex items-center gap-3'>
-					<span className='grid size-11 place-items-center rounded-2xl bg-slate-950 font-black text-white'>
+					<span className='grid size-11 place-items-center rounded-card bg-brand text-[17px] font-black text-white'>
 						B
 					</span>
 					<div>
 						<strong className='block'>B SPACE</strong>
-						<span className='text-xs text-slate-500'>Demo authentication</span>
+						<span className='text-[11.5px] text-ink-3'>Demo authentication</span>
 					</div>
 				</div>
-				<section className='mt-10 rounded-[2rem] bg-white p-6 shadow-sm'>
-					<div className='grid size-12 place-items-center rounded-2xl bg-slate-100'>
+				<section className='mt-10 rounded-card-xl bg-card p-6 shadow-card'>
+					<div className='grid size-12 place-items-center rounded-card bg-brand-50 text-brand'>
 						<Smartphone className='size-6' />
 					</div>
-					<p className='mt-6 text-xs font-bold uppercase tracking-[.2em] text-slate-400'>
+					<p className='mt-6 text-[11px] font-bold uppercase tracking-[.16em] text-ink-3'>
 						{title}
 					</p>
-					<h1 className='mt-2 text-3xl font-black text-slate-950'>Kirish</h1>
+					<h1 className='mt-2 text-[28px] font-black tracking-[-0.02em] text-ink'>Kirish</h1>
 
 					{step === 'phone' && (
 						<form
@@ -193,12 +266,12 @@ export default function WelcomePage() {
 								submitPhone()
 							}}
 						>
-							<label htmlFor='phone' className='text-sm font-semibold'>
+							<label htmlFor='phone' className='text-[13px] font-semibold text-ink-2'>
 								Telefon
 							</label>
 
-							<div className='mt-2 flex h-14 items-center rounded-2xl border border-slate-200 bg-white transition focus-within:border-slate-950'>
-								<div className='flex h-full items-center border-r border-slate-200 px-4 text-lg font-semibold text-slate-950'>
+							<div className='mt-2 flex h-14 items-center rounded-card border border-line bg-white transition focus-within:border-brand'>
+								<div className='flex h-full items-center border-r border-line px-4 text-[17px] font-semibold text-ink'>
 									+998
 								</div>
 
@@ -215,7 +288,7 @@ export default function WelcomePage() {
 										setPhoneDigits(digits)
 										setError('')
 									}}
-									className='h-full min-w-0 flex-1 bg-transparent px-4 text-lg font-medium tracking-wide outline-none'
+									className='h-full min-w-0 flex-1 bg-transparent px-4 text-[17px] font-medium tracking-wide text-ink outline-none'
 									placeholder='90 123 45 67'
 								/>
 							</div>
@@ -223,7 +296,7 @@ export default function WelcomePage() {
 							<button
 								type='submit'
 								disabled={phoneDigits.length !== 9}
-								className='mt-4 h-13 w-full rounded-2xl bg-slate-950 font-bold text-white disabled:cursor-not-allowed disabled:opacity-40'
+								className='mt-4 h-13 w-full rounded-xl bg-brand text-[15px] font-[650] text-white shadow-[0_6px_16px_rgb(108_71_224/.28)] disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none'
 							>
 								OTP yuborish
 							</button>
@@ -238,12 +311,12 @@ export default function WelcomePage() {
 								submitOtp()
 							}}
 						>
-							<div className='rounded-2xl bg-sky-50 p-4 text-sm text-sky-800'>
+							<div className='rounded-card bg-info-bg p-3.5 text-[13px] leading-5 text-info'>
 								<strong>Demo rejim:</strong> haqiqiy SMS yuborilmaydi. Kod{' '}
 								<strong>123456</strong>.
 							</div>
 
-							<label htmlFor='otp' className='mt-5 block text-sm font-semibold'>
+							<label htmlFor='otp' className='mt-5 block text-[13px] font-semibold text-ink-2'>
 								6 xonali kod
 							</label>
 
@@ -258,14 +331,14 @@ export default function WelcomePage() {
 									setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))
 									setError('')
 								}}
-								className='mt-2 h-13 w-full rounded-2xl border border-slate-200 px-4 text-center text-2xl font-black tracking-[.35em] outline-none focus:border-slate-950'
+								className='mt-2 h-13 w-full rounded-card border border-line px-4 text-center font-mono text-2xl font-black tracking-[.35em] text-ink outline-none focus:border-brand'
 								placeholder='123456'
 							/>
 
 							<button
 								type='submit'
 								disabled={otp.length !== 6}
-								className='mt-4 h-13 w-full rounded-2xl bg-slate-950 font-bold text-white disabled:cursor-not-allowed disabled:opacity-40'
+								className='mt-4 h-13 w-full rounded-xl bg-brand text-[15px] font-[650] text-white shadow-[0_6px_16px_rgb(108_71_224/.28)] disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none'
 							>
 								Tasdiqlash
 							</button>
@@ -281,7 +354,7 @@ export default function WelcomePage() {
 							}}
 						>
 							<div>
-								<label htmlFor='name' className='text-sm font-semibold'>
+								<label htmlFor='name' className='text-[13px] font-semibold text-ink-2'>
 									Ism
 								</label>
 
@@ -294,34 +367,36 @@ export default function WelcomePage() {
 										setName(e.target.value)
 										setError('')
 									}}
-									className='mt-2 h-13 w-full rounded-2xl border border-slate-200 px-4 outline-none focus:border-slate-950'
+									className='mt-2 h-13 w-full rounded-card border border-line px-4 text-ink outline-none focus:border-brand'
 									placeholder='Ali'
 								/>
 							</div>
 
 							<div>
-								<label htmlFor='vehiclePlate' className='text-sm font-semibold'>
+								<label htmlFor='vehiclePlate' className='text-[13px] font-semibold text-ink-2'>
 									Avtomobil davlat raqami
 								</label>
 
 								<div className='relative mt-2'>
-									<CarFront className='absolute left-4 top-1/2 size-5 -translate-y-1/2 text-slate-400' />
+									<CarFront className='absolute left-4 top-1/2 size-5 -translate-y-1/2 text-ink-3' />
 
 									<input
 										id='vehiclePlate'
+										ref={plateInputRef}
 										value={vehiclePlate}
-										onChange={e => {
-											setVehiclePlate(e.target.value.toUpperCase())
-											setError('')
-										}}
-										className='h-13 w-full rounded-2xl border border-slate-200 pl-12 pr-4 font-bold outline-none focus:border-slate-950'
+										inputMode='text'
+										autoCapitalize='characters'
+										autoComplete='off'
+										spellCheck={false}
+										onChange={handlePlateChange}
+										className='h-13 w-full rounded-card border border-line pl-12 pr-4 font-mono font-bold text-ink outline-none focus:border-brand'
 									/>
 								</div>
 							</div>
 
 							<button
 								type='submit'
-								className='h-13 w-full rounded-2xl bg-slate-950 font-bold text-white'
+								className='h-13 w-full rounded-xl bg-brand text-[15px] font-[650] text-white shadow-[0_6px_16px_rgb(108_71_224/.28)]'
 							>
 								<span className='inline-flex items-center gap-2'>
 									<Check className='size-5' />
@@ -332,7 +407,7 @@ export default function WelcomePage() {
 					)}
 
 					{error && (
-						<p className='mt-4 rounded-xl bg-rose-50 p-3 text-sm font-medium text-rose-700'>
+						<p className='mt-4 rounded-card bg-bad-bg p-3 text-[13px] font-medium text-bad'>
 							{error}
 						</p>
 					)}

@@ -1,24 +1,136 @@
-"use client";
+'use client'
 
-import { useParams } from "next/navigation";
-import Link from "next/link";
-import { CheckCircle2, CreditCard, ReceiptText } from "lucide-react";
-import { useApp } from "@/context/app-context";
-import { getParking } from "@/data/parkings";
-import { formatDateTime, formatUZS } from "@/lib/format";
+import { CheckCircle2, CreditCard, ReceiptText, Share2 } from 'lucide-react'
+import { notFound, useParams, useRouter } from 'next/navigation'
+
+import { AppBar } from '@/components/ui/app-bar'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
+import { IconTile } from '@/components/ui/icon-tile'
+import { KeyValue } from '@/components/ui/key-value'
+import { Toast } from '@/components/ui/toast'
+import { useApp } from '@/context/app-context'
+import { getParking } from '@/data/parkings'
+import { useBookingMeta } from '@/hooks/use-booking-meta'
+import { useToast } from '@/hooks/use-toast'
+import { formatDateTime, formatUZS } from '@/lib/format'
+import { formatUzbekPlate } from '@/lib/plate'
 
 export default function ReceiptPage() {
-  const params = useParams<{ id: string }>();
-  const { reservations } = useApp();
-  const reservation = reservations.find((item) => item.id === params.id);
-  const parking = reservation ? getParking(reservation.parkingId) : undefined;
-  if (!reservation || !parking) return <div>Chek topilmadi.</div>;
-  const total = reservation.finalTotal ?? reservation.estimatedTotal;
-  return (
-    <div className="space-y-6 text-center">
-      <div><CheckCircle2 className="mx-auto size-14 text-emerald-500" /><p className="mt-4 text-xs font-black uppercase tracking-[.2em] text-emerald-600">Payment successful</p><h1 className="mt-2 text-4xl font-black">{formatUZS(total)}</h1><p className="mt-2 text-sm text-slate-500">Mock payment · hech qanday real mablag‘ yechilmadi</p></div>
-      <section className="rounded-4xl border border-slate-200 p-6 text-left"><div className="flex items-center gap-3 border-b border-slate-100 pb-5"><div className="grid size-12 place-items-center rounded-2xl bg-slate-100"><ReceiptText className="size-6" /></div><div><strong>{parking.name}</strong><p className="mt-1 text-xs text-slate-500">{reservation.exitedAt ? formatDateTime(reservation.exitedAt) : "Session completed"}</p></div></div><dl className="mt-5 space-y-3 text-sm"><div className="flex justify-between"><dt className="text-slate-500">Booking</dt><dd className="max-w-[55%] truncate font-mono text-xs">{reservation.id}</dd></div><div className="flex justify-between"><dt className="text-slate-500">Vehicle</dt><dd className="font-bold">{reservation.vehiclePlate}</dd></div><div className="flex justify-between"><dt className="text-slate-500">Hourly rate</dt><dd className="font-bold">{formatUZS(reservation.pricePerHour)}</dd></div><div className="flex justify-between border-t border-slate-100 pt-3"><dt className="font-bold">Total paid</dt><dd className="font-black">{formatUZS(total)}</dd></div></dl><div className="mt-5 flex items-center gap-3 rounded-2xl bg-slate-100 p-4"><CreditCard className="size-5" /><div><p className="text-xs text-slate-500">Payment method</p><strong className="text-sm">B SPACE Demo •••• 4242</strong></div></div></section>
-      <Link href="/bookings" className="flex h-13 items-center justify-center rounded-2xl bg-slate-950 font-black text-white">Booking history</Link>
-    </div>
-  );
+	const params = useParams<{ id: string }>()
+	const router = useRouter()
+	const { reservations } = useApp()
+	const toast = useToast<string>()
+
+	const reservation = reservations.find(item => item.id === params.id)
+	const parking = reservation ? getParking(reservation.parkingId) : undefined
+	const meta = useBookingMeta(reservation?.id)
+
+	if (!reservation || !parking) notFound()
+
+	const total = reservation.finalTotal ?? reservation.estimatedTotal
+
+	async function share() {
+		const text = `${parking!.name} · ${formatUZS(total)} · ${reservation!.id}`
+		try {
+			await navigator.clipboard.writeText(text)
+			toast.show('Chek nusxalandi')
+		} catch {
+			// Clipboard needs a secure context and permission; the figures are
+			// on screen either way.
+			toast.show(text)
+		}
+	}
+
+	return (
+		<div className='-mx-5 -mt-6 min-h-[calc(100dvh-var(--spacing-nav))] bg-canvas pb-28 pt-5'>
+			<div className='mx-auto w-full max-w-md space-y-3 px-4'>
+				<AppBar
+					title='Chek'
+					subtitle={parking.name}
+					onBack={() => router.push('/bookings')}
+				/>
+
+				<Card className='text-center'>
+					<Badge tone='ok' className='mx-auto'>
+						<CheckCircle2 className='size-3' /> To‘lov muvaffaqiyatli
+					</Badge>
+					<p className='mt-3 text-[34px] font-black leading-none tracking-[-0.02em] text-ink'>
+						{formatUZS(total)}
+					</p>
+					<p className='mt-2 text-[11.5px] text-ink-3'>
+						Demo to‘lov — hech qanday real mablag‘ yechilmadi.
+					</p>
+				</Card>
+
+				<Card>
+					<div className='flex items-center gap-3 border-b border-line pb-3'>
+						<IconTile tone='bg-card-2 text-ink-2'>
+							<ReceiptText className='size-[18px]' />
+						</IconTile>
+						<div className='min-w-0 flex-1'>
+							<p className='truncate text-[14px] font-bold text-ink'>
+								{parking.name}
+							</p>
+							<p className='mt-0.5 text-[11.5px] text-ink-3'>
+								{reservation.exitedAt
+									? formatDateTime(reservation.exitedAt)
+									: 'Sessiya yakunlandi'}
+							</p>
+						</div>
+					</div>
+
+					<div className='pt-1'>
+						<KeyValue
+							label='Bron'
+							value={
+								<span className='font-mono text-[11px]'>{reservation.id}</span>
+							}
+						/>
+						<KeyValue
+							label='Avtomobil'
+							value={formatUzbekPlate(reservation.vehiclePlate)}
+						/>
+						{meta && (
+							<KeyValue label='Joy' value={`${meta.bay} · ${meta.level}-daraja`} />
+						)}
+						<KeyValue
+							label='Soatlik tarif'
+							value={formatUZS(reservation.pricePerHour)}
+						/>
+						<KeyValue
+							label='Davomiylik'
+							value={`${reservation.durationHours} soat`}
+						/>
+						<KeyValue
+							label={<b className='text-ink'>Jami to‘langan</b>}
+							value={<b className='text-ink'>{formatUZS(total)}</b>}
+						/>
+					</div>
+
+					<div className='mt-3 flex items-center gap-3 rounded-card-lg bg-card-2 p-3'>
+						<CreditCard className='size-[18px] shrink-0 text-ink-2' />
+						<div>
+							<p className='text-[11px] text-ink-3'>To‘lov usuli</p>
+							<p className='text-[13px] font-bold text-ink'>
+								B SPACE Demo •••• 4242
+							</p>
+						</div>
+					</div>
+				</Card>
+
+				<div className='grid grid-cols-2 gap-2'>
+					<Button variant='outline' onClick={share}>
+						<Share2 className='size-4' /> Ulashish
+					</Button>
+					<Button variant='primary' onClick={() => router.push('/bookings')}>
+						Bronlar tarixi
+					</Button>
+				</div>
+			</div>
+
+			<Toast open={toast.open} message={toast.payload ?? ''} />
+		</div>
+	)
 }

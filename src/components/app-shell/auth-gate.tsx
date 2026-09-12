@@ -11,7 +11,14 @@ export function AuthGate({ children }: { children: ReactNode }) {
   const pathname = usePathname();
 
   useEffect(() => {
-    if (hydrated && !user) router.replace(`/welcome?next=${encodeURIComponent(pathname)}`);
+    if (!hydrated || user) return;
+    // The query matters — without it /favorites?tab=parking would come back
+    // as bare /favorites. Read straight off location rather than through
+    // useSearchParams(): this gate wraps every (app) route, and that hook
+    // would drag all of them out of static prerendering for a value only
+    // ever needed here, inside an effect that is already client-only.
+    const next = pathname + window.location.search;
+    router.replace(`/welcome?next=${encodeURIComponent(next)}`);
   }, [hydrated, user, router, pathname]);
 
   if (!hydrated || !user) return <LoadingScreen />;

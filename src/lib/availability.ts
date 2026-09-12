@@ -1,0 +1,52 @@
+import type { Parking } from '@/lib/types'
+
+export type AvailabilityTone = {
+	text: string
+	bar: string
+}
+
+export type ParkingAvailability = {
+	percent: number
+	full: boolean
+	tone: AvailabilityTone
+}
+
+// One reading of "how free is this lot", shared by the Favorites card, the
+// Transport destination card and the Transport route summary — which each
+// recomputed it inline. The banding (comfortable ≥30%, tight ≥15%, else
+// critical) is the one two of those three already used.
+//
+// Home's nearby chip deliberately does NOT use this: it bands on absolute
+// free spaces ("FULL" / "≤5 joy"), which answers a different question.
+export function parkingAvailability(parking: Parking): ParkingAvailability {
+	const percent = parking.totalSpaces
+		? Math.max(
+				0,
+				Math.min(
+					100,
+					Math.round((parking.availableSpaces / parking.totalSpaces) * 100),
+				),
+			)
+		: 0
+	const full = parking.availableSpaces <= 0
+
+	const tone: AvailabilityTone =
+		!full && percent >= 30
+			? { text: 'text-ok', bar: 'bg-ok' }
+			: !full && percent >= 15
+				? { text: 'text-warn', bar: 'bg-warn' }
+				: { text: 'text-bad', bar: 'bg-bad' }
+
+	return { percent, full, tone }
+}
+
+// The inverse reading of the same number: how *loaded* a place is, banded
+// the way City Goo's loadColor() does. parkingAvailability() above answers
+// "can I park here" from free spaces; this answers "how busy is this hour"
+// from an occupancy percentage, and drives both forecast bar charts.
+export function occupancyTone(percent: number) {
+	if (percent < 40) return 'bg-ok'
+	if (percent < 70) return 'bg-warn'
+	if (percent < 90) return 'bg-load-high'
+	return 'bg-bad'
+}

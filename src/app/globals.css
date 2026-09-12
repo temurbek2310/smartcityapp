@@ -1,5 +1,66 @@
 @import "tailwindcss";
 
+/* City Goo's :root, ported onto Tailwind 4's theme system.
+ *
+ * A token only mints utilities if its first segment names a Tailwind
+ * namespace (--color-*, --radius-*, --shadow-*, --font-*, --text-*, ...),
+ * and reusing a name Tailwind already ships silently redefines every
+ * existing use of it. City Goo's --r-lg is 18px where Tailwind's
+ * rounded-lg is 8px, so the radii and shadows below take their own names
+ * rather than re-rounding 4,500 lines of existing markup. Every colour
+ * name here is new, so nothing is overridden.
+ *
+ * Font weights are deliberately absent: City Goo uses 650 and 750, which
+ * Tailwind has no scale step for, and --font-* / --font-weight-* both mint
+ * `font-x` utilities and would collide. Use font-[750] instead. */
+@theme {
+  --color-brand: #6c47e0;
+  --color-brand-600: #5b37cc;
+  --color-brand-100: #ede7fe;
+  --color-brand-50: #f5f1ff;
+
+  --color-canvas: #f3f4f8;
+  --color-card: #ffffff;
+  --color-card-2: #f7f8fc;
+  --color-line: #eaecf2;
+  --color-line-2: #e1e4ed;
+
+  --color-ink: #0f172a;
+  --color-ink-2: #475069;
+  --color-ink-3: #8a91a6;
+
+  --color-ok: #12b76a;
+  --color-ok-bg: #e7f8f0;
+  --color-warn: #f79009;
+  --color-warn-bg: #fef4e5;
+  --color-bad: #f04438;
+  --color-bad-bg: #feecea;
+  --color-info: #2e90fa;
+  --color-info-bg: #e8f2fe;
+  /* Fourth occupancy band, between warn and bad — City Goo's loadColor(). */
+  --color-load-high: #f97316;
+  --color-star: #fdb022;
+
+  --radius-card: 14px;
+  --radius-card-lg: 18px;
+  --radius-card-xl: 24px;
+  --radius-sheet: 26px;
+
+  --shadow-card: 0 1px 2px rgb(16 24 40 / .04), 0 4px 14px rgb(16 24 40 / .06);
+  --shadow-sheet: 0 8px 30px rgb(16 24 40 / .16);
+
+  --spacing-nav: 76px;
+}
+
+/* next/font defines these on <html>, so they resolve at use site rather
+ * than being inlined — which is what `inline` is for. */
+@theme inline {
+  --font-sans: var(--font-inter), "SF Pro Display", -apple-system,
+    BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: var(--font-mono-face), ui-monospace, "SF Mono", "Roboto Mono",
+    monospace;
+}
+
 :root {
   --background: #e2e8f0;
   --foreground: #0f172a;
@@ -11,15 +72,142 @@ body {
   margin: 0;
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
 }
 button, a, input, select { -webkit-tap-highlight-color: transparent; }
 button, a { touch-action: manipulation; }
-.maplibregl-map { font-family: Arial, Helvetica, sans-serif; }
+.maplibregl-map { font-family: var(--font-sans); }
 .maplibregl-ctrl-bottom-left, .maplibregl-ctrl-bottom-right { font-size: 9px; }
 
 @keyframes slide-up {
-  from { opacity: 0; transform: translateY(12px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
 }
-.animate-slide-up { animation: slide-up .25s ease-out; }
+.animate-slide-up,
+.animate-fade-up { animation: slide-up .24s ease both; }
+
+/* City Goo sheet motion: .sheet slides in over .3s cubic-bezier(.32,.72,0,1)
+   from translateY(102%), its scrim fades in over .22s. */
+@keyframes sheet-up {
+  from { transform: translateY(102%); }
+  to { transform: none; }
+}
+.animate-sheet-up { animation: sheet-up .3s cubic-bezier(.32, .72, 0, 1) both; }
+
+@keyframes scrim-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.animate-scrim-in { animation: scrim-in .22s ease both; }
+
+.citygo-pressable { transition: transform .12s ease; }
+.citygo-pressable:active { transform: scale(.975); }
+.citygo-tile:active > span { transform: scale(.92); }
+
+.citygo-map-pin-bubble {
+  transition: transform .15s ease, box-shadow .16s ease;
+}
+.citygo-map-pin:active > .citygo-map-pin-bubble { transform: scale(1.12); }
+
+@keyframes citygo-map-card-in {
+  from { transform: translateY(130%); }
+  to { transform: none; }
+}
+.animate-map-card-in { animation: citygo-map-card-in .26s cubic-bezier(.32, .72, 0, 1) both; }
+
+.citygo-location-dot { transition: box-shadow .5s ease; }
+@keyframes citygo-ping {
+  0% { box-shadow: 0 0 0 9px rgb(46 144 250 / .34), 0 4px 12px rgb(15 23 42 / .18); }
+  70% { box-shadow: 0 0 0 26px rgb(46 144 250 / 0), 0 4px 12px rgb(15 23 42 / .18); }
+  100% { box-shadow: 0 0 0 9px rgb(46 144 250 / .18), 0 4px 12px rgb(15 23 42 / .18); }
+}
+.citygo-location-dot.is-ping { animation: citygo-ping 1s ease-out; }
+
+@keyframes citygo-shimmer {
+  from { background-position: 100% 0; }
+  to { background-position: -100% 0; }
+}
+.citygo-shimmer {
+  background-image: linear-gradient(90deg, var(--color-card-2) 25%, #fff 50%, var(--color-card-2) 75%);
+  background-size: 400% 100%;
+  animation: citygo-shimmer 1.3s infinite;
+}
+
+@keyframes citygo-spin { to { transform: rotate(360deg); } }
+.citygo-refresh-spinner.is-refreshing { animation: citygo-spin .9s linear infinite; }
+
+.citygo-voice-ring {
+  position: relative;
+  isolation: isolate;
+}
+.citygo-voice-ring::before,
+.citygo-voice-ring::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 2px solid rgb(255 255 255 / .5);
+  border-radius: 999px;
+  animation: citygo-ring-pulse 1.8s ease-out infinite;
+  z-index: 0;
+}
+.citygo-voice-ring::after { animation-delay: .6s; }
+.citygo-voice-ring > * { position: relative; z-index: 1; }
+@keyframes citygo-ring-pulse {
+  0% { transform: scale(1); opacity: .6; }
+  100% { transform: scale(1.9); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-sheet-up, .animate-scrim-in { animation: none; }
+}
+
+/* City Goo toast (.toast / .toast.on) reproduced 1:1 — same ink background,
+   14px radius, 12/14 padding, 13.5px/600 text, 10px gap, --sh-lg shadow and
+   the translateY(160%) .28s cubic-bezier(.32,.72,0,1) slide with the
+   visibility delay that keeps it out of the a11y tree while hidden.
+   Two adaptations: City Goo's absolute 400px device frame becomes B SPACE's
+   centered app shell, and the home-indicator safe area is added to its
+   calc(var(--nav-h) + 14px) offset so the toast clears the bottom nav. */
+.citygo-toast {
+  position: fixed;
+  left: 16px;
+  right: 16px;
+  bottom: calc(var(--spacing-nav) + 14px + env(safe-area-inset-bottom, 0px));
+  z-index: 110;
+  margin-inline: auto;
+  max-width: 25rem;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--color-ink);
+  color: #fff;
+  border-radius: var(--radius-card);
+  padding: 12px 14px;
+  font-size: 13.5px;
+  font-weight: 600;
+  box-shadow: var(--shadow-sheet);
+  transform: translateY(160%);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: transform .28s cubic-bezier(.32, .72, 0, 1), opacity .28s ease, visibility 0s linear .28s;
+}
+.citygo-toast.is-on {
+  transform: none;
+  opacity: 1;
+  visibility: visible;
+  transition-delay: 0s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .citygo-toast { transform: none; transition: opacity .28s ease, visibility 0s linear .28s; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

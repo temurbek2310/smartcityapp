@@ -1,145 +1,182 @@
 'use client'
 
+import {
+	CheckCircle2,
+	CircleParking,
+	Clock3,
+	LogOut,
+	Plus,
+	QrCode,
+} from 'lucide-react'
+import { notFound, useParams, useRouter } from 'next/navigation'
+import { useEffect, useState } from 'react'
+
+import { AppBar } from '@/components/ui/app-bar'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
+import { EmptyState } from '@/components/ui/empty-state'
+import { KeyValue } from '@/components/ui/key-value'
 import { QrImage } from '@/components/ui/qr-image'
 import { useApp } from '@/context/app-context'
 import { getParking } from '@/data/parkings'
+import { useBookingMeta } from '@/hooks/use-booking-meta'
 import { formatDuration, formatTime, formatUZS } from '@/lib/format'
-import { Clock3, LogOut, Plus, QrCode as QrIcon } from 'lucide-react'
-import { useParams, useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { formatUzbekPlate } from '@/lib/plate'
+import { calculateFinalTotal } from '@/lib/reservation'
 
 export default function SessionPage() {
 	const params = useParams<{ id: string }>()
 	const router = useRouter()
 	const { reservations, extendReservation, exitReservation } = useApp()
+
 	const reservation = reservations.find(item => item.id === params.id)
 	const parking = reservation ? getParking(reservation.parkingId) : undefined
+	const meta = useBookingMeta(reservation?.id)
+
 	const [now, setNow] = useState<number | null>(null)
 	const [showExitQr, setShowExitQr] = useState(false)
 
 	useEffect(() => {
-		const updateNow = () => setNow(Date.now())
-		const initialTimer = window.setTimeout(updateNow, 0)
-		const intervalTimer = window.setInterval(updateNow, 1000)
+		const update = () => setNow(Date.now())
+		const initial = window.setTimeout(update, 0)
+		const interval = window.setInterval(update, 1000)
 		return () => {
-			window.clearTimeout(initialTimer)
-			window.clearInterval(intervalTimer)
+			window.clearTimeout(initial)
+			window.clearInterval(interval)
 		}
 	}, [])
 
-	if (!reservation || !parking)
-		return (
-			<div className='rounded-3xl bg-rose-50 p-6'>
-				Parking sessiyasi topilmadi.
+	if (!reservation || !parking) notFound()
+
+	const frame = (children: React.ReactNode) => (
+		<div className='-mx-5 -mt-6 min-h-[calc(100dvh-var(--spacing-nav))] bg-canvas pb-28 pt-5'>
+			<div className='mx-auto w-full max-w-md space-y-3 px-4'>
+				<AppBar
+					title='Parking sessiyasi'
+					subtitle={parking.name}
+					onBack={() => router.push('/bookings')}
+				/>
+				{children}
 			</div>
+		</div>
+	)
+
+	if (reservation.status === 'completed') {
+		return frame(
+			<EmptyState
+				icon={CheckCircle2}
+				title='Sessiya yakunlangan'
+				text='To‘lov amalga oshirildi.'
+				href={`/receipt/${reservation.id}`}
+				action='Chekni ko‘rish'
+			/>,
 		)
-	if (reservation.status === 'completed')
-		return (
-			<div className='space-y-4'>
-				<p className='rounded-2xl bg-emerald-50 p-4 text-sm font-semibold text-emerald-800'>
-					Bu sessiya yakunlangan.
-				</p>
-				<button
-					onClick={() => router.push(`/receipt/${reservation.id}`)}
-					className='h-12 w-full rounded-2xl bg-slate-950 font-bold text-white'
-				>
-					Chekni ko‘rish
-				</button>
-			</div>
+	}
+
+	if (reservation.status !== 'active') {
+		return frame(
+			<EmptyState
+				icon={CircleParking}
+				title='Bron hali faol emas'
+				text='Parkingga kirganingizdan so‘ng taymer ishga tushadi.'
+				href={`/reservation/${reservation.id}`}
+				action='Bronga qaytish'
+			/>,
 		)
-	if (reservation.status !== 'active')
-		return (
-			<div className='space-y-4'>
-				<p className='rounded-2xl bg-amber-50 p-4 text-sm text-amber-800'>
-					Bu booking hali active emas.
-				</p>
-				<button
-					onClick={() => router.push(`/reservation/${reservation.id}`)}
-					className='h-12 w-full rounded-2xl bg-slate-950 font-bold text-white'
-				>
-					Reservationga qaytish
-				</button>
-			</div>
-		)
+	}
 
 	const reservationId = reservation.id
 	const remaining = now === null ? 0 : new Date(reservation.endAt).getTime() - now
+	const overstayed = remaining <= 0
 
-	function finish() {
-		exitReservation(reservationId)
-		router.push(`/receipt/${reservationId}`)
-	}
+	// Billed by the hour from entry, so it only matches estimatedTotal while
+	// the car sits inside its booked duration.
+	const runningTotal =
+		now === null
+			? reservation.estimatedTotal
+			: calculateFinalTotal(reservation, new Date(now))
 
-	return (
-		<div className='space-y-6'>
-			<div className='text-center'>
-				<span className='inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-black text-emerald-700'>
-					<span className='size-2 animate-pulse rounded-full bg-emerald-500' />{' '}
-					ACTIVE
-				</span>
-				<h1 className='mt-4 text-3xl font-black'>Parking in progress</h1>
-				<p className='mt-2 text-sm text-slate-500'>{parking.name}</p>
-			</div>
-			<section className='rounded-4xl bg-slate-950 p-7 text-center text-white shadow-xl shadow-slate-950/10'>
-				<Clock3 className='mx-auto size-7 text-sky-300' />
-				<p className='mt-4 text-xs font-bold uppercase tracking-[.2em] text-slate-400'>
-					Time remaining
+	return frame(
+		<>
+			{/* The countdown is the whole screen, so it gets the one dark surface
+			    in the app — City Goo reserves that for a live timer too. */}
+			<Card className='bg-ink px-5 py-6 text-center'>
+				<Badge
+					tone={overstayed ? 'bad' : 'ok'}
+					className='mx-auto bg-white/12 text-white'
+				>
+					<span
+						className={`size-1.5 rounded-full ${overstayed ? 'bg-bad' : 'animate-pulse bg-ok'}`}
+					/>
+					{overstayed ? 'VAQT TUGADI' : 'FAOL'}
+				</Badge>
+
+				<Clock3 className='mx-auto mt-4 size-6 text-white/55' />
+				<p className='mt-2 text-[11px] font-bold uppercase tracking-[.16em] text-white/50'>
+					{overstayed ? 'Ortiqcha vaqt' : 'Qolgan vaqt'}
 				</p>
-				<p className='mt-3 font-mono text-5xl font-black tracking-tight'>
-					{formatDuration(remaining)}
+				<p className='mt-2 font-mono text-[40px] font-black leading-none tracking-tight text-white'>
+					{formatDuration(Math.abs(remaining))}
 				</p>
-				<div className='mt-5 flex justify-between border-t border-white/10 pt-4 text-sm'>
-					<span className='text-slate-400'>End time</span>
-					<strong>{formatTime(reservation.endAt)}</strong>
+
+				<div className='mt-5 flex items-center justify-between border-t border-white/10 pt-3.5 text-[13px]'>
+					<span className='text-white/55'>Tugash vaqti</span>
+					<b className='text-white'>{formatTime(reservation.endAt)}</b>
 				</div>
-			</section>
-			<section className='rounded-3xl border border-slate-200 p-5'>
-				<div className='flex justify-between text-sm'>
-					<span className='text-slate-500'>Vehicle</span>
-					<strong>{reservation.vehiclePlate}</strong>
-				</div>
-				<div className='mt-3 flex justify-between text-sm'>
-					<span className='text-slate-500'>Current estimate</span>
-					<strong>{formatUZS(reservation.estimatedTotal)}</strong>
-				</div>
-				<button
+			</Card>
+
+			<Card>
+				<KeyValue
+					label='Avtomobil'
+					value={formatUzbekPlate(reservation.vehiclePlate)}
+				/>
+				{meta && <KeyValue label='Joy' value={`${meta.bay} · ${meta.level}-daraja`} />}
+				<KeyValue label='Soatlik tarif' value={formatUZS(reservation.pricePerHour)} />
+				<KeyValue label='Joriy hisob' value={formatUZS(runningTotal)} />
+
+				<Button
+					variant='outline'
+					block
+					className='mt-3'
 					onClick={() => extendReservation(reservation.id, 1)}
-					className='mt-5 flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-sky-50 font-black text-sky-700'
 				>
-					<Plus className='size-5' /> +1 soat uzaytirish
-				</button>
-				<p className='mt-2 text-center text-[11px] text-slate-400'>
-					Demo: future capacity check avtomatik ravishda available deb qabul
-					qilinadi.
+					<Plus className='size-4 text-brand' /> +1 soat uzaytirish
+				</Button>
+				<p className='mt-2 text-center text-[11px] text-ink-3'>
+					Demo: bo‘sh joy tekshiruvi avtomatik mavjud deb hisoblanadi.
 				</p>
-			</section>
+			</Card>
 
-			{!showExitQr ? (
-				<button
-					onClick={() => setShowExitQr(true)}
-					className='flex h-14 w-full items-center justify-center gap-2 rounded-2xl border border-slate-300 font-black'
-				>
-					<QrIcon className='size-5' /> Exit QR ochish
-				</button>
-			) : (
-				<section className='animate-slide-up rounded-4xl border border-slate-200 p-6 text-center'>
-					<p className='text-xs font-bold uppercase tracking-[.2em] text-slate-400'>
-						Exit QR
+			{showExitQr ? (
+				<Card className='animate-slide-up text-center'>
+					<p className='text-[11px] font-bold uppercase tracking-[.16em] text-ink-3'>
+						Chiqish QR kodi
 					</p>
-					<div className='mx-auto mt-4 w-fit rounded-3xl border border-slate-100 p-3'>
+					<div className='mx-auto mt-3 w-fit rounded-card-lg border border-line p-3'>
 						<QrImage value={`BSPACE:EXIT:${reservation.id}`} size={190} />
 					</div>
-					<p className='mt-3 text-xs text-slate-500'>
-						Gate scanner o‘rniga MVP simulator ishlaydi.
+					<p className='mt-3 text-[11.5px] text-ink-3'>
+						Shlagbaum skaneri o‘rniga demo simulyator ishlaydi.
 					</p>
-					<button
-						onClick={finish}
-						className='mt-5 flex h-13 w-full items-center justify-center gap-2 rounded-2xl bg-rose-500 font-black text-white'
+					<Button
+						variant='primary'
+						danger
+						block
+						className='mt-4'
+						onClick={() => {
+							exitReservation(reservationId)
+							router.push(`/receipt/${reservationId}`)
+						}}
 					>
-						<LogOut className='size-5' /> Simulate exit & pay
-					</button>
-				</section>
+						<LogOut className='size-4' /> Chiqish va to‘lov (demo)
+					</Button>
+				</Card>
+			) : (
+				<Button variant='outline' block onClick={() => setShowExitQr(true)}>
+					<QrCode className='size-4 text-brand' /> Chiqish QR kodini ochish
+				</Button>
 			)}
-		</div>
+		</>,
 	)
 }

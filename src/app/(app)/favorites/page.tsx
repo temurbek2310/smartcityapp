@@ -1,7 +1,6 @@
 'use client'
 
 import {
-	ChevronRight,
 	CircleParking,
 	Heart,
 	MapPin,
@@ -11,7 +10,6 @@ import {
 	Ticket,
 	Users,
 	X,
-	type LucideIcon,
 } from 'lucide-react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
@@ -24,68 +22,21 @@ import {
 	type WheelEvent as ReactWheelEvent,
 } from 'react'
 
+import { ParkingBookingSheet } from '@/components/parking/parking-booking-sheet'
+import { Toast } from '@/components/ui/toast'
 import { useApp } from '@/context/app-context'
+import { EmptyState } from '@/components/ui/empty-state'
 import { PARKINGS } from '@/data/parkings'
+import { PLACES } from '@/data/places'
+import { EVENTS } from '@/data/events'
+import { QUEUE_ORGS } from '@/data/queue-orgs'
+import { usePlaceFavorites } from '@/hooks/use-place-favorites'
+import { useToast } from '@/hooks/use-toast'
+import { parkingAvailability } from '@/lib/availability'
+import { formatDistance, formatUZS } from '@/lib/format'
+import type { Place } from '@/lib/types'
 
 type FavoriteTab = 'places' | 'parking' | 'queues' | 'routes' | 'events'
-
-type SavedPlace = {
-	id: string
-	title: string
-	subtitle: string
-	rating: number
-	distance: string
-	accent: string
-	parkingId?: string
-}
-
-const SAVED_PLACE_CATALOG: SavedPlace[] = [
-	{
-		id: 'coffee-lab',
-		title: 'Coffee Lab',
-		subtitle: 'Kafe · Yevropa oshxonasi',
-		rating: 4.8,
-		distance: '300 m',
-		accent: 'from-[#493329] to-[#151922]',
-		parkingId: 'amir-temur',
-	},
-	{
-		id: 'urban-food',
-		title: 'Urban Food',
-		subtitle: 'Restoran · Osiyo oshxonasi',
-		rating: 4.4,
-		distance: '270 m',
-		accent: 'from-[#74402d] to-[#151922]',
-		parkingId: 'amir-temur',
-	},
-	{
-		id: 'plov-center',
-		title: 'Plov Center',
-		subtitle: 'Milliy oshxona',
-		rating: 4.9,
-		distance: '480 m',
-		accent: 'from-[#4a4020] to-[#151922]',
-		parkingId: 'amir-temur',
-	},
-	{
-		id: 'tashkent-city-bc',
-		title: 'Tashkent City BC',
-		subtitle: 'A+ klass biznes markaz',
-		rating: 4.8,
-		distance: '1.2 km',
-		accent: 'from-[#2c3e63] to-[#151922]',
-		parkingId: 'tashkent-city',
-	},
-	{
-		id: 'magic-cinema',
-		title: 'Magic Cinema',
-		subtitle: 'Kinoteatr · 8 zal',
-		rating: 4.6,
-		distance: '1.2 km',
-		accent: 'from-[#64177d] to-[#151922]',
-		parkingId: 'magic-city',
-	},
-]
 
 const TABS: { id: FavoriteTab; label: string }[] = [
 	{ id: 'places', label: 'Joylar' },
@@ -107,15 +58,25 @@ function isTab(value: string | null): value is FavoriteTab {
 
 export default function FavoritesPage() {
 	const params = useSearchParams()
-	const { favorites, toggleFavorite } = useApp()
+	const {
+		favorites,
+		toggleFavorite,
+		favoriteQueueOrgs,
+		toggleQueueOrgFavorite,
+		favoriteEvents,
+		toggleEventFavorite,
+		savedRoutes,
+		removeRoute,
+	} = useApp()
 	const requestedTab = params.get('tab')
-	const bookedParkingId = params.get('booked')
 
 	const [tab, setTab] = useState<FavoriteTab>(() =>
 		isTab(requestedTab) ? requestedTab : 'places',
 	)
-	const [placeFavoriteIds, setPlaceFavoriteIds] = useState<string[]>([])
-	const [successVisible, setSuccessVisible] = useState(Boolean(bookedParkingId))
+	const placeFavorites = usePlaceFavorites()
+	const placeFavoriteIds = placeFavorites.ids
+	const [bookingParkingId, setBookingParkingId] = useState<string | null>(null)
+	const toast = useToast<string>()
 
 	useEffect(() => {
 		const timer = window.setTimeout(() => {
@@ -125,27 +86,17 @@ export default function FavoritesPage() {
 				)
 				if (isTab(requestedTab)) setTab(requestedTab)
 				else if (isTab(savedTab)) setTab(savedTab)
-
-				const rawPlaces = window.localStorage.getItem('citygoo-place-favorites')
-				const parsed = rawPlaces ? JSON.parse(rawPlaces) : []
-				setPlaceFavoriteIds(Array.isArray(parsed) ? parsed : [])
 			} catch {
-				setPlaceFavoriteIds([])
+				// The saved tab is a convenience; the default still renders.
 			}
 		}, 0)
 
 		return () => window.clearTimeout(timer)
 	}, [requestedTab])
 
-	useEffect(() => {
-		if (!successVisible) return
-		const timer = window.setTimeout(() => setSuccessVisible(false), 3200)
-		return () => window.clearTimeout(timer)
-	}, [successVisible])
-
 	const savedPlaces = useMemo(
 		() =>
-			SAVED_PLACE_CATALOG.filter(place => placeFavoriteIds.includes(place.id)),
+			PLACES.filter(place => placeFavoriteIds.includes(place.id)),
 		[placeFavoriteIds],
 	)
 
@@ -154,12 +105,22 @@ export default function FavoritesPage() {
 		[favorites],
 	)
 
+	const savedQueueOrgs = useMemo(
+		() => QUEUE_ORGS.filter(org => favoriteQueueOrgs.includes(org.id)),
+		[favoriteQueueOrgs],
+	)
+
+	const savedEvents = useMemo(
+		() => EVENTS.filter(event => favoriteEvents.includes(event.id)),
+		[favoriteEvents],
+	)
+
 	const counts: Record<FavoriteTab, number> = {
 		places: savedPlaces.length,
 		parking: savedParkings.length,
-		queues: 0,
-		routes: 0,
-		events: 0,
+		queues: savedQueueOrgs.length,
+		routes: savedRoutes.length,
+		events: savedEvents.length,
 	}
 
 	function selectTab(next: FavoriteTab) {
@@ -172,20 +133,14 @@ export default function FavoritesPage() {
 	}
 
 	function removePlace(id: string) {
-		const next = placeFavoriteIds.filter(item => item !== id)
-		setPlaceFavoriteIds(next)
-		try {
-			window.localStorage.setItem(
-				'citygoo-place-favorites',
-				JSON.stringify(next),
-			)
-		} catch {
-			// Favorites still work when persistence is unavailable.
-		}
+		placeFavorites.remove(id)
 	}
 
+	// -mx-5/-mt-6 escapes the layout's padding so the chip rail can scroll
+	// edge to edge — the same idiom parking/[id] uses for its hero. This was
+	// a nested <main>, which gave the document two landmarks.
 	return (
-		<main className='min-h-[calc(100dvh-76px)] bg-[#f3f4f8] pb-28 pt-5 text-slate-950'>
+		<div className='-mx-5 -mt-6 min-h-[calc(100dvh-var(--spacing-nav))] bg-canvas pb-28 pt-5 text-ink'>
 			<div className='mx-auto w-full max-w-md'>
 				<header className='px-4'>
 					<div className='flex items-start justify-between gap-4'>
@@ -193,14 +148,14 @@ export default function FavoritesPage() {
 							<h1 className='text-[25px] font-black tracking-[-0.04em]'>
 								Sevimlilar
 							</h1>
-							<p className='mt-2 text-[13px] leading-5 text-[#8a91a6]'>
+							<p className='mt-2 text-[13px] leading-5 text-ink-3'>
 								Saqlangan joylar, parkinglar va marshrutlar
 							</p>
 						</div>
 
 						<button
 							type='button'
-							className='grid size-12 shrink-0 place-items-center rounded-[15px] bg-white text-slate-700 shadow-[0_7px_22px_rgba(15,23,42,0.08)] ring-1 ring-[#eaecf2] active:scale-[0.97]'
+							className='grid size-12 shrink-0 place-items-center rounded-[15px] bg-white text-ink-2 shadow-[0_7px_22px_rgba(15,23,42,0.08)] ring-1 ring-line active:scale-[0.97]'
 							aria-label='Sevimlilar menyusi'
 						>
 							<span className='-translate-y-0.5 text-[22px] leading-none'>
@@ -208,37 +163,13 @@ export default function FavoritesPage() {
 							</span>
 						</button>
 					</div>
-
-					{successVisible && bookedParkingId ? (
-						<div className='mt-4 flex items-center gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-3.5 py-3 shadow-sm'>
-							<span className='grid size-9 shrink-0 place-items-center rounded-[11px] bg-emerald-500 text-white'>
-								<CircleParking className='size-5' />
-							</span>
-							<div className='min-w-0 flex-1'>
-								<p className='text-[13px] font-extrabold text-emerald-900'>
-									Parking muvaffaqiyatli bron qilindi
-								</p>
-								<p className='mt-0.5 truncate text-[11px] text-emerald-700'>
-									Bron qilingan parking Sevimlilarga ham qo‘shildi.
-								</p>
-							</div>
-							<button
-								type='button'
-								onClick={() => setSuccessVisible(false)}
-								className='grid size-8 place-items-center text-emerald-700'
-								aria-label='Yopish'
-							>
-								<X className='size-4' />
-							</button>
-						</div>
-					) : null}
 				</header>
 
-				<div className='mt-3'>
+				<div className='mt-4'>
 					<FavoriteTabs tab={tab} counts={counts} onSelect={selectTab} />
 				</div>
 
-				<div className='px-4 pt-2'>
+				<div className='px-4 pt-3'>
 					{tab === 'places' ? (
 						<section className='space-y-3'>
 							{savedPlaces.length ? (
@@ -265,97 +196,83 @@ export default function FavoritesPage() {
 						<section className='space-y-3'>
 							{savedParkings.length ? (
 								savedParkings.map(parking => {
-									const justBooked = bookedParkingId === parking.id
-									const freePercent = Math.max(
-										0,
-										Math.min(
-											100,
-											Math.round(
-												(parking.availableSpaces / parking.totalSpaces) * 100,
-											),
-										),
-									)
+									const { percent: freePercent, tone } =
+										parkingAvailability(parking)
 
 									return (
 										<article
 											key={parking.id}
-											className={`overflow-hidden rounded-[20px] bg-white shadow-[0_4px_14px_rgba(16,24,40,0.07)] ring-1 ${justBooked ? 'ring-violet-300' : 'ring-[#eaecf2]'}`}
+											className='overflow-hidden rounded-[20px] bg-white shadow-card ring-1 ring-line'
 										>
-											{justBooked ? (
-												<div className='bg-[#6c47e0] px-3.5 py-2 text-[11px] font-extrabold text-white'>
-													Hozirgina bron qilindi
-												</div>
-											) : null}
 
 											<Link
 												href={`/parking/${parking.id}`}
-												className='flex min-h-24'
+												className='flex min-h-23'
 											>
 												<div
-													className={`grid w-23 shrink-0 place-items-center bg-linear-to-br ${parking.accent} text-white/60`}
+													className={`flex w-18 shrink-0 flex-col items-center justify-center gap-1.5 bg-linear-to-br ${parking.accent} text-white/60`}
 												>
-													<div className='text-center'>
-														<CircleParking className='mx-auto size-6' />
-														<p className='mt-1.5 text-[10px] font-bold text-white/75'>
-															{parking.totalSpaces} joy
-														</p>
-													</div>
+													<CircleParking className='size-6' />
+													<p className='text-[10px] font-bold leading-none text-white/75'>
+														{parking.totalSpaces} joy
+													</p>
 												</div>
 
-												<div className='min-w-0 flex-1 px-3.5 py-3'>
-													<div className='flex items-start justify-between gap-2'>
-														<div className='min-w-0'>
-															<h2 className='truncate text-[15px] font-extrabold'>
+												<div className='min-w-0 flex-1 px-4 py-3.5'>
+													<div className='flex items-start justify-between gap-2.5'>
+														<div className='min-w-0 flex-1'>
+															<h2 className='line-clamp-2 text-[15px] font-extrabold leading-[19px]'>
 																{parking.name}
 															</h2>
-															<p className='mt-1 truncate text-[11px] text-[#8a91a6]'>
+															<p className='mt-1 truncate text-[11px] leading-4 text-ink-3'>
 																{parking.address}
 															</p>
 														</div>
-														<span className='shrink-0 text-[10px] text-[#8a91a6]'>
+														<span className='shrink-0 text-[10.5px] leading-[19px] text-ink-3'>
 															{parking.city}
 														</span>
 													</div>
 
-													<div className='mt-2.5 flex items-center justify-between gap-3'>
+													<div className='mt-3 flex items-baseline justify-between gap-3'>
 														<span
-															className={`truncate text-[12px] font-bold ${freePercent >= 30 ? 'text-emerald-600' : freePercent >= 15 ? 'text-amber-600' : 'text-rose-500'}`}
+															className={`truncate text-[12.5px] font-bold ${tone.text}`}
 														>
 															Bo‘sh {parking.availableSpaces} /{' '}
 															{parking.totalSpaces}
 														</span>
-														<span className='shrink-0 text-[12px] font-extrabold'>
-															{parking.pricePerHour.toLocaleString('ru-RU')}{' '}
-															so‘m/s
+														<span className='shrink-0 text-[12.5px] font-extrabold text-ink'>
+															{formatUZS(parking.pricePerHour)}/s
 														</span>
 													</div>
 
-													<div className='mt-2 h-1.25 overflow-hidden rounded-full bg-[#eaecf2]'>
+													<div className='mt-2.5 h-[7px] overflow-hidden rounded-full bg-line'>
 														<span
-															className={`block h-full rounded-full ${freePercent >= 30 ? 'bg-emerald-500' : freePercent >= 15 ? 'bg-amber-500' : 'bg-rose-500'}`}
+															className={`block h-full rounded-full transition-[width] duration-400 ${tone.bar}`}
 															style={{ width: `${freePercent}%` }}
 														/>
 													</div>
 												</div>
 											</Link>
 
-											<div className='flex gap-2 px-3 pb-3'>
+											<div className='flex items-center gap-2 px-4 pb-4'>
 												<Link
 													href={`/navigate/parking/${parking.id}`}
-													className='flex h-9 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-[10px] border border-[#e1e4ed] bg-white px-2 text-[11px] font-bold'
+													className='flex h-[34px] min-w-0 flex-1 items-center justify-center gap-[7px] whitespace-nowrap rounded-[9px] border-[1.5px] border-line-2 bg-white px-2.5 text-[12px] font-bold active:scale-[0.975]'
 												>
-													<Navigation className='size-3.5' /> Yo‘nalish
-												</Link>
-												<Link
-													href={`/reserve/${parking.id}`}
-													className='flex h-9 min-w-0 flex-1 items-center justify-center rounded-[10px] bg-[#6c47e0] px-2 text-[11px] font-extrabold text-white'
-												>
-													Bron qilish
+													<Navigation className='size-3.5 shrink-0' />
+													Yo‘nalish
 												</Link>
 												<button
 													type='button'
+													onClick={() => setBookingParkingId(parking.id)}
+													className='flex h-[34px] min-w-0 flex-[1.15] items-center justify-center whitespace-nowrap rounded-[9px] bg-brand px-2.5 text-[12px] font-extrabold text-white shadow-[0_6px_16px_rgba(108,71,224,.28)] active:scale-[0.975]'
+												>
+													Bron qilish
+												</button>
+												<button
+													type='button'
 													onClick={() => toggleFavorite(parking.id)}
-													className='grid size-9 shrink-0 place-items-center rounded-[10px] border border-[#e1e4ed] bg-white text-rose-500 active:scale-[0.96]'
+													className='grid size-[34px] shrink-0 place-items-center rounded-[9px] bg-card-2 text-bad active:scale-[0.975]'
 													aria-label={`${parking.name}ni sevimlilardan olib tashlash`}
 												>
 													<X className='size-4' />
@@ -377,37 +294,173 @@ export default function FavoritesPage() {
 					) : null}
 
 					{tab === 'queues' ? (
-						<EmptyState
-							icon={Users}
-							title='Hozircha bo‘sh'
-							text='Saqlangan elektron navbatlar shu bo‘limda ko‘rinadi.'
-							href='/home'
-							action='Topish'
-						/>
+						<section className='space-y-3'>
+							{savedQueueOrgs.length ? (
+								savedQueueOrgs.map(org => (
+									<article
+										key={org.id}
+										className='flex items-center gap-3 rounded-card-lg bg-card p-3 shadow-card'
+									>
+										<Link
+											href='/queues'
+											className='flex min-w-0 flex-1 items-center gap-3'
+										>
+											<span className='grid size-12 shrink-0 place-items-center rounded-2xl bg-brand-50 text-brand'>
+												<Users className='size-5' />
+											</span>
+											<span className='min-w-0'>
+												<span className='block truncate text-[15px] font-extrabold'>
+													{org.title}
+												</span>
+												<span className='mt-0.5 block truncate text-[11px] text-ink-3'>
+													{org.address} · {org.waiting} kishi
+												</span>
+											</span>
+										</Link>
+										<span
+											className={`shrink-0 rounded-[7px] px-2 py-1 text-[10px] font-extrabold ${
+												org.waitMinutes < 15
+													? 'bg-ok-bg text-ok'
+													: org.waitMinutes < 35
+														? 'bg-warn-bg text-warn'
+														: 'bg-bad-bg text-bad'
+											}`}
+										>
+											{org.waitMinutes} daq
+										</span>
+										<button
+											type='button'
+											aria-label='Olib tashlash'
+											onClick={() => toggleQueueOrgFavorite(org.id)}
+											className='grid size-9 shrink-0 place-items-center rounded-xl bg-card-2 text-bad'
+										>
+											<X className='size-4' />
+										</button>
+									</article>
+								))
+							) : (
+								<EmptyState
+									icon={Users}
+									title='Hozircha bo‘sh'
+									text='Navbat sahifasidagi yurak tugmasi orqali tashkilotlarni saqlang.'
+									href='/queues'
+									action='Navbatlar'
+								/>
+							)}
+						</section>
 					) : null}
 
 					{tab === 'routes' ? (
-						<EmptyState
-							icon={Route}
-							title='Hozircha bo‘sh'
-							text='Uy, ish va tez-tez ishlatiladigan marshrutlarni shu yerda saqlash mumkin bo‘ladi.'
-							href='/home'
-							action='Topish'
-						/>
+						<section className='space-y-3'>
+							{savedRoutes.length ? (
+								savedRoutes.map(route => (
+									<article
+										key={route.id}
+										className='rounded-card-lg bg-card p-3 shadow-card'
+									>
+										<div className='flex items-start justify-between gap-3'>
+											<div className='min-w-0'>
+												<h2 className='truncate text-[15px] font-extrabold'>
+													{route.title}
+												</h2>
+												<p className='mt-1 truncate text-[11px] text-ink-3'>
+													{route.from} → {route.to}
+												</p>
+											</div>
+											<button
+												type='button'
+												aria-label='Olib tashlash'
+												onClick={() => removeRoute(route.id)}
+												className='grid size-9 shrink-0 place-items-center rounded-xl bg-card-2 text-bad'
+											>
+												<X className='size-4' />
+											</button>
+										</div>
+										<Link
+											href={`/transport?mode=${route.mode}${route.parkingId ? `&parkingId=${route.parkingId}` : ''}`}
+											className='mt-3 flex h-9 items-center justify-center gap-1.5 rounded-[10px] bg-brand text-[11.5px] font-extrabold text-white'
+										>
+											<Navigation className='size-3.5' /> Qayta qurish
+										</Link>
+									</article>
+								))
+							) : (
+								<EmptyState
+									icon={Route}
+									title='Hozircha bo‘sh'
+									text='Transport ekranida marshrut qurib, “Marshrutni saqlash” tugmasini bosing.'
+									href='/transport'
+									action='Marshrut qurish'
+								/>
+							)}
+						</section>
 					) : null}
 
 					{tab === 'events' ? (
-						<EmptyState
-							icon={Ticket}
-							title='Hozircha bo‘sh'
-							text='Saqlangan shahar voqealari shu bo‘limda ko‘rinadi.'
-							href='/home'
-							action='Topish'
-						/>
+						<section className='space-y-3'>
+							{savedEvents.length ? (
+								savedEvents.map(event => (
+									<article
+										key={event.id}
+										className='overflow-hidden rounded-card-lg bg-card shadow-card'
+									>
+										<div
+											className={`flex h-24 items-end justify-between bg-linear-to-br p-3 ${event.accent}`}
+										>
+											<span className='rounded-[7px] bg-white/90 px-2 py-1 text-[10px] font-extrabold text-ink'>
+												{event.when}, {event.time}
+											</span>
+											<span className='rounded-[7px] bg-white/90 px-2 py-1 text-[10px] font-extrabold text-ink-2'>
+												{event.category}
+											</span>
+										</div>
+										<div className='p-3'>
+											<h2 className='text-[15px] font-extrabold'>
+												{event.title}
+											</h2>
+											<p className='mt-1 text-[11px] text-ink-3'>
+												{event.place} · {event.price}
+											</p>
+											<div className='mt-3 grid grid-cols-2 gap-2'>
+												<Link
+													href={`/parking/${event.parkingId}`}
+													className='flex h-9 items-center justify-center gap-1.5 rounded-[10px] border-[1.5px] border-line-2 bg-white text-[11.5px] font-bold'
+												>
+													<CircleParking className='size-3.5' /> Parking
+												</Link>
+												<button
+													type='button'
+													onClick={() => toggleEventFavorite(event.id)}
+													className='flex h-9 items-center justify-center gap-1.5 rounded-[10px] bg-card-2 text-[11.5px] font-bold text-bad'
+												>
+													<X className='size-3.5' /> Olib tashlash
+												</button>
+											</div>
+										</div>
+									</article>
+								))
+							) : (
+								<EmptyState
+									icon={Ticket}
+									title='Hozircha bo‘sh'
+									text='Bosh sahifadagi voqealar ro‘yxatidan yurak tugmasi orqali saqlang.'
+									href='/home'
+									action='Voqealar'
+								/>
+							)}
+						</section>
 					) : null}
 				</div>
 			</div>
-		</main>
+
+			<ParkingBookingSheet
+				parkingId={bookingParkingId}
+				onClose={() => setBookingParkingId(null)}
+				onNotify={toast.show}
+			/>
+
+			<Toast open={toast.open} message={toast.payload ?? ''} />
+		</div>
 	)
 }
 
@@ -495,8 +548,8 @@ function FavoriteTabs({
 						}}
 						className={`h-9 shrink-0 rounded-[11px] px-3.5 text-[12px] font-bold transition active:scale-[0.98] ${
 							tab === item.id
-								? 'bg-[#6c47e0] text-white shadow-[0_5px_14px_rgba(108,71,224,0.22)]'
-								: 'border border-[#e1e4ed] bg-white text-[#475069]'
+								? 'bg-brand text-white shadow-[0_5px_14px_rgba(108,71,224,0.22)]'
+								: 'border border-line-2 bg-white text-ink-2'
 						}`}
 					>
 						{item.label} · {counts[item.id]}
@@ -511,13 +564,13 @@ function PlaceFavoriteCard({
 	place,
 	onRemove,
 }: {
-	place: SavedPlace
+	place: Place
 	onRemove: () => void
 }) {
 	return (
-		<article className='overflow-hidden rounded-[20px] bg-white shadow-[0_4px_14px_rgba(16,24,40,0.07)] ring-1 ring-[#eaecf2]'>
+		<article className='overflow-hidden rounded-[20px] bg-white shadow-[0_4px_14px_rgba(16,24,40,0.07)] ring-1 ring-line'>
 			<Link
-				href={place.parkingId ? `/parking/${place.parkingId}` : '/map'}
+				href={place.parkingId ? `/parking/${place.parkingId}` : '/home'}
 				className='flex min-h-23'
 			>
 				<div
@@ -532,21 +585,21 @@ function PlaceFavoriteCard({
 							<h2 className='truncate text-[15px] font-extrabold'>
 								{place.title}
 							</h2>
-							<p className='mt-1 truncate text-[11px] text-[#8a91a6]'>
+							<p className='mt-1 truncate text-[11px] text-ink-3'>
 								{place.subtitle}
 							</p>
 						</div>
-						<span className='shrink-0 text-[10px] text-[#8a91a6]'>
-							{place.distance}
+						<span className='shrink-0 text-[10px] text-ink-3'>
+							{formatDistance(place.distanceKm)}
 						</span>
 					</div>
 
 					<div className='mt-2.5 flex items-center gap-2'>
 						<span className='flex items-center gap-1 text-[12px] font-bold'>
-							<Star className='size-3.5 fill-[#fdb022] text-[#fdb022]' />{' '}
+							<Star className='size-3.5 fill-star text-star' />{' '}
 							{place.rating}
 						</span>
-						<span className='rounded-[7px] bg-[#e7f8f0] px-2 py-1 text-[10px] font-extrabold text-[#12b76a]'>
+						<span className='rounded-[7px] bg-ok-bg px-2 py-1 text-[10px] font-extrabold text-ok'>
 							Ochiq
 						</span>
 					</div>
@@ -556,52 +609,21 @@ function PlaceFavoriteCard({
 			<div className='grid grid-cols-2 gap-2 px-3 pb-3'>
 				<Link
 					href={
-						place.parkingId ? `/navigate/parking/${place.parkingId}` : '/map'
+						place.parkingId ? `/navigate/parking/${place.parkingId}` : '/home'
 					}
-					className='flex h-9 items-center justify-center gap-1.5 rounded-[10px] border border-[#e1e4ed] bg-white px-2 text-[11px] font-bold'
+					className='flex h-9 items-center justify-center gap-1.5 rounded-[10px] border border-line-2 bg-white px-2 text-[11px] font-bold'
 				>
 					<Navigation className='size-3.5' /> Yo‘nalish
 				</Link>
 				<button
 					type='button'
 					onClick={onRemove}
-					className='flex h-9 items-center justify-center gap-1.5 rounded-[10px] border border-[#e1e4ed] bg-white px-2 text-[11px] font-bold active:scale-[0.98]'
+					className='flex h-9 items-center justify-center gap-1.5 rounded-[10px] border border-line-2 bg-white px-2 text-[11px] font-bold active:scale-[0.98]'
 				>
-					<Heart className='size-3.5 text-rose-500' /> Olib tashlash
+					<Heart className='size-3.5 text-bad' /> Olib tashlash
 				</button>
 			</div>
 		</article>
 	)
 }
 
-function EmptyState({
-	icon: Icon,
-	title,
-	text,
-	href,
-	action,
-}: {
-	icon: LucideIcon
-	title: string
-	text: string
-	href: string
-	action: string
-}) {
-	return (
-		<div className='mt-3 rounded-[18px] bg-white px-5 py-7 text-center shadow-[0_4px_14px_rgba(16,24,40,0.06)] ring-1 ring-[#eaecf2]'>
-			<span className='mx-auto grid size-11 place-items-center rounded-[13px] bg-[#f5f1ff] text-[#6c47e0]'>
-				<Icon className='size-5' />
-			</span>
-			<h2 className='mt-3 text-[14px] font-extrabold'>{title}</h2>
-			<p className='mx-auto mt-2 max-w-67.5 text-[12px] leading-5 text-[#8a91a6]'>
-				{text}
-			</p>
-			<Link
-				href={href}
-				className='mt-4 inline-flex h-9 items-center gap-1.5 rounded-[10px] bg-[#6c47e0] px-4 text-[12px] font-extrabold text-white'
-			>
-				{action} <ChevronRight className='size-3.5' />
-			</Link>
-		</div>
-	)
-}

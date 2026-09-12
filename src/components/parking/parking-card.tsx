@@ -1,118 +1,122 @@
 'use client'
 
-import { Heart, MapPin, ShieldCheck } from 'lucide-react'
-import { useRouter } from 'next/navigation'
+import {
+	BatteryCharging,
+	Car,
+	Navigation,
+	ShieldCheck,
+	Star,
+	Umbrella,
+} from 'lucide-react'
+import Link from 'next/link'
 
-import { useApp } from '@/context/app-context'
-import { formatUZS } from '@/lib/format'
+import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
+import { Meter } from '@/components/ui/meter'
+import { parkingAvailability } from '@/lib/availability'
+import { cn } from '@/lib/cn'
+import { formatDistance, formatUZS } from '@/lib/format'
 import type { Parking } from '@/lib/types'
 
-type ParkingCardProps = {
-  parking: Parking
-  distance?: number
-  onSelect?: (parkingId: string) => void
-  selected?: boolean
-}
-
+// One row in the parking list. City Goo's list card: tinted thumb carrying
+// the level count, name and distance, address, free/total with an occupancy
+// bar, price, a strip of amenity facts, then route and book.
 export function ParkingCard({
-  parking,
-  distance,
-  onSelect,
-  selected = false,
-}: ParkingCardProps) {
-  const router = useRouter()
-  const { favorites, toggleFavorite } = useApp()
-  const favorite = favorites.includes(parking.id)
+	parking,
+	distance,
+	onOpen,
+	onBook,
+}: {
+	parking: Parking
+	distance: number
+	onOpen: () => void
+	onBook: () => void
+}) {
+	const { percent, full, tone } = parkingAvailability(parking)
 
-  const statusClass =
-    parking.availableSpaces === 0
-      ? 'bg-red-50 text-red-700'
-      : parking.availableSpaces <= 5
-        ? 'bg-amber-50 text-amber-700'
-        : 'bg-emerald-50 text-emerald-700'
+	return (
+		<Card variant='bare'>
+			<button
+				type='button'
+				onClick={onOpen}
+				className='flex w-full min-h-26 text-left'
+			>
+				<span
+					className={cn(
+						'grid w-26 shrink-0 place-items-center bg-linear-to-br text-white/60',
+						parking.accent,
+					)}
+				>
+					<Car className='size-5' />
+					<span className='mt-1 text-[10px] font-bold text-white/75'>
+						{parking.levels} daraja
+					</span>
+				</span>
 
-  function openParking() {
-    if (onSelect) {
-      onSelect(parking.id)
-      return
-    }
+				<span className='min-w-0 flex-1 px-3 py-2.5'>
+					<span className='flex items-start justify-between gap-2'>
+						<span className='min-w-0'>
+							<span className='block truncate text-[15px] font-extrabold text-ink'>
+								{parking.name}
+							</span>
+							<span className='mt-0.5 block truncate text-[11px] text-ink-3'>
+								{parking.address}
+							</span>
+						</span>
+						<span className='shrink-0 text-[10px] text-ink-3'>
+							{formatDistance(distance)}
+						</span>
+					</span>
 
-    router.push(`/parking/${parking.id}`)
-  }
+					<span className='mt-2 flex items-baseline justify-between gap-2'>
+						<span className={cn('text-[12.5px] font-bold', tone.text)}>
+							{full
+								? 'Bo‘sh joy yo‘q'
+								: `Bo‘sh ${parking.availableSpaces} / ${parking.totalSpaces}`}
+						</span>
+						<span className='text-[13px] font-extrabold text-ink'>
+							{parking.pricePerHour
+								? `${formatUZS(parking.pricePerHour)}/soat`
+								: 'Bepul'}
+						</span>
+					</span>
 
-  return (
-    <article
-      className={`overflow-hidden rounded-3xl border bg-white shadow-sm transition ${
-        selected
-          ? 'border-teal-500 ring-4 ring-teal-500/10'
-          : 'border-slate-200'
-      }`}
-    >
-      <div className={`h-28 bg-linear-to-br ${parking.accent} p-4 text-white`}>
-        <div className='flex items-start justify-between'>
-          <span className='rounded-full bg-white/20 px-3 py-1 text-xs font-semibold backdrop-blur'>
-            {parking.city}
-          </span>
+					<Meter value={percent} tone={tone.bar} height={5} className='mt-1.5' />
 
-          <button
-            type='button'
-            onClick={() => toggleFavorite(parking.id)}
-            className='grid size-10 place-items-center rounded-full bg-white/20 backdrop-blur'
-            aria-label={favorite ? 'Remove favorite' : 'Add favorite'}
-          >
-            <Heart className={`size-5 ${favorite ? 'fill-white' : ''}`} />
-          </button>
-        </div>
-      </div>
+					<span className='mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10.5px] text-ink-3'>
+						<span className='flex items-center gap-1 font-bold text-ink-2'>
+							<Star className='size-3 fill-star text-star' /> {parking.rating}
+						</span>
+						<span className='flex items-center gap-1'>
+							<Umbrella className='size-3' />
+							{parking.amenities.includes('Covered') ? 'Yopiq' : 'Ochiq'}
+						</span>
+						{parking.evChargers > 0 && (
+							<span className='flex items-center gap-1'>
+								<BatteryCharging className='size-3' /> {parking.evChargers} ta
+							</span>
+						)}
+						{parking.amenities.includes('Security') && (
+							<span className='flex items-center gap-1'>
+								<ShieldCheck className='size-3' /> Qo‘riqlanadi
+							</span>
+						)}
+						<span>{parking.workingHours}</span>
+					</span>
+				</span>
+			</button>
 
-      <div className='p-4'>
-        <button type='button' onClick={openParking} className='w-full text-left'>
-          <div className='flex items-start justify-between gap-3'>
-            <div className='min-w-0'>
-              <h3 className='truncate font-bold text-slate-950'>{parking.name}</h3>
-              <p className='mt-1 flex items-center gap-1 text-xs text-slate-500'>
-                <MapPin className='size-3.5 shrink-0' />
-                <span className='truncate'>
-                  {parking.district}, {parking.city}
-                </span>
-              </p>
-            </div>
-
-            <span
-              className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${statusClass}`}
-            >
-              {parking.availableSpaces === 0
-                ? 'FULL'
-                : `${parking.availableSpaces} free`}
-            </span>
-          </div>
-
-          <div className='mt-4 flex items-center justify-between border-t border-slate-100 pt-3 text-sm'>
-            <div className='text-slate-500'>
-              {distance !== undefined ? (
-                `${distance.toFixed(1)} km`
-              ) : (
-                <span className='flex items-center gap-1'>
-                  <ShieldCheck className='size-4' />
-                  Verified
-                </span>
-              )}
-            </div>
-
-            <strong className='text-slate-950'>
-              {formatUZS(parking.pricePerHour)} / soat
-            </strong>
-          </div>
-        </button>
-
-        <button
-          type='button'
-          onClick={openParking}
-          className='mt-4 flex h-11 w-full items-center justify-center rounded-2xl bg-slate-950 text-sm font-bold text-white'
-        >
-          {onSelect ? 'Xaritada ko‘rish' : 'Batafsil'}
-        </button>
-      </div>
-    </article>
-  )
+			<div className='grid grid-cols-2 gap-2 px-3 pb-3'>
+				<Link
+					href={`/navigate/parking/${parking.id}`}
+					className='flex h-9 items-center justify-center gap-1.5 rounded-[10px] border-[1.5px] border-line-2 bg-white text-[11.5px] font-bold text-ink'
+				>
+					<Navigation className='size-3.5' /> Yo‘nalish
+				</Link>
+				<Button size='sm' variant='primary' disabled={full} onClick={onBook}>
+					{full ? 'Joy yo‘q' : 'Bron qilish'}
+				</Button>
+			</div>
+		</Card>
+	)
 }
