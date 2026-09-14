@@ -13,11 +13,13 @@ import { useEffect, useState } from 'react'
 
 import { AppBar } from '@/components/ui/app-bar'
 import { Badge } from '@/components/ui/badge'
+import { BottomSheet } from '@/components/ui/bottom-sheet'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { EmptyState } from '@/components/ui/empty-state'
 import { KeyValue } from '@/components/ui/key-value'
 import { QrImage } from '@/components/ui/qr-image'
+import { cn } from '@/lib/cn'
 import { useApp } from '@/context/app-context'
 import { getParking } from '@/data/parkings'
 import { useBookingMeta } from '@/hooks/use-booking-meta'
@@ -67,9 +69,9 @@ export default function SessionPage() {
 			<EmptyState
 				icon={CheckCircle2}
 				title='Sessiya yakunlangan'
-				text='To‘lov amalga oshirildi.'
+				text="To'lov amalga oshirildi."
 				href={`/receipt/${reservation.id}`}
-				action='Chekni ko‘rish'
+				action="Chekni ko'rish"
 			/>,
 		)
 	}
@@ -79,7 +81,7 @@ export default function SessionPage() {
 			<EmptyState
 				icon={CircleParking}
 				title='Bron hali faol emas'
-				text='Parkingga kirganingizdan so‘ng taymer ishga tushadi.'
+				text="Parkingga kirganingizdan so'ng taymer ishga tushadi."
 				href={`/reservation/${reservation.id}`}
 				action='Bronga qaytish'
 			/>,
@@ -99,66 +101,116 @@ export default function SessionPage() {
 
 	return frame(
 		<>
-			{/* The countdown is the whole screen, so it gets the one dark surface
-			    in the app — City Goo reserves that for a live timer too. */}
-			<Card className='bg-ink px-5 py-6 text-center'>
-				<Badge
-					tone={overstayed ? 'bad' : 'ok'}
-					className='mx-auto bg-white/12 text-white'
-				>
-					<span
-						className={`size-1.5 rounded-full ${overstayed ? 'bg-bad' : 'animate-pulse bg-ok'}`}
-					/>
-					{overstayed ? 'VAQT TUGADI' : 'FAOL'}
-				</Badge>
-
-				<Clock3 className='mx-auto mt-4 size-6 text-white/55' />
-				<p className='mt-2 text-[11px] font-bold uppercase tracking-[.16em] text-white/50'>
-					{overstayed ? 'Ortiqcha vaqt' : 'Qolgan vaqt'}
-				</p>
-				<p className='mt-2 font-mono text-[40px] font-black leading-none tracking-tight text-white'>
-					{formatDuration(Math.abs(remaining))}
-				</p>
-
-				<div className='mt-5 flex items-center justify-between border-t border-white/10 pt-3.5 text-[13px]'>
-					<span className='text-white/55'>Tugash vaqti</span>
-					<b className='text-white'>{formatTime(reservation.endAt)}</b>
+			<Card
+				className={
+					overstayed ? 'border-[1.5px] border-bad' : 'border-[1.5px] border-brand'
+				}
+			>
+				{/* Header: badge + id snippet */}
+				<div className='flex items-center justify-between gap-3'>
+					<Badge tone={overstayed ? 'bad' : 'ok'}>
+						<span
+							className={`size-1.5 rounded-full ${overstayed ? 'bg-bad' : 'animate-pulse bg-ok'}`}
+						/>
+						{overstayed ? 'VAQT TUGADI' : 'FAOL'}
+					</Badge>
+					<span className='font-mono text-[11px] font-bold text-ink-3'>
+						{reservation.id.slice(-8).toUpperCase()}
+					</span>
 				</div>
+
+				{/* Identity row: bay/level box + plate + entry time */}
+				{meta && (
+					<div className='mt-3 flex items-center gap-3'>
+						<div className='w-20 shrink-0 rounded-2xl bg-brand-50 px-2 py-2.5 text-center'>
+							<p className='font-mono text-lg font-black text-brand'>
+								{meta.bay}
+							</p>
+							<p className='mt-0.5 text-[10px] text-ink-3'>
+								{meta.level}-daraja
+							</p>
+						</div>
+						<div className='min-w-0 flex-1'>
+							<p className='truncate text-[15px] font-extrabold text-ink'>
+								{formatUzbekPlate(reservation.vehiclePlate)}
+							</p>
+							<p className='mt-1 text-[11.5px] text-ink-3'>
+								Kirish {formatTime(
+									reservation.enteredAt ?? reservation.startAt,
+								)}
+							</p>
+						</div>
+					</div>
+				)}
+
+				{/* Countdown centerpiece */}
+				<div className='mt-5 text-center'>
+					<Clock3
+						className={cn(
+							'mx-auto size-6',
+							overstayed ? 'text-bad' : 'text-brand',
+						)}
+					/>
+					<p className='mt-2 text-[11px] font-bold uppercase tracking-[.16em] text-ink-3'>
+						{overstayed ? 'Ortiqcha vaqt' : 'Qolgan vaqt'}
+					</p>
+					<p
+						className={cn(
+							'mt-2 font-mono text-[40px] font-black leading-none tracking-tight',
+							overstayed ? 'text-bad' : 'text-ink',
+						)}
+					>
+						{formatDuration(Math.abs(remaining))}
+					</p>
+				</div>
+
+				{/* Footer divider row */}
+				<div className='mt-5 flex items-center justify-between border-t border-line pt-3.5 text-[13px]'>
+					<span className='text-ink-3'>Tugash vaqti</span>
+					<b className='text-ink'>{formatTime(reservation.endAt)}</b>
+				</div>
+
+				{/* Action buttons */}
+				<div className='mt-4 grid grid-cols-2 gap-2'>
+					<Button
+						size='sm'
+						variant='outline'
+						onClick={() => extendReservation(reservation.id, 1)}
+					>
+						<Plus className='size-3.5 text-brand' /> +1 soat
+					</Button>
+					<Button
+						size='sm'
+						variant='outline'
+						onClick={() => setShowExitQr(true)}
+					>
+						<QrCode className='size-3.5 text-brand' /> Chiqish QR
+					</Button>
+				</div>
+
+				{/* Demo note */}
+				<p className='mt-2 text-center text-[11px] text-ink-3'>
+					Demo: bo'sh joy tekshiruvi avtomatik mavjud deb hisoblanadi.
+				</p>
 			</Card>
 
+			{/* Billing card */}
 			<Card>
-				<KeyValue
-					label='Avtomobil'
-					value={formatUzbekPlate(reservation.vehiclePlate)}
-				/>
-				{meta && <KeyValue label='Joy' value={`${meta.bay} · ${meta.level}-daraja`} />}
 				<KeyValue label='Soatlik tarif' value={formatUZS(reservation.pricePerHour)} />
 				<KeyValue label='Joriy hisob' value={formatUZS(runningTotal)} />
-
-				<Button
-					variant='outline'
-					block
-					className='mt-3'
-					onClick={() => extendReservation(reservation.id, 1)}
-				>
-					<Plus className='size-4 text-brand' /> +1 soat uzaytirish
-				</Button>
-				<p className='mt-2 text-center text-[11px] text-ink-3'>
-					Demo: bo‘sh joy tekshiruvi avtomatik mavjud deb hisoblanadi.
-				</p>
 			</Card>
 
-			{showExitQr ? (
-				<Card className='animate-slide-up text-center'>
-					<p className='text-[11px] font-bold uppercase tracking-[.16em] text-ink-3'>
-						Chiqish QR kodi
-					</p>
-					<div className='mx-auto mt-3 w-fit rounded-card-lg border border-line p-3'>
-						<QrImage value={`BSPACE:EXIT:${reservation.id}`} size={190} />
-					</div>
-					<p className='mt-3 text-[11.5px] text-ink-3'>
-						Shlagbaum skaneri o‘rniga demo simulyator ishlaydi.
-					</p>
+			{/* Exit QR sheet */}
+			{showExitQr && (
+				<BottomSheet title='Chiqish QR kodi' onClose={() => setShowExitQr(false)}>
+					<Card className='text-center'>
+						<div className='mx-auto w-fit rounded-3xl border border-line bg-white p-3'>
+							<QrImage value={`BSPACE:EXIT:${reservation.id}`} size={190} />
+						</div>
+						<p className='mt-3 text-[11.5px] text-ink-3'>
+							Shlagbaum skaneri o'rniga demo simulyator ishlaydi.
+						</p>
+					</Card>
 					<Button
 						variant='primary'
 						danger
@@ -169,13 +221,9 @@ export default function SessionPage() {
 							router.push(`/receipt/${reservationId}`)
 						}}
 					>
-						<LogOut className='size-4' /> Chiqish va to‘lov (demo)
+						<LogOut className='size-4' /> Chiqish va to'lov (demo)
 					</Button>
-				</Card>
-			) : (
-				<Button variant='outline' block onClick={() => setShowExitQr(true)}>
-					<QrCode className='size-4 text-brand' /> Chiqish QR kodini ochish
-				</Button>
+				</BottomSheet>
 			)}
 		</>,
 	)
