@@ -190,7 +190,7 @@ export default function SessionPage() {
 
 				{/* Demo note */}
 				<p className='mt-2 text-center text-[11px] text-ink-3'>
-					Demo: bo'sh joy tekshiruvi avtomatik mavjud deb hisoblanadi.
+					Demo: bo‘sh joy tekshiruvi avtomatik mavjud deb hisoblanadi.
 				</p>
 			</Card>
 
@@ -208,7 +208,7 @@ export default function SessionPage() {
 							<QrImage value={`BSPACE:EXIT:${reservation.id}`} size={190} />
 						</div>
 						<p className='mt-3 text-[11.5px] text-ink-3'>
-							Shlagbaum skaneri o'rniga demo simulyator ishlaydi.
+							Shlagbaum skaneri o‘rniga demo simulyator ishlaydi.
 						</p>
 					</Card>
 					<Button
@@ -221,7 +221,7 @@ export default function SessionPage() {
 							router.push(`/receipt/${reservationId}`)
 						}}
 					>
-						<LogOut className='size-4' /> Chiqish va to'lov (demo)
+						<LogOut className='size-4' /> Chiqish va to‘lov (demo)
 					</Button>
 				</BottomSheet>
 			)}

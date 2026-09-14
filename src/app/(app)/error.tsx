@@ -6,7 +6,7 @@ import { useEffect } from 'react'
 
 // Every authed screen sits under this. Without it a throw anywhere in a
 // client screen unmounts the tree and leaves a blank page — no nav, no way
-// back. Realistic sources here are MapLibre failing to initialise, an old
+// back. Realistic sources here are 2GIS MapGL failing to initialise, an old
 // WebView without crypto.randomUUID, and any lookup that assumes an id
 // exists.
 export default function AppError({

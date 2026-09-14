@@ -19,8 +19,8 @@ import type { RouteEndpoint } from '@/lib/route-endpoints'
 
 // What City Goo pins on the route: the things that will slow you down, each
 // tappable for the reason. They sit on the card rather than on the map itself
-// because MapLibre owns marker placement and these have no coordinates of
-// their own — they describe the route, not a point on it.
+// because the map engine owns marker placement and these have no coordinates
+// of their own — they describe the route, not a point on it.
 export type RouteProblem = {
 	id: string
 	icon: LucideIcon
@@ -85,9 +85,9 @@ type RouteMapProps = {
 }
 
 // Reproduces City Goo's map card for the Transport screen using B SPACE's
-// real MapLibre/OSM map (see components/map/parking-map.tsx) — no second
-// map provider. Zoom controls come from MapLibre's own top-right
-// NavigationControl, already built into ParkingMap.
+// real 2GIS-powered map (see components/map/city-map.tsx) — no second map
+// provider. Zoom controls come from 2GIS's own default top-right zoomControl,
+// already on for every map on this screen.
 export function RouteMap({
 	origin,
 	locating,

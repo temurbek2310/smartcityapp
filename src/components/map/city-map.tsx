@@ -8,9 +8,10 @@ import { TASHKENT_CENTER, UZBEKISTAN_BOUNDS } from '@/lib/geo'
 import { mapObjectKey, type MapObject, type MapSymbol } from '@/lib/map-objects'
 import type { MapLine } from '@/lib/home-map'
 
-type MapLibreModule = typeof import('maplibre-gl')
-type MapInstance = InstanceType<MapLibreModule['Map']>
-type MarkerInstance = InstanceType<MapLibreModule['Marker']>
+type MapglModule = Awaited<ReturnType<typeof import('@2gis/mapgl').load>>
+type MapInstance = InstanceType<MapglModule['Map']>
+type MarkerInstance = InstanceType<MapglModule['HtmlMarker']>
+type PolylineInstance = InstanceType<MapglModule['Polyline']>
 
 // What the screen above can ask the map to do. ParkingMap drives its camera
 // from props alone because its screen only ever reacts to a selection; /map
@@ -21,6 +22,15 @@ export type CityMapHandle = {
 	flyTo: (object: MapObject) => void
 	fitAll: () => void
 	goToUser: () => void
+}
+
+function boundsOf(points: { lat: number; lng: number }[]) {
+	const lats = points.map(point => point.lat)
+	const lngs = points.map(point => point.lng)
+	return {
+		southWest: [Math.min(...lngs), Math.min(...lats)],
+		northEast: [Math.max(...lngs), Math.max(...lats)],
+	}
 }
 
 export function CityMap({
@@ -48,9 +58,11 @@ export function CityMap({
 }) {
 	const containerRef = useRef<HTMLDivElement>(null)
 	const mapRef = useRef<MapInstance | null>(null)
-	const maplibreRef = useRef<MapLibreModule | null>(null)
+	const mapglRef = useRef<MapglModule | null>(null)
 	const markersRef = useRef<MarkerInstance[]>([])
 	const userMarkerRef = useRef<MarkerInstance | null>(null)
+	const userDotElRef = useRef<HTMLDivElement | null>(null)
+	const linesRef = useRef<Map<string, PolylineInstance>>(new Map())
 	const onSelectRef = useRef(onSelect)
 	const objectsRef = useRef(objects)
 	const [ready, setReady] = useState(false)
@@ -71,46 +83,36 @@ export function CityMap({
 
 		let disposed = false
 		let resizeObserver: ResizeObserver | undefined
+		// Captured once: the Map instance itself never gets reassigned, only
+		// mutated in place, so this stays valid for the cleanup below.
+		const lines = linesRef.current
 
 		void (async () => {
-			const maplibregl = await import('maplibre-gl')
+			const { load } = await import('@2gis/mapgl')
+			const mapgl = await load()
 			if (disposed || !containerRef.current) return
 
 			const container = containerRef.current
-			maplibreRef.current = maplibregl
+			mapglRef.current = mapgl
 
-			const map = new maplibregl.Map({
-				container,
-				style: {
-					version: 8,
-					sources: {
-						osm: {
-							type: 'raster',
-							tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
-							tileSize: 256,
-							attribution: '© OpenStreetMap contributors',
-						},
-					},
-					layers: [{ id: 'osm-base-map', type: 'raster', source: 'osm' }],
-				},
+			const map = new mapgl.Map(container, {
 				center: [TASHKENT_CENTER.lng, TASHKENT_CENTER.lat],
 				zoom: 12.2,
 				minZoom: 5,
 				maxZoom: 18,
-				maxBounds: [
-					[UZBEKISTAN_BOUNDS.west, UZBEKISTAN_BOUNDS.south],
-					[UZBEKISTAN_BOUNDS.east, UZBEKISTAN_BOUNDS.north],
-				],
+				maxBounds: {
+					southWest: [UZBEKISTAN_BOUNDS.west, UZBEKISTAN_BOUNDS.south],
+					northEast: [UZBEKISTAN_BOUNDS.east, UZBEKISTAN_BOUNDS.north],
+				},
+				key: process.env.NEXT_PUBLIC_MAPGL_API_KEY,
 			})
 
 			mapRef.current = map
 			setReady(true)
-			map.once('load', () => {
-				if (!disposed) map.resize()
-			})
+			map.invalidateSize()
 
 			if (typeof ResizeObserver !== 'undefined') {
-				resizeObserver = new ResizeObserver(() => map.resize())
+				resizeObserver = new ResizeObserver(() => map.invalidateSize())
 				resizeObserver.observe(container)
 			}
 		})().catch(() => {
@@ -120,25 +122,28 @@ export function CityMap({
 		return () => {
 			disposed = true
 			resizeObserver?.disconnect()
-			markersRef.current.forEach(marker => marker.remove())
+			markersRef.current.forEach(marker => marker.destroy())
 			markersRef.current = []
-			userMarkerRef.current?.remove()
+			userMarkerRef.current?.destroy()
 			userMarkerRef.current = null
-			mapRef.current?.remove()
+			userDotElRef.current = null
+			lines.forEach(line => line.destroy())
+			lines.clear()
+			mapRef.current?.destroy()
 			mapRef.current = null
-			maplibreRef.current = null
+			mapglRef.current = null
 		}
 	}, [])
 
-	// Object pins. MapLibre owns the outer element's transform, so selection is
+	// Object pins. 2GIS owns the outer element's transform, so selection is
 	// expressed with box-shadow and z-index on an inner span only — a CSS
 	// transition on the outer transform makes pins lag the map while panning.
 	useEffect(() => {
 		const map = mapRef.current
-		const maplibregl = maplibreRef.current
-		if (!map || !maplibregl || !ready) return
+		const mapgl = mapglRef.current
+		if (!map || !mapgl || !ready) return
 
-		markersRef.current.forEach(marker => marker.remove())
+		markersRef.current.forEach(marker => marker.destroy())
 		markersRef.current = []
 
 		const next: MarkerInstance[] = []
@@ -178,6 +183,7 @@ export function CityMap({
 			bubble.innerHTML = glyph(object.symbol ?? object.kind)
 			outer.appendChild(bubble)
 
+			let height = 34
 			if (object.tag) {
 				const tag = document.createElement('span')
 				tag.textContent = object.tag
@@ -188,6 +194,7 @@ export function CityMap({
           box-shadow: 0 2px 8px rgba(15,23,42,.2); pointer-events: none;
         `
 				outer.appendChild(tag)
+				height += 3 + 16 // gap + approximate tag row height
 			}
 
 			outer.addEventListener('click', event => {
@@ -197,16 +204,18 @@ export function CityMap({
 			})
 
 			next.push(
-				new maplibregl.Marker({ element: outer, anchor: 'bottom' })
-					.setLngLat([object.lng, object.lat])
-					.addTo(map),
+				new mapgl.HtmlMarker(map, {
+					coordinates: [object.lng, object.lat],
+					html: outer,
+					anchor: [17, height],
+				}),
 			)
 		}
 
 		markersRef.current = next
 
 		return () => {
-			next.forEach(marker => marker.remove())
+			next.forEach(marker => marker.destroy())
 			if (markersRef.current === next) markersRef.current = []
 		}
 	}, [objects, selectedKey, ready])
@@ -222,14 +231,13 @@ export function CityMap({
 	const fitted = useRef<string | null>(null)
 	useEffect(() => {
 		const map = mapRef.current
-		const maplibregl = maplibreRef.current
-		if (!map || !maplibregl || !ready || fitted.current === viewportKey) return
+		if (!map || !ready || fitted.current === viewportKey) return
 		if (objects.length === 0) return
 
 		fitted.current = viewportKey
 		// The container may still have been mid-layout when the map was built;
 		// fitBounds against a stale size picks the wrong zoom.
-		map.resize()
+		map.invalidateSize()
 
 		const lats = objects.map(object => object.lat)
 		const lngs = objects.map(object => object.lng)
@@ -239,23 +247,22 @@ export function CityMap({
 
 		if (spread) {
 			const centre = userLocation ?? TASHKENT_CENTER
-			map.easeTo({ center: [centre.lng, centre.lat], zoom: 11.8, duration: 0 })
+			map.setCenter([centre.lng, centre.lat])
+			map.setZoom(11.8)
 			return
 		}
 		if (objects.length === 1) {
 			const [object] = objects
-			map.easeTo({
-				center: [object.lng, object.lat], zoom: 14.5, duration: 0,
-				padding: { top: 56, left: 56, right: 56, bottom: bottomPadding },
-			})
+			map.setPadding({ top: 56, left: 56, right: 56, bottom: bottomPadding })
+			map.setCenter([object.lng, object.lat])
+			map.setZoom(14.5)
 			return
 		}
 
-		const bounds = new maplibregl.LngLatBounds()
-		objects.forEach(object => bounds.extend([object.lng, object.lat]))
-		map.fitBounds(bounds, {
+		map.fitBounds(boundsOf(objects), {
 			padding: { top: 56, left: 56, right: 56, bottom: bottomPadding },
-			maxZoom: 14.5, duration: 0,
+			maxZoom: 14.5,
+			animation: { duration: 0 },
 		})
 	}, [objects, ready, userLocation, viewportKey, bottomPadding])
 
@@ -263,48 +270,66 @@ export function CityMap({
 	useEffect(() => {
 		if (!ready || !selectedKey) return
 		const selected = objectsRef.current.find(object => mapObjectKey(object) === selectedKey)
-		if (selected) mapRef.current?.flyTo({
-			center: [selected.lng, selected.lat], zoom: 15.5, duration: 600,
-			padding: { top: 0, left: 0, right: 0, bottom: Math.max(0, bottomPadding - 56) },
-		})
+		const map = mapRef.current
+		if (!selected || !map) return
+
+		map.setPadding({ top: 0, left: 0, right: 0, bottom: Math.max(0, bottomPadding - 56) })
+		map.setCenter([selected.lng, selected.lat], { animate: true, duration: 600 })
+		map.setZoom(15.5, { animate: true, duration: 600, useHeightForAnimation: true })
 	}, [ready, selectedKey, bottomPadding])
 
 	useEffect(() => {
 		if (!ready || !locateRevision || !userLocation) return
-		mapRef.current?.flyTo({ center: [userLocation.lng, userLocation.lat], zoom: 14.5, duration: 600 })
+		const map = mapRef.current
+		if (!map) return
+		map.setCenter([userLocation.lng, userLocation.lat], { animate: true, duration: 600 })
+		map.setZoom(14.5, { animate: true, duration: 600, useHeightForAnimation: true })
 	}, [ready, userLocation, locateRevision])
 
+	// Overlay lines (bike lanes, illustrative route/traffic segments) — one
+	// Polyline per line, keyed by id, rather than a single shared GeoJSON
+	// source: 2GIS's GeoJsonSource styles by flat scalar attributes, not a
+	// per-feature paint expression, so per-line color needs either the
+	// low-level style-layer API or, far more simply, N Polyline instances —
+	// which is all this already-small, discrete line list needs.
 	useEffect(() => {
 		const map = mapRef.current
-		if (!map || !ready) return
-		const draw = () => {
-			if (map.getLayer('city-lines')) map.removeLayer('city-lines')
-			if (map.getSource('city-lines')) map.removeSource('city-lines')
-			if (!lines.length) return
-			map.addSource('city-lines', {
-				type: 'geojson', data: { type: 'FeatureCollection', features: lines.map(line => ({
-					type: 'Feature', properties: { color: line.color },
-					geometry: { type: 'LineString', coordinates: line.coordinates },
-				})) },
-			})
-			map.addLayer({ id: 'city-lines', type: 'line', source: 'city-lines',
-				paint: { 'line-color': ['get', 'color'], 'line-width': 5, 'line-opacity': 0.85 },
-			})
+		const mapgl = mapglRef.current
+		if (!map || !mapgl || !ready) return
+
+		const existing = linesRef.current
+		const nextIds = new Set(lines.map(line => line.id))
+
+		for (const [id, polyline] of existing) {
+			if (!nextIds.has(id)) {
+				polyline.destroy()
+				existing.delete(id)
+			}
 		}
-		if (map.isStyleLoaded()) draw()
-		else map.once('load', draw)
-		return () => { map.off('load', draw) }
+
+		for (const line of lines) {
+			if (existing.has(line.id)) continue
+			existing.set(
+				line.id,
+				new mapgl.Polyline(map, {
+					coordinates: line.coordinates,
+					color: line.color,
+					width: 5,
+				}),
+			)
+		}
 	}, [lines, ready])
 
 	// The blue "you are here" dot, kept separate so a filter change never
 	// removes it.
 	useEffect(() => {
 		const map = mapRef.current
-		const maplibregl = maplibreRef.current
-		if (!map || !maplibregl || !ready) return
+		const mapgl = mapglRef.current
+		if (!map || !mapgl || !ready) return
 
-		userMarkerRef.current?.remove()
+		userMarkerRef.current?.destroy()
 		userMarkerRef.current = null
+		userDotElRef.current = null
 		if (!userLocation) return
 
 		const element = document.createElement('div')
@@ -315,15 +340,18 @@ export function CityMap({
       background: #2e90fa; border: 3px solid #ffffff;
       box-shadow: 0 0 0 6px rgba(46,144,250,.18);
     `
+		userDotElRef.current = element
 
-		userMarkerRef.current = new maplibregl.Marker({ element })
-			.setLngLat([userLocation.lng, userLocation.lat])
-			.addTo(map)
+		userMarkerRef.current = new mapgl.HtmlMarker(map, {
+			coordinates: [userLocation.lng, userLocation.lat],
+			html: element,
+			anchor: [8, 8],
+		})
 	}, [userLocation, ready])
 
 	useEffect(() => {
 		if (!ready || !locateRevision || !userLocation) return
-		const element = userMarkerRef.current?.getElement()
+		const element = userDotElRef.current
 		if (!element) return
 		element.classList.remove('is-ping')
 		void element.offsetWidth
@@ -334,44 +362,40 @@ export function CityMap({
 		handleRef,
 		() => ({
 			flyTo(object: MapObject) {
-				mapRef.current?.flyTo({
-					center: [object.lng, object.lat],
-					zoom: 15.5,
-					duration: 600,
-				})
+				const map = mapRef.current
+				if (!map) return
+				map.setCenter([object.lng, object.lat], { animate: true, duration: 600 })
+				map.setZoom(15.5, { animate: true, duration: 600, useHeightForAnimation: true })
 			},
 			fitAll() {
 				const map = mapRef.current
-				const maplibregl = maplibreRef.current
 				const list = objectsRef.current
-				if (!map || !maplibregl || list.length === 0) return
+				if (!map || list.length === 0) return
 
 				if (list.length === 1) {
-					map.easeTo({ center: [list[0].lng, list[0].lat], zoom: 15, duration: 500 })
+					map.setCenter([list[0].lng, list[0].lat], { animate: true, duration: 500 })
+					map.setZoom(15, { animate: true, duration: 500 })
 					return
 				}
 
-				const bounds = new maplibregl.LngLatBounds()
-				list.forEach(object => bounds.extend([object.lng, object.lat]))
-				map.fitBounds(bounds, {
+				map.fitBounds(boundsOf(list), {
 					padding: { top: 60, left: 60, right: 60, bottom: bottomPadding },
-					maxZoom: 15, duration: 550,
+					maxZoom: 15,
+					animation: { duration: 550 },
 				})
 			},
 			goToUser() {
-				if (!userLocation) return
-				mapRef.current?.flyTo({
-					center: [userLocation.lng, userLocation.lat],
-					zoom: 14.5,
-					duration: 600,
-				})
+				const map = mapRef.current
+				if (!map || !userLocation) return
+				map.setCenter([userLocation.lng, userLocation.lat], { animate: true, duration: 600 })
+				map.setZoom(14.5, { animate: true, duration: 600, useHeightForAnimation: true })
 			},
 		}),
 		[userLocation, bottomPadding],
 	)
 
 	return <div className={`relative ${className}`} data-no-ptr>
-		<div ref={containerRef} className='size-full' />
+		<div ref={containerRef} className='citygo-map-root size-full' />
 		{failed && <p role='status' className='absolute inset-0 grid place-items-center bg-card-2 p-5 text-center text-sm text-ink-2'>
 			Xarita ochilmadi. Obyektlarni ro‘yxatdan tanlashingiz mumkin.
 		</p>}
@@ -380,7 +404,7 @@ export function CityMap({
 
 const EMPTY_LINES: MapLine[] = []
 
-// MapLibre markers are raw DOM, so the pin cannot mount a lucide React
+// 2GIS markers are raw DOM, so the pin cannot mount a lucide React
 // component. These are the same four lucide shapes the list rows use, written
 // out as markup. Fixed strings — nothing here interpolates content.
 const GLYPHS: Record<MapSymbol, string> = {

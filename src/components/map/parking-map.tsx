@@ -7,9 +7,10 @@ import type { Coordinate } from '@/lib/geo'
 import { TASHKENT_CENTER, UZBEKISTAN_BOUNDS } from '@/lib/geo'
 import type { Parking } from '@/lib/types'
 
-type MapLibreModule = typeof import('maplibre-gl')
-type MapInstance = InstanceType<MapLibreModule['Map']>
-type MarkerInstance = InstanceType<MapLibreModule['Marker']>
+type MapglModule = Awaited<ReturnType<typeof import('@2gis/mapgl').load>>
+type MapInstance = InstanceType<MapglModule['Map']>
+type MarkerInstance = InstanceType<MapglModule['HtmlMarker']>
+type PolylineInstance = InstanceType<MapglModule['Polyline']>
 
 type ParkingMapProps = {
 	parkings: Parking[]
@@ -18,15 +19,16 @@ type ParkingMapProps = {
 	userLocation?: Coordinate
 	locateRevision?: number
 	routeTo?: Coordinate
+	// A real road-following route, when the navigate screen has fetched one
+	// from 2GIS's Routing API. Falls back to the straight-line preview below
+	// while it's loading or if the fetch fails.
+	routePath?: Coordinate[]
 	// City Goo puts a price tag under every parking pin, behind a toggle on the
 	// map controls. The toggle existed here before this prop did, so it lit up
 	// and changed nothing.
 	showPrices?: boolean
 	className?: string
 }
-
-const ROUTE_SOURCE = 'bspace-route-source'
-const ROUTE_LAYER = 'bspace-route-layer'
 
 function isCompactGroup(parkings: Parking[]) {
 	if (parkings.length < 2) return false
@@ -40,6 +42,18 @@ function isCompactGroup(parkings: Parking[]) {
 	)
 }
 
+// Min/max reduction over a coordinate list, since 2GIS's LngLatBounds is a
+// plain {southWest, northEast} object with no incremental `.extend()` builder
+// like MapLibre's.
+function boundsOf(points: Coordinate[]) {
+	const lats = points.map(point => point.lat)
+	const lngs = points.map(point => point.lng)
+	return {
+		southWest: [Math.min(...lngs), Math.min(...lats)],
+		northEast: [Math.max(...lngs), Math.max(...lats)],
+	}
+}
+
 export function ParkingMap({
 	parkings,
 	onSelect,
@@ -47,14 +61,17 @@ export function ParkingMap({
 	userLocation,
 	locateRevision = 0,
 	routeTo,
+	routePath,
 	showPrices = false,
 	className = 'h-[46vh]',
 }: ParkingMapProps) {
 	const containerRef = useRef<HTMLDivElement>(null)
 	const mapRef = useRef<MapInstance | null>(null)
-	const maplibreRef = useRef<MapLibreModule | null>(null)
+	const mapglRef = useRef<MapglModule | null>(null)
 	const parkingMarkersRef = useRef<MarkerInstance[]>([])
 	const userMarkerRef = useRef<MarkerInstance | null>(null)
+	const userDotElRef = useRef<HTMLDivElement | null>(null)
+	const routeRef = useRef<PolylineInstance | null>(null)
 	const onSelectRef = useRef(onSelect)
 	const [mapReady, setMapReady] = useState(false)
 
@@ -71,63 +88,35 @@ export function ParkingMap({
 		let resizeObserver: ResizeObserver | undefined
 
 		void (async () => {
-			const maplibregl = await import('maplibre-gl')
+			const { load } = await import('@2gis/mapgl')
+			const mapgl = await load()
 
 			if (disposed || !containerRef.current) return
 
 			const container = containerRef.current
-			maplibreRef.current = maplibregl
+			mapglRef.current = mapgl
 
-			const map = new maplibregl.Map({
-				container,
-				style: {
-					version: 8,
-					sources: {
-						osm: {
-							type: 'raster',
-							tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
-							tileSize: 256,
-							attribution: '© OpenStreetMap contributors',
-						},
-					},
-					layers: [
-						{
-							id: 'osm-base-map',
-							type: 'raster',
-							source: 'osm',
-						},
-					],
-				},
+			const map = new mapgl.Map(container, {
 				center: [TASHKENT_CENTER.lng, TASHKENT_CENTER.lat],
 				zoom: 11.2,
 				minZoom: 5,
 				maxZoom: 18,
-				maxBounds: [
-					[UZBEKISTAN_BOUNDS.west, UZBEKISTAN_BOUNDS.south],
-					[UZBEKISTAN_BOUNDS.east, UZBEKISTAN_BOUNDS.north],
-				],
-				// attributionControl: true,
+				maxBounds: {
+					southWest: [UZBEKISTAN_BOUNDS.west, UZBEKISTAN_BOUNDS.south],
+					northEast: [UZBEKISTAN_BOUNDS.east, UZBEKISTAN_BOUNDS.north],
+				},
+				key: process.env.NEXT_PUBLIC_MAPGL_API_KEY,
 			})
 
 			mapRef.current = map
 
-			map.addControl(
-				new maplibregl.NavigationControl({
-					showCompass: false,
-				}),
-				'top-right',
-			)
-
-			// DOM markers do not depend on raster tiles finishing their network load,
-			// so mark the instance ready immediately after construction.
+			// DOM markers do not depend on any tile/network load, so mark the
+			// instance ready immediately after construction.
 			setMapReady(true)
-
-			map.once('load', () => {
-				if (!disposed) map.resize()
-			})
+			map.invalidateSize()
 
 			if (typeof ResizeObserver !== 'undefined') {
-				resizeObserver = new ResizeObserver(() => map.resize())
+				resizeObserver = new ResizeObserver(() => map.invalidateSize())
 				resizeObserver.observe(container)
 			}
 		})()
@@ -136,29 +125,33 @@ export function ParkingMap({
 			disposed = true
 			resizeObserver?.disconnect()
 
-			parkingMarkersRef.current.forEach(marker => marker.remove())
+			parkingMarkersRef.current.forEach(marker => marker.destroy())
 			parkingMarkersRef.current = []
 
-			userMarkerRef.current?.remove()
+			userMarkerRef.current?.destroy()
 			userMarkerRef.current = null
+			userDotElRef.current = null
 
-			mapRef.current?.remove()
+			routeRef.current?.destroy()
+			routeRef.current = null
+
+			mapRef.current?.destroy()
 			mapRef.current = null
-			maplibreRef.current = null
+			mapglRef.current = null
 		}
 	}, [])
 
-	// Parking markers. IMPORTANT: MapLibre owns the transform of the OUTER
+	// Parking markers. IMPORTANT: 2GIS owns the transform of the OUTER
 	// element. Never put a CSS transition on that outer transform or markers
 	// will visibly lag behind the map while panning/zooming. Visual focus is
 	// applied only with inner box-shadow, so the geographic anchor stays fixed.
 	useEffect(() => {
 		const map = mapRef.current
-		const maplibregl = maplibreRef.current
+		const mapgl = mapglRef.current
 
-		if (!map || !maplibregl || !mapReady) return
+		if (!map || !mapgl || !mapReady) return
 
-		parkingMarkersRef.current.forEach(marker => marker.remove())
+		parkingMarkersRef.current.forEach(marker => marker.destroy())
 		parkingMarkersRef.current = []
 
 		const nextMarkers: MarkerInstance[] = []
@@ -266,13 +259,13 @@ export function ParkingMap({
 				onSelectRef.current?.(parking.id)
 			})
 
-			const marker = new maplibregl.Marker({
-				element: outer,
-				anchor: 'bottom',
-				offset: [0, -6],
+			const marker = new mapgl.HtmlMarker(map, {
+				coordinates: [parking.lng, parking.lat],
+				html: outer,
+				// The tip should land on the tail's pointed tip, which extends
+				// below the 56px-tall box — nudge visually if it looks off.
+				anchor: [24, 62],
 			})
-				.setLngLat([parking.lng, parking.lat])
-				.addTo(map)
 
 			nextMarkers.push(marker)
 		}
@@ -280,7 +273,7 @@ export function ParkingMap({
 		parkingMarkersRef.current = nextMarkers
 
 		return () => {
-			nextMarkers.forEach(marker => marker.remove())
+			nextMarkers.forEach(marker => marker.destroy())
 			if (parkingMarkersRef.current === nextMarkers) {
 				parkingMarkersRef.current = []
 			}
@@ -292,39 +285,31 @@ export function ParkingMap({
 	// makes nearby Tashkent results tiny and hard to use.
 	useEffect(() => {
 		const map = mapRef.current
-		const maplibregl = maplibreRef.current
 
-		if (!map || !maplibregl || !mapReady || selectedParkingId || routeTo) return
+		if (!map || !mapReady || selectedParkingId || routeTo) return
 
 		if (parkings.length === 0) return
 
 		if (parkings.length === 1) {
 			const parking = parkings[0]
-			map.easeTo({
-				center: [parking.lng, parking.lat],
-				zoom: 14.5,
-				duration: 500,
-			})
+			map.setCenter([parking.lng, parking.lat], { animate: true, duration: 500 })
+			map.setZoom(14.5, { animate: true, duration: 500 })
 			return
 		}
 
 		if (isCompactGroup(parkings)) {
-			const bounds = new maplibregl.LngLatBounds()
-			parkings.forEach(parking => bounds.extend([parking.lng, parking.lat]))
+			const bounds = boundsOf(parkings)
 			map.fitBounds(bounds, {
-				padding: 54,
+				padding: { top: 54, right: 54, bottom: 54, left: 54 },
 				maxZoom: 14,
-				duration: 550,
+				animation: { duration: 550 },
 			})
 			return
 		}
 
 		const center = userLocation ?? TASHKENT_CENTER
-		map.easeTo({
-			center: [center.lng, center.lat],
-			zoom: 11.2,
-			duration: 450,
-		})
+		map.setCenter([center.lng, center.lat], { animate: true, duration: 450 })
+		map.setZoom(11.2, { animate: true, duration: 450 })
 	}, [parkings, mapReady, selectedParkingId, routeTo, userLocation])
 
 	// Selected parking focus mode.
@@ -335,22 +320,20 @@ export function ParkingMap({
 		const parking = parkings.find(item => item.id === selectedParkingId)
 		if (!parking) return
 
-		map.easeTo({
-			center: [parking.lng, parking.lat],
-			zoom: Math.max(map.getZoom(), 15),
-			duration: 650,
-		})
+		map.setCenter([parking.lng, parking.lat], { animate: true, duration: 650 })
+		map.setZoom(Math.max(map.getZoom(), 15), { animate: true, duration: 650 })
 	}, [selectedParkingId, parkings, mapReady, routeTo])
 
 	// User location dot.
 	useEffect(() => {
 		const map = mapRef.current
-		const maplibregl = maplibreRef.current
+		const mapgl = mapglRef.current
 
-		if (!map || !maplibregl || !mapReady) return
+		if (!map || !mapgl || !mapReady) return
 
-		userMarkerRef.current?.remove()
+		userMarkerRef.current?.destroy()
 		userMarkerRef.current = null
+		userDotElRef.current = null
 
 		if (!userLocation) return
 
@@ -365,109 +348,77 @@ export function ParkingMap({
       background: #0ea5e9;
       box-shadow: 0 0 0 7px rgba(14,165,233,.18), 0 4px 12px rgba(15,23,42,.18);
     `
+		userDotElRef.current = element
 
-		userMarkerRef.current = new maplibregl.Marker({
-			element,
-			anchor: 'center',
+		userMarkerRef.current = new mapgl.HtmlMarker(map, {
+			coordinates: [userLocation.lng, userLocation.lat],
+			html: element,
+			anchor: [9, 9],
 		})
-			.setLngLat([userLocation.lng, userLocation.lat])
-			.addTo(map)
 
 		if (!selectedParkingId && !routeTo) {
-			map.easeTo({
-				center: [userLocation.lng, userLocation.lat],
-				zoom: Math.max(map.getZoom(), 12),
+			map.setCenter([userLocation.lng, userLocation.lat], {
+				animate: true,
 				duration: 500,
 			})
+			map.setZoom(Math.max(map.getZoom(), 12), { animate: true, duration: 500 })
 		}
 
 		return () => {
-			userMarkerRef.current?.remove()
+			userMarkerRef.current?.destroy()
 			userMarkerRef.current = null
+			userDotElRef.current = null
 		}
 	}, [userLocation, selectedParkingId, routeTo, mapReady])
 
 	useEffect(() => {
 		if (!mapReady || !locateRevision || !userLocation) return
-		const element = userMarkerRef.current?.getElement()
+		const element = userDotElRef.current
 		if (!element) return
 		element.classList.remove('is-ping')
 		void element.offsetWidth
 		element.classList.add('is-ping')
 	}, [mapReady, userLocation, locateRevision])
 
-	// Straight-line MVP navigation preview. The real road routing hand-off is
-	// handled by the navigation page's external navigator button.
+	// Route preview: a real road-following route (routePath) when the navigate
+	// screen has fetched one, otherwise a straight-line MVP stand-in between
+	// the user and the target.
 	useEffect(() => {
 		const map = mapRef.current
-		const maplibregl = maplibreRef.current
+		const mapgl = mapglRef.current
 
-		if (!map || !maplibregl || !mapReady) return
+		if (!map || !mapgl || !mapReady) return
 
-		const removeRoute = () => {
-			if (map.getLayer(ROUTE_LAYER)) map.removeLayer(ROUTE_LAYER)
-			if (map.getSource(ROUTE_SOURCE)) map.removeSource(ROUTE_SOURCE)
-		}
+		routeRef.current?.destroy()
+		routeRef.current = null
 
-		if (!userLocation || !routeTo) {
-			if (map.isStyleLoaded()) removeRoute()
-			return
-		}
+		const points: Coordinate[] | undefined =
+			routePath && routePath.length >= 2
+				? routePath
+				: userLocation && routeTo
+					? [userLocation, routeTo]
+					: undefined
 
-		const drawRoute = () => {
-			removeRoute()
+		if (!points) return
 
-			map.addSource(ROUTE_SOURCE, {
-				type: 'geojson',
-				data: {
-					type: 'Feature',
-					properties: {},
-					geometry: {
-						type: 'LineString',
-						coordinates: [
-							[userLocation.lng, userLocation.lat],
-							[routeTo.lng, routeTo.lat],
-						],
-					},
-				},
-			})
+		routeRef.current = new mapgl.Polyline(map, {
+			coordinates: points.map(point => [point.lng, point.lat]),
+			color: '#0f766e',
+			width: 5,
+		})
 
-			map.addLayer({
-				id: ROUTE_LAYER,
-				type: 'line',
-				source: ROUTE_SOURCE,
-				paint: {
-					'line-color': '#0f766e',
-					'line-width': 5,
-					'line-opacity': 0.86,
-				},
-			})
-
-			const bounds = new maplibregl.LngLatBounds()
-			bounds.extend([userLocation.lng, userLocation.lat])
-			bounds.extend([routeTo.lng, routeTo.lat])
-			map.fitBounds(bounds, {
-				padding: 64,
-				maxZoom: 14,
-				duration: 550,
-			})
-		}
-
-		if (map.isStyleLoaded()) {
-			drawRoute()
-		} else {
-			map.once('load', drawRoute)
-		}
-
-		return () => {
-			map.off('load', drawRoute)
-		}
-	}, [userLocation, routeTo, mapReady])
+		const bounds = boundsOf(points)
+		map.fitBounds(bounds, {
+			padding: { top: 64, right: 64, bottom: 64, left: 64 },
+			maxZoom: 14,
+			animation: { duration: 550 },
+		})
+	}, [userLocation, routeTo, routePath, mapReady])
 
 	return (
 		<div
 			ref={containerRef}
-			className={`relative overflow-hidden rounded-[2rem] bg-card-2 ${className}`}
+			className={`citygo-map-root relative overflow-hidden rounded-[2rem] bg-card-2 ${className}`}
 		/>
 	)
 }

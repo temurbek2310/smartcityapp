@@ -31,8 +31,8 @@ export type MapObject = {
 	lng: number
 	distanceKm: number
 	icon: LucideIcon
-	// Hex, not a class: it is written straight onto a DOM marker MapLibre owns,
-	// which never sees Tailwind's stylesheet.
+	// Hex, not a class: it is written straight onto a DOM marker the map
+	// engine owns, which never sees Tailwind's stylesheet.
 	color: string
 	symbol?: MapSymbol
 	// Where "Ochish" goes.
