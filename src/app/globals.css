@@ -76,8 +76,7 @@ body {
 }
 button, a, input, select { -webkit-tap-highlight-color: transparent; }
 button, a { touch-action: manipulation; }
-.maplibregl-map { font-family: var(--font-sans); }
-.maplibregl-ctrl-bottom-left, .maplibregl-ctrl-bottom-right { font-size: 9px; }
+.citygo-map-root { font-family: var(--font-sans); }
 
 @keyframes slide-up {
   from { opacity: 0; transform: translateY(8px); }

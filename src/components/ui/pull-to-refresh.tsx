@@ -67,14 +67,14 @@ export function PullToRefresh({ children }: { children: ReactNode }) {
 		function onTouchStart(event: TouchEvent) {
 			// Only from the very top, and never when the gesture began inside
 			// something that owns horizontal or map panning of its own —
-			// MapLibre's canvas and the drag-scrolling rails both do.
+			// The map's canvas and the drag-scrolling rails both do.
 			if (window.scrollY > 0) return
 			// Not every touchstart carries an Element target, and a throw in a
 			// listener would silently disarm the gesture rather than fail loudly.
 			const target = event.target
 			if (
 				target instanceof Element &&
-				target.closest('.maplibregl-map, [data-no-ptr]')
+				target.closest('.citygo-map-root, [data-no-ptr]')
 			)
 				return
 			start.current = event.touches[0]?.clientY ?? null

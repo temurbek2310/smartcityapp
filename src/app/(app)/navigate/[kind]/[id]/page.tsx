@@ -8,7 +8,7 @@ import {
 	QrCode,
 } from 'lucide-react'
 import { notFound, useParams, useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import { ParkingMap } from '@/components/map/parking-map'
 import { AppBar } from '@/components/ui/app-bar'
@@ -19,8 +19,16 @@ import { useApp } from '@/context/app-context'
 import { getParking } from '@/data/parkings'
 import { cn } from '@/lib/cn'
 import { formatDistance, formatUZS } from '@/lib/format'
+import type { Coordinate } from '@/lib/geo'
 import { distanceKm } from '@/lib/geo'
 import { useUserLocation } from '@/lib/use-user-location'
+
+type RouteState = {
+	status: 'idle' | 'ready' | 'error'
+	distanceMeters?: number
+	durationSeconds?: number
+	coordinates?: Coordinate[]
+}
 
 export default function NavigatePage() {
 	const params = useParams<{ kind: string; id: string }>()
@@ -28,6 +36,7 @@ export default function NavigatePage() {
 	const { reservations } = useApp()
 	const { location, status, locate } = useUserLocation()
 	const [locateRevision, setLocateRevision] = useState(0)
+	const [route, setRoute] = useState<RouteState>({ status: 'idle' })
 
 	useEffect(() => {
 		locate()
@@ -43,12 +52,70 @@ export default function NavigatePage() {
 			? getParking(reservation?.parkingId ?? '')
 			: getParking(params.id)
 
+	const locationReady = status === 'ready' || status === 'fallback'
+
+	// Read inside the effect without being a dependency of it: a passive GPS
+	// update should not by itself re-fetch the route, only the first fix and
+	// an explicit GPS-refresh tap (locateRevision) should.
+	const locationRef = useRef(location)
+	useEffect(() => {
+		locationRef.current = location
+	}, [location])
+
+	// Fetch a real road-following route once GPS is available, and again
+	// whenever the user taps the GPS-refresh button.
+	useEffect(() => {
+		if (!parking || !locationReady) return
+
+		let cancelled = false
+
+		fetch('/api/directions', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				origin: locationRef.current,
+				destination: { lat: parking.lat, lng: parking.lng },
+			}),
+		})
+			.then(response => (response.ok ? response.json() : Promise.reject()))
+			.then(
+				(data: {
+					distanceMeters: number
+					durationSeconds: number
+					coordinates: Coordinate[]
+				}) => {
+					if (cancelled) return
+					setRoute({
+						status: 'ready',
+						distanceMeters: data.distanceMeters,
+						durationSeconds: data.durationSeconds,
+						coordinates: data.coordinates,
+					})
+				},
+			)
+			.catch(() => {
+				if (!cancelled) setRoute({ status: 'error' })
+			})
+
+		return () => {
+			cancelled = true
+		}
+	}, [parking, locationReady, locateRevision])
+
 	if (!parking || !['parking', 'reservation'].includes(params.kind)) notFound()
 
-	const distance = distanceKm(location, parking)
-	// A city-speed estimate, not a routed one — the note below says so rather
-	// than letting the number imply a road graph we do not have.
-	const eta = Math.max(3, Math.round((distance / 30) * 60))
+	const straightLineDistance = distanceKm(location, parking)
+	// A city-speed estimate, not a routed one — used until (or unless) a real
+	// route comes back from the routing API.
+	const straightLineEta = Math.max(3, Math.round((straightLineDistance / 30) * 60))
+
+	const hasRealRoute = route.status === 'ready' && route.coordinates
+	const distanceLabel = hasRealRoute
+		? formatDistance(route.distanceMeters! / 1000)
+		: formatDistance(straightLineDistance)
+	const etaLabel = hasRealRoute
+		? `~${Math.max(1, Math.round(route.durationSeconds! / 60))} daq`
+		: `~${straightLineEta} daq`
 
 	return (
 		<div className='-mx-5 -mt-6 min-h-[calc(100dvh-var(--spacing-nav))] bg-canvas pb-28 pt-5'>
@@ -62,11 +129,10 @@ export default function NavigatePage() {
 				<Card variant='bare'>
 					<ParkingMap
 						parkings={[parking]}
-						userLocation={
-							status === 'ready' || status === 'fallback' ? location : undefined
-						}
+						userLocation={locationReady ? location : undefined}
 						locateRevision={locateRevision}
 						routeTo={{ lat: parking.lat, lng: parking.lng }}
+						routePath={hasRealRoute ? route.coordinates : undefined}
 						className='h-[46vh]'
 					/>
 				</Card>
@@ -75,12 +141,12 @@ export default function NavigatePage() {
 					<Card className='text-center'>
 						<p className='text-[11px] text-ink-3'>Masofa</p>
 						<p className='mt-1 text-[16px] font-black text-ink'>
-							{formatDistance(distance)}
+							{distanceLabel}
 						</p>
 					</Card>
 					<Card className='text-center'>
 						<p className='text-[11px] text-ink-3'>Taxminiy vaqt</p>
-						<p className='mt-1 text-[16px] font-black text-ink'>~{eta} daq</p>
+						<p className='mt-1 text-[16px] font-black text-ink'>{etaLabel}</p>
 					</Card>
 					<button
 						type='button'
@@ -127,9 +193,9 @@ export default function NavigatePage() {
 
 				<Card variant='flat'>
 					<p className='text-[11.5px] leading-5 text-ink-2'>
-						Xaritadagi chiziq yo‘l bo‘ylab qurilgan marshrut emas — bu
-						yo‘nalish ko‘rinishi. Haqiqiy navigatsiya uchun tashqi navigatorni
-						oching.
+						{hasRealRoute
+							? 'Marshrut 2GIS orqali hisoblangan — bu jonli navigatsiya emas. To‘liq navigatsiya uchun tashqi navigatorni oching.'
+							: 'Xaritadagi chiziq yo‘l bo‘ylab qurilgan marshrut emas — bu yo‘nalish ko‘rinishi. Haqiqiy navigatsiya uchun tashqi navigatorni oching.'}
 					</p>
 				</Card>
 
