@@ -86,8 +86,8 @@ type RouteMapProps = {
 
 // Reproduces City Goo's map card for the Transport screen using B SPACE's
 // real 2GIS-powered map (see components/map/city-map.tsx) — no second map
-// provider. Zoom controls come from 2GIS's own default top-right zoomControl,
-// already on for every map on this screen.
+// provider. CityMap disables 2GIS's default zoom buttons consistently with
+// the other maps in the app.
 export function RouteMap({
 	origin,
 	locating,
