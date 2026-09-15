@@ -98,6 +98,7 @@ export function CityMap({
 			const map = new mapgl.Map(container, {
 				center: [TASHKENT_CENTER.lng, TASHKENT_CENTER.lat],
 				zoom: 12.2,
+				zoomControl: false,
 				minZoom: 5,
 				maxZoom: 18,
 				maxBounds: {

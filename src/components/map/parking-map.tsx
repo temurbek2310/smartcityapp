@@ -99,6 +99,7 @@ export function ParkingMap({
 			const map = new mapgl.Map(container, {
 				center: [TASHKENT_CENTER.lng, TASHKENT_CENTER.lat],
 				zoom: 11.2,
+				zoomControl: false,
 				minZoom: 5,
 				maxZoom: 18,
 				maxBounds: {
