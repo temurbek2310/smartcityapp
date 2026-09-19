@@ -49,6 +49,19 @@ export default function SessionPage() {
 		}
 	}, [])
 
+	// «Chiqish» on the Bron row and on the parking banner opens the exit sheet
+	// directly, so ending a session is one tap from wherever it is shown.
+	// Read off location rather than through useSearchParams(), the way
+	// AuthGate does, so this page keeps its own rendering mode.
+	useEffect(() => {
+		const timer = window.setTimeout(() => {
+			if (new URLSearchParams(window.location.search).get('exit') === '1') {
+				setShowExitQr(true)
+			}
+		}, 0)
+		return () => window.clearTimeout(timer)
+	}, [])
+
 	if (!reservation || !parking) notFound()
 
 	const frame = (children: React.ReactNode) => (

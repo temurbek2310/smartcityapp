@@ -129,8 +129,18 @@ export function isBaySelectable(state: BayState) {
 }
 
 // The first bay a booking should default to, so "Reserve" never opens with
-// nothing chosen.
-export function firstFreeBay(parking: Parking, level: number) {
+// nothing chosen. `exclude` keeps it off bays the customer already holds
+// here: the floor plan draws those as «yours» and refuses to select them, so
+// defaulting to one opened the sheet on a bay its own confirm button would
+// not accept.
+export function firstFreeBay(
+	parking: Parking,
+	level: number,
+	exclude: readonly string[] = [],
+) {
 	const { bays } = bayMap(parking, level)
-	return bays.find(bay => isBaySelectable(bay.state))?.id ?? null
+	return (
+		bays.find(bay => isBaySelectable(bay.state) && !exclude.includes(bay.id))
+			?.id ?? null
+	)
 }

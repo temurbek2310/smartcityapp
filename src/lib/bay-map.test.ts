@@ -79,4 +79,20 @@ describe('firstFreeBay', () => {
 	it('returns null when the level has nothing to pick', () => {
 		expect(firstFreeBay(nextMall, 1)).toBeNull()
 	})
+
+	// The floor plan draws a bay the customer already holds as «yours» and
+	// refuses to select it, so an auto-pick that lands on one opens the sheet
+	// on a bay its own confirm button rejects.
+	it('skips a bay the customer already holds here', () => {
+		const first = firstFreeBay(magicCity, 1)!
+		const next = firstFreeBay(magicCity, 1, [first])
+		expect(next).not.toBe(first)
+		expect(next).toMatch(/^[A-H]-\d\d$/)
+	})
+
+	it('returns null when every pickable bay is excluded', () => {
+		const { bays } = bayMap(magicCity, 1)
+		const all = bays.filter(bay => isBaySelectable(bay.state)).map(bay => bay.id)
+		expect(firstFreeBay(magicCity, 1, all)).toBeNull()
+	})
 })

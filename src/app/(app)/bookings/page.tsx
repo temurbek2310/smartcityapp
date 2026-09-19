@@ -4,6 +4,7 @@ import {
 	CalendarDays,
 	ChevronRight,
 	CircleParking,
+	LogOut,
 	QrCode,
 	Repeat,
 	Share2,
@@ -17,6 +18,7 @@ import { useRouter } from 'next/navigation'
 import { useMemo, useState } from 'react'
 
 import { ServiceBookingSheet } from '@/components/booking/service-booking-sheet'
+import { TableBookingFlow } from '@/components/booking/table-booking-flow'
 import { ParkingBookingSheet } from '@/components/parking/parking-booking-sheet'
 import { Badge, type BadgeTone } from '@/components/ui/badge'
 import { BottomSheet } from '@/components/ui/bottom-sheet'
@@ -78,6 +80,8 @@ export default function BookingsPage() {
 		refId: string
 	} | null>(null)
 	const [parkingSheet, setParkingSheet] = useState<string | null>(null)
+	// The generic «Stolik» shortcut, which has to ask which restaurant first.
+	const [tableFlowOpen, setTableFlowOpen] = useState(false)
 
 	const rows = useMemo(() => bookingRows(app), [app])
 	const open = rows.filter(isOpen)
@@ -85,6 +89,14 @@ export default function BookingsPage() {
 	const list = tab === 'open' ? open : history
 
 	function cancel(row: BookingRow) {
+		// The row knows whether the store will actually honour this. Without
+		// the guard an active parking session reported success and carried on
+		// running, because cancelReservation() ignores anything but 'reserved'.
+		if (!row.cancellable) {
+			setCancelRow(null)
+			toast.show('Bu bronni bekor qilib bo‘lmaydi')
+			return
+		}
 		if (row.kind === 'parking') cancelReservation(row.id)
 		else if (row.kind === 'queue') cancelQueueTicket(row.id)
 		else cancelServiceBooking(row.id)
@@ -106,10 +118,12 @@ export default function BookingsPage() {
 	function startNew(kind: BookingKind) {
 		if (kind === 'parking') return router.push('/parking')
 		if (kind === 'queue') return router.push('/queues')
+		// Same generic shortcut as Home's services rail, same flow: ask which
+		// restaurant instead of picking one on the customer's behalf.
+		if (kind === 'table') return setTableFlowOpen(true)
 		// The service sheet needs somewhere to book; Home's place catalog is
 		// where these live, so send the matching demo venue.
-		const refId =
-			kind === 'table' ? 'urban-food' : kind === 'cinema' ? 'cinema-magic' : 'medical-plaza'
+		const refId = kind === 'cinema' ? 'cinema-magic' : 'medical-plaza'
 		setServiceSheet({ kind: kind as ServiceBookingKind, refId })
 	}
 
@@ -213,14 +227,27 @@ export default function BookingsPage() {
 										>
 											<Share2 className='size-3.5' /> Ulashish
 										</Button>
-										<Button
-											size='sm'
-											variant='outline'
-											danger
-											onClick={() => setCancelRow(row)}
-										>
-											<X className='size-3.5' /> Bekor
-										</Button>
+										{/* A booking that has already started is ended, not
+										    cancelled. Parking is the only kind with that
+										    stage, and its exit lives on the session screen. */}
+										{row.cancellable ? (
+											<Button
+												size='sm'
+												variant='outline'
+												danger
+												onClick={() => setCancelRow(row)}
+											>
+												<X className='size-3.5' /> Bekor
+											</Button>
+										) : (
+											<Button
+												size='sm'
+												variant='outline'
+												onClick={() => router.push(row.exitHref ?? row.href ?? '/home')}
+											>
+												<LogOut className='size-3.5' /> Chiqish
+											</Button>
+										)}
 									</div>
 								) : (
 									row.status !== 'cancelled' && (
@@ -353,6 +380,15 @@ export default function BookingsPage() {
 					kind={serviceSheet.kind}
 					refId={serviceSheet.refId}
 					onClose={() => setServiceSheet(null)}
+					onNotify={toast.show}
+				/>
+			)}
+
+			{/* Mounted only while open, so an abandoned choice never carries
+			    over into the next attempt. */}
+			{tableFlowOpen && (
+				<TableBookingFlow
+					onClose={() => setTableFlowOpen(false)}
 					onNotify={toast.show}
 				/>
 			)}

@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
-import { calculateFinalTotal, reservationCode } from './reservation'
+import {
+	calculateFinalTotal,
+	findOverlappingReservation,
+	intervalsOverlap,
+	isLiveReservation,
+	reservationCode,
+} from './reservation'
 import type { Reservation } from '@/lib/types'
 
 function makeReservation(patch: Partial<Reservation> = {}): Reservation {
@@ -67,5 +73,134 @@ describe('calculateFinalTotal', () => {
 describe('reservationCode', () => {
 	it('namespaces the QR payload so a scanner can tell what it is', () => {
 		expect(reservationCode('booking-1')).toBe('BSPACE:booking-1')
+	})
+})
+
+// 10:00–12:00 on the day the other fixtures use.
+const TEN = '2026-09-11T10:00:00.000Z'
+const TWELVE = '2026-09-11T12:00:00.000Z'
+
+describe('intervalsOverlap', () => {
+	it.each([
+		['partial overlap', '2026-09-11T11:00:00.000Z', '2026-09-11T13:00:00.000Z', true],
+		['complete containment', '2026-09-11T10:30:00.000Z', '2026-09-11T11:30:00.000Z', true],
+		['containing the existing one', '2026-09-11T09:00:00.000Z', '2026-09-11T13:00:00.000Z', true],
+		['the exact same interval', TEN, TWELVE, true],
+		['touching at the end', TWELVE, '2026-09-11T14:00:00.000Z', false],
+		['touching at the start', '2026-09-11T08:00:00.000Z', TEN, false],
+		['entirely before', '2026-09-11T07:00:00.000Z', '2026-09-11T09:00:00.000Z', false],
+		['entirely after', '2026-09-11T13:00:00.000Z', '2026-09-11T15:00:00.000Z', false],
+	])('reports %s as %s', (_label, start, end, expected) => {
+		expect(intervalsOverlap(TEN, TWELVE, start, end)).toBe(expected)
+	})
+
+	it('accepts Dates and epoch millis as well as ISO strings', () => {
+		expect(
+			intervalsOverlap(
+				new Date(TEN),
+				Date.parse(TWELVE),
+				'2026-09-11T11:00:00.000Z',
+				new Date('2026-09-11T13:00:00.000Z'),
+			),
+		).toBe(true)
+	})
+
+	it('never claims a clash for an unparsable or inverted window', () => {
+		expect(intervalsOverlap(TEN, TWELVE, 'not-a-date', TWELVE)).toBe(false)
+		expect(intervalsOverlap(TEN, TWELVE, TWELVE, TEN)).toBe(false)
+	})
+})
+
+describe('isLiveReservation', () => {
+	it('counts a booking the customer still holds, and nothing else', () => {
+		expect(isLiveReservation(makeReservation({ status: 'reserved' }))).toBe(true)
+		expect(isLiveReservation(makeReservation({ status: 'active' }))).toBe(true)
+		expect(isLiveReservation(makeReservation({ status: 'completed' }))).toBe(false)
+		expect(isLiveReservation(makeReservation({ status: 'cancelled' }))).toBe(false)
+	})
+})
+
+// One driver, one car. The rule is about the hours held, not about how many
+// bookings exist or which lot, level or bay each one names.
+describe('findOverlappingReservation', () => {
+	const existing = makeReservation({
+		id: 'held',
+		status: 'reserved',
+		startAt: TEN,
+		endAt: TWELVE,
+	})
+	const eleventoOne = {
+		startAt: '2026-09-11T11:00:00.000Z',
+		endAt: '2026-09-11T13:00:00.000Z',
+	}
+
+	it('blocks an overlap in a different lot, level and bay', () => {
+		// Bay and level live outside the Reservation entirely, so a clash can
+		// only ever be decided on time — which is the point.
+		const other = { ...existing, parkingId: 'tashkent-city' }
+		expect(findOverlappingReservation([other], eleventoOne)?.id).toBe('held')
+	})
+
+	it('allows a later booking that only touches the previous one', () => {
+		expect(
+			findOverlappingReservation([existing], {
+				startAt: TWELVE,
+				endAt: '2026-09-11T14:00:00.000Z',
+			}),
+		).toBeUndefined()
+	})
+
+	it('allows an unrelated window later the same day', () => {
+		expect(
+			findOverlappingReservation([existing], {
+				startAt: '2026-09-11T15:00:00.000Z',
+				endAt: '2026-09-11T16:00:00.000Z',
+			}),
+		).toBeUndefined()
+	})
+
+	it('allows the same hours on another day', () => {
+		expect(
+			findOverlappingReservation([existing], {
+				startAt: '2026-09-12T11:00:00.000Z',
+				endAt: '2026-09-12T13:00:00.000Z',
+			}),
+		).toBeUndefined()
+	})
+
+	it.each([['cancelled' as const], ['completed' as const]])(
+		'ignores a %s booking over the same hours',
+		status => {
+			expect(
+				findOverlappingReservation([{ ...existing, status }], eleventoOne),
+			).toBeUndefined()
+		},
+	)
+
+	it('blocks while a session is active', () => {
+		const running = { ...existing, status: 'active' as const }
+		expect(findOverlappingReservation([running], eleventoOne)?.id).toBe('held')
+	})
+
+	it('skips the booking being edited when asked to', () => {
+		expect(
+			findOverlappingReservation([existing], eleventoOne, { ignoreId: 'held' }),
+		).toBeUndefined()
+	})
+
+	it('finds the clash among bookings that do not overlap', () => {
+		const earlier = makeReservation({
+			id: 'earlier',
+			status: 'reserved',
+			startAt: '2026-09-11T06:00:00.000Z',
+			endAt: '2026-09-11T07:00:00.000Z',
+		})
+		expect(
+			findOverlappingReservation([earlier, existing], eleventoOne)?.id,
+		).toBe('held')
+	})
+
+	it('returns nothing when the customer holds no bookings', () => {
+		expect(findOverlappingReservation([], eleventoOne)).toBeUndefined()
 	})
 })

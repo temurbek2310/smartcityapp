@@ -131,6 +131,53 @@ describe('bookingRows', () => {
 		expect(row.repeat).toEqual({ kind: 'table', refId: 'urban-food' })
 	})
 
+	// The store refuses to cancel anything but a not-yet-entered booking, so a
+	// row that says otherwise produces a «Bron bekor qilindi» for a session
+	// that keeps running. These mappings are what stops the screen offering it.
+	it('only lets a parking booking be cancelled before the driver enters', () => {
+		const [reserved] = bookingRows({ ...empty, reservations: [reservation()] })
+		expect(reserved.cancellable).toBe(true)
+		expect(reserved.exitHref).toBeUndefined()
+
+		const [active] = bookingRows({
+			...empty,
+			reservations: [reservation({ status: 'active' })],
+		})
+		expect(active.cancellable).toBe(false)
+		// An entered session is ended by leaving the lot, not by cancelling.
+		expect(active.exitHref).toBe('/session/r1?exit=1')
+	})
+
+	it.each([
+		['completed' as const],
+		['cancelled' as const],
+	])('offers no cancel and no exit on a %s booking', status => {
+		const [row] = bookingRows({ ...empty, reservations: [reservation({ status })] })
+		expect(row.cancellable).toBe(false)
+		expect(row.exitHref).toBeUndefined()
+	})
+
+	it('keeps queue tickets and table bookings cancellable while they are live', () => {
+		const [waiting] = bookingRows({ ...empty, queueTickets: [ticket()] })
+		const [called] = bookingRows({
+			...empty,
+			queueTickets: [ticket({ status: 'called', position: 0 })],
+		})
+		const [served] = bookingRows({
+			...empty,
+			queueTickets: [ticket({ status: 'served' })],
+		})
+		expect([waiting.cancellable, called.cancellable, served.cancellable])
+			.toEqual([true, true, false])
+
+		const [table] = bookingRows({ ...empty, serviceBookings: [service()] })
+		const [gone] = bookingRows({
+			...empty,
+			serviceBookings: [service({ status: 'cancelled' })],
+		})
+		expect([table.cancellable, gone.cancellable]).toEqual([true, false])
+	})
+
 	it('returns nothing for an empty registry', () => {
 		expect(bookingRows(empty)).toEqual([])
 	})

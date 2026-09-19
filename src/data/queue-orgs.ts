@@ -47,7 +47,10 @@ export const QUEUE_ORGS: QueueOrg[] = [
 		services: [
 			{ id: 'table', title: 'Stolda buyurtma', avgWaitMinutes: 35, prefix: 'A', windows: 2 },
 			{ id: 'takeaway', title: 'O‘zim bilan', avgWaitMinutes: 12, prefix: 'B', windows: 1 },
-			{ id: 'reserve', title: 'Stol bron qilish', avgWaitMinutes: 5, prefix: 'C', windows: 1 },
+			// Taking a number to wait for a free table. It used to be called
+			// «Stol bron qilish», which is the name of the real table
+			// reservation — picking it handed you a queue ticket instead.
+			{ id: 'reserve', title: 'Stol navbati', avgWaitMinutes: 5, prefix: 'C', windows: 1 },
 		],
 		tip: '40–50 daqiqadan keyin kelganingiz ma’qul — navbat qariyb 40% qisqaradi.',
 	},
@@ -276,6 +279,14 @@ export const QUEUE_ORGS: QueueOrg[] = [
 
 export function getQueueOrg(id: string) {
 	return QUEUE_ORGS.find(org => org.id === id)
+}
+
+// The queue desk of a venue in the place catalog, when it has one. QueueOrg
+// already carried placeId for exactly this and nothing read it, so a café
+// with a live queue could be opened from Home without the sheet knowing the
+// queue existed. Only the four venues that name a place resolve here.
+export function getQueueOrgByPlace(placeId: string) {
+	return QUEUE_ORGS.find(org => org.placeId === placeId)
 }
 
 // How loaded the place is right now, as a percentage. City Goo derives this

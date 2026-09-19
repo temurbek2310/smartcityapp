@@ -31,6 +31,16 @@ export type BookingRow = {
 	amountLabel?: string
 	// What a "Takrorlash" from history should reopen.
 	repeat?: { kind: BookingKind; refId: string }
+	// Whether cancelling this row actually cancels anything. These mirror the
+	// guards the store itself applies, so a screen can no longer offer a
+	// «Bekor» that calls a mutation the reducer will refuse — which is how an
+	// active parking session came to report "Bron bekor qilindi" while its
+	// timer kept running.
+	cancellable: boolean
+	// How an open booking that cannot be cancelled is ended instead. A parking
+	// session the driver has already entered is closed by leaving the lot, not
+	// by cancelling a reservation that has already been honoured.
+	exitHref?: string
 }
 
 const STATUS_LABELS: Record<BookingRowStatus, string> = {
@@ -73,6 +83,13 @@ function fromReservation(reservation: Reservation): BookingRow {
 					: `/reservation/${reservation.id}`,
 		amountLabel: formatUZS(reservation.finalTotal ?? reservation.estimatedTotal),
 		repeat: { kind: 'parking', refId: reservation.parkingId },
+		// app-context's cancelReservation() only mutates a 'reserved' booking.
+		cancellable: reservation.status === 'reserved',
+		// Already inside: the way out is the exit QR on the session screen.
+		exitHref:
+			reservation.status === 'active'
+				? `/session/${reservation.id}?exit=1`
+				: undefined,
 	})
 }
 
@@ -104,9 +121,13 @@ function fromQueueTicket(ticket: QueueTicket): BookingRow {
 					? `taxminan ${ticket.etaMinutes} daqiqa`
 					: formatDateTime(ticket.closedAt ?? ticket.createdAt),
 		status,
-		href: '/queues',
+		// The organisation, not the bare screen: /queues opens on QUEUE_ORGS[0]
+		// otherwise, so a ticket taken anywhere else led to someone else's queue.
+		href: `/queues?org=${ticket.orgId}`,
 		qrValue: `BSPACE:QUEUE:${ticket.id}`,
 		repeat: { kind: 'queue', refId: ticket.orgId },
+		// closeQueueTicket() accepts both of the live statuses.
+		cancellable: ticket.status === 'waiting' || ticket.status === 'called',
 	})
 }
 
@@ -126,6 +147,8 @@ function fromServiceBooking(booking: ServiceBooking): BookingRow {
 					: 'cancelled',
 		qrValue: `BSPACE:${booking.kind.toUpperCase()}:${booking.code}`,
 		repeat: { kind: booking.kind, refId: booking.refId },
+		// cancelServiceBooking() only mutates an 'active' booking.
+		cancellable: booking.status === 'active',
 	})
 }
 

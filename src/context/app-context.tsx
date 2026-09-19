@@ -324,19 +324,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [state.user],
   );
 
+  // Only a booking the driver has not entered yet can be cancelled. Once the
+  // car is inside, the session is ended by exiting — exitReservation() meters
+  // and closes it. The notification used to be pushed whether or not the map
+  // changed anything, so cancelling an active session announced a cancellation
+  // that never happened.
   const cancelReservation = useCallback((reservationId: string) => {
-    setState((current) => ({
-      ...current,
-      reservations: current.reservations.map((reservation) =>
-        reservation.id === reservationId && reservation.status === "reserved"
-          ? { ...reservation, status: "cancelled" as const }
-          : reservation,
-      ),
-      notifications: [
-        makeNotification("Bron bekor qilindi", "Parking broni bekor qilindi.", "booking"),
-        ...current.notifications,
-      ],
-    }));
+    setState((current) => {
+      const target = current.reservations.find(
+        (reservation) => reservation.id === reservationId,
+      );
+      if (target?.status !== "reserved") return current;
+
+      return {
+        ...current,
+        reservations: current.reservations.map((reservation) =>
+          reservation.id === reservationId
+            ? { ...reservation, status: "cancelled" as const }
+            : reservation,
+        ),
+        notifications: [
+          makeNotification("Bron bekor qilindi", "Parking broni bekor qilindi.", "booking"),
+          ...current.notifications,
+        ],
+      };
+    });
   }, []);
 
   const enterReservation = useCallback((reservationId: string) => {

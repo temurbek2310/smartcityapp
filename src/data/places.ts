@@ -363,3 +363,13 @@ export const PLACES: Place[] = [
 export function getPlace(id: string) {
 	return PLACES.find(place => place.id === id)
 }
+
+// Venues a table can be booked at, nearest first. The catalog's own
+// category decides — the generic «Stol bron qilish» used to skip the
+// question entirely and book Urban Food whoever the customer meant, and a
+// second hand-written restaurant list would only drift from this one.
+export function tableBookablePlaces() {
+	return PLACES.filter(place => place.category === 'food').sort(
+		(a, b) => a.distanceKm - b.distanceKm,
+	)
+}

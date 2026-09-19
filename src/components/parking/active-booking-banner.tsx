@@ -1,6 +1,6 @@
 'use client'
 
-import { Plus, QrCode, X } from 'lucide-react'
+import { LogOut, Plus, QrCode, X } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 
@@ -91,14 +91,26 @@ export function ActiveBookingBanner({
 					>
 						<Plus className='size-3.5' /> 1 soat
 					</Button>
-					<Button
-						size='sm'
-						variant='outline'
-						danger
-						onClick={() => setSheet('cancel')}
-					>
-						<X className='size-3.5' /> Bekor
-					</Button>
+					{/* Same rule as the Bron list: once the car is inside, the
+					    booking is ended by leaving, not by cancelling it. */}
+					{reservation.status === 'reserved' ? (
+						<Button
+							size='sm'
+							variant='outline'
+							danger
+							onClick={() => setSheet('cancel')}
+						>
+							<X className='size-3.5' /> Bekor
+						</Button>
+					) : (
+						<Button
+							size='sm'
+							variant='outline'
+							onClick={() => router.push(`/session/${reservation.id}?exit=1`)}
+						>
+							<LogOut className='size-3.5' /> Chiqish
+						</Button>
+					)}
 				</div>
 			</Card>
 

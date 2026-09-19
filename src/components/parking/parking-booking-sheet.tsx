@@ -1,8 +1,8 @@
 'use client'
 
-import { CircleParking, Minus, Plus } from 'lucide-react'
+import { CalendarClock, CircleParking, Minus, Plus } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 
 import { BottomSheet } from '@/components/ui/bottom-sheet'
 import { HorizontalRail } from '@/components/ui/horizontal-rail'
@@ -13,9 +13,10 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Chip } from '@/components/ui/chip'
 import { bayMap, firstFreeBay, isBaySelectable } from '@/lib/bay-map'
-import { readBookingMeta, saveBookingMeta } from '@/lib/booking-meta'
+import { saveBookingMeta } from '@/lib/booking-meta'
 import { useBookingMeta } from '@/hooks/use-booking-meta'
 import { formatDayMonth, formatTime, formatUZS } from '@/lib/format'
+import { findOverlappingReservation } from '@/lib/reservation'
 
 // The one parking booking UI in the app. It used to live inline in Home
 // and duplicated an older standalone /reserve/[id] form; both are gone and
@@ -101,6 +102,16 @@ function bookingStartDate(draft: ParkingBookingDraft) {
 	return start
 }
 
+// The window this draft would occupy, in the same arithmetic
+// createReservation() uses to derive endAt.
+function bookingWindow(draft: ParkingBookingDraft) {
+	const startAt = bookingStartDate(draft)
+	return {
+		startAt,
+		endAt: new Date(startAt.getTime() + draft.hours * 3_600_000),
+	}
+}
+
 type ParkingBookingSheetProps = {
 	// The parking to book, or null while the sheet is closed. Every value in
 	// the sheet is read from this parking — nothing is hardcoded.
@@ -137,32 +148,52 @@ function ParkingBookingSheetBody({
 		makeDraft(parkingId, initialBay, initialLevel),
 	)
 	const [bayOpen, setBayOpen] = useState(false)
+	// Guards a double tap on the confirm button. A ref rather than state
+	// because two clicks can land before React re-renders, and only the ref is
+	// already updated by the time the second handler runs.
+	const submittingRef = useRef(false)
+	const [submitting, setSubmitting] = useState(false)
 	const heldReservation = reservations.find(item => item.parkingId === parkingId &&
 		(item.status === 'active' || item.status === 'reserved'))
 	const heldMeta = useBookingMeta(heldReservation?.id)
 	const heldBay = heldMeta?.level === booking.level ? heldMeta.bay : null
 
+	// The booking the customer already holds across the window this draft
+	// asks for. Computed as the draft changes so the clash is on screen
+	// before they reach for the confirm button; confirmParkingBooking()
+	// re-checks, because a «Hozir» start keeps moving.
+	const conflict = useMemo(
+		() => findOverlappingReservation(reservations, bookingWindow(booking)),
+		[reservations, booking],
+	)
+	const conflictParking = conflict
+		? PARKINGS.find(item => item.id === conflict.parkingId)
+		: undefined
+
 	const parking = PARKINGS.find(item => item.id === booking.parkingId)
 	if (!parking) return null
 
+	// Bays this customer holds on the given level, excluded from auto-picks.
+	function heldBaysOn(level: number) {
+		return heldMeta && heldMeta.level === level ? [heldMeta.bay] : []
+	}
+
+	// The bay the booking will actually use. Derived rather than stored,
+	// because the held bay arrives from storage a tick after the draft is
+	// built: the floor plan marks it «yours» and refuses to select it, so a
+	// draft left sitting on one opens the sheet on a bay its own confirm
+	// button rejects.
+	const selectedBay =
+		booking.bay && booking.bay !== heldBay
+			? booking.bay
+			: (firstFreeBay(parking, booking.level, heldBaysOn(booking.level)) ?? '')
+
 	function confirmParkingBooking() {
 		if (!parking) return
+		// Two taps before the sheet unmounts would otherwise book twice.
+		if (submittingRef.current) return
 		if (parking.availableSpaces <= 0) {
 			onNotify('Bu parking hozir to‘la')
-			return
-		}
-		const bay = bayMap(parking, booking.level).bays.find(item => item.id === booking.bay)
-		if (!bay || !isBaySelectable(bay.state)) {
-			onNotify('Bo‘sh joyni tanlang')
-			return
-		}
-		const held = reservations.some(item => {
-			if (item.parkingId !== parking.id || !['active', 'reserved'].includes(item.status)) return false
-			const meta = readBookingMeta(item.id)
-			return meta?.level === booking.level && meta.bay === booking.bay
-		})
-		if (held) {
-			onNotify('Bu joy allaqachon siz uchun bron qilingan. Boshqa joyni tanlang.')
 			return
 		}
 
@@ -173,6 +204,27 @@ function ParkingBookingSheetBody({
 			return
 		}
 
+		// Before anything about bays: if the customer is already parked
+		// somewhere during this window, no choice of bay makes the booking
+		// valid, and telling them to pick another one sends them the wrong way.
+		const clash = findOverlappingReservation(reservations, {
+			startAt: start,
+			endAt: new Date(start.getTime() + booking.hours * 3_600_000),
+		})
+		if (clash) {
+			onNotify('Bu vaqtda sizda boshqa parking broni mavjud')
+			return
+		}
+
+		const bay = bayMap(parking, booking.level).bays.find(item => item.id === selectedBay)
+		if (!bay || !isBaySelectable(bay.state)) {
+			onNotify('Bo‘sh joyni tanlang')
+			return
+		}
+
+		submittingRef.current = true
+		setSubmitting(true)
+
 		try {
 			const reservation = createReservation({
 				parkingId: parking.id,
@@ -182,16 +234,23 @@ function ParkingBookingSheetBody({
 			})
 
 			saveBookingMeta(reservation.id, {
-				bay: booking.bay,
+				bay: selectedBay,
 				level: booking.level,
 				holdMinutes: 15,
 			})
 
 			// A reservation is not a favorite: booking touches the reservation
-			// store only, and lands the user on Bron.
+			// store only. It lands on the booking's own confirmation screen
+			// rather than on the Bron list — that screen already carries the
+			// «Bron tasdiqlandi» badge, the QR, the countdown and the way in,
+			// and its back button goes to Bron. Dropping the user straight into
+			// a list left the booking with no confirmation moment at all.
 			onClose()
-			router.push('/bookings')
+			router.push(`/reservation/${reservation.id}`)
 		} catch {
+			// Nothing was stored, so let the customer try again.
+			submittingRef.current = false
+			setSubmitting(false)
 			onNotify('Bron yaratilmadi. Profilga qayta kirib ko‘ring.')
 		}
 	}
@@ -221,7 +280,12 @@ function ParkingBookingSheetBody({
 										setBooking(current => ({
 											...current,
 											level: index + 1,
-											bay: firstFreeBay(parking!, index + 1) ?? '',
+											bay:
+												firstFreeBay(
+													parking!,
+													index + 1,
+													heldBaysOn(index + 1),
+												) ?? '',
 										}))
 									}
 									className='h-7 px-2.5 text-[11.5px]'
@@ -236,7 +300,7 @@ function ParkingBookingSheetBody({
 						<BayGrid
 							parking={parking}
 							level={booking.level}
-							selectedBay={booking.bay}
+							selectedBay={selectedBay}
 							heldBay={heldBay}
 							onSelect={(bay, state) => {
 								if (!isBaySelectable(state)) return onNotify('Bu joy band')
@@ -250,10 +314,10 @@ function ParkingBookingSheetBody({
 					variant='primary'
 					block
 					className='mt-4'
-					disabled={!booking.bay || booking.bay === heldBay}
+					disabled={!selectedBay}
 					onClick={() => setBayOpen(false)}
 				>
-					{booking.bay ? `${booking.bay} joyini tanlash` : 'Bu darajada bo‘sh joy yo‘q'}
+					{selectedBay ? `${selectedBay} joyini tanlash` : 'Bu darajada bo‘sh joy yo‘q'}
 				</Button>
 			</BottomSheet>
 		)
@@ -393,7 +457,7 @@ function ParkingBookingSheetBody({
 				<div className='mt-3 flex items-center gap-3'>
 					<div className='w-22 shrink-0 rounded-2xl bg-brand-50 px-2 py-3 text-center'>
 						<p className='font-mono text-xl font-black text-brand'>
-							{booking.bay || '—'}
+							{selectedBay || '—'}
 						</p>
 						<p className='mt-1 text-[10px] text-ink-3'>
 							{booking.level}-daraja
@@ -430,12 +494,52 @@ function ParkingBookingSheetBody({
 				</div>
 			</div>
 
+			{/* One driver cannot occupy two spaces at once, whichever lot each
+			    one is in. Shown as the draft changes rather than only on
+			    submit, so the clash is visible before the bay is fiddled with. */}
+			{conflict && (
+				<div className='mt-3 rounded-2xl bg-warn-bg p-4'>
+					<div className='flex items-start gap-3'>
+						<CalendarClock className='mt-0.5 size-4 shrink-0 text-warn' />
+						<div className='min-w-0 flex-1'>
+							<p className='text-[13px] font-black text-ink'>
+								Bu vaqtda sizda boshqa parking broni mavjud
+							</p>
+							<p className='mt-1 text-[11.5px] leading-5 text-ink-2'>
+								{conflictParking?.name ?? 'Parking'} ·{' '}
+								{formatTime(conflict.startAt)}–{formatTime(conflict.endAt)}.
+								Boshqa vaqtni tanlang yoki avvalgi bronni bekor qiling.
+							</p>
+						</div>
+					</div>
+					<button
+						type='button'
+						onClick={() => {
+							onClose()
+							router.push(
+								conflict.status === 'active'
+									? `/session/${conflict.id}`
+									: `/reservation/${conflict.id}`,
+							)
+						}}
+						className='mt-3 h-10 w-full rounded-xl border border-line-2 bg-white text-[12px] font-black text-ink'
+					>
+						Bronni ko‘rish
+					</button>
+				</div>
+			)}
+
 			<button
 				type='button'
 				onClick={confirmParkingBooking}
-				className='mt-4 h-13 w-full rounded-2xl bg-brand px-4 text-sm font-black text-white shadow-lg shadow-[0_6px_16px_rgb(108_71_224/.28)]'
+				disabled={submitting || Boolean(conflict)}
+				className='mt-4 h-13 w-full rounded-2xl bg-brand px-4 text-sm font-black text-white shadow-lg shadow-[0_6px_16px_rgb(108_71_224/.28)] disabled:cursor-not-allowed disabled:opacity-45 disabled:shadow-none'
 			>
-				{total ? 'To‘lash va bron qilish' : 'Bron qilish'}
+				{conflict
+					? 'Vaqt band'
+					: total
+						? 'To‘lash va bron qilish'
+						: 'Bron qilish'}
 			</button>
 			<p className='mt-2 text-center text-[11px] text-ink-3'>
 				Kelishdan 1 soat oldin bepul bekor qilish mumkin
