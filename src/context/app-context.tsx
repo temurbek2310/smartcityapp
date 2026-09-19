@@ -20,6 +20,7 @@ import type {
   UserProfile,
 } from "@/lib/types";
 import type { ServiceBookingDraft } from "@/lib/bookings";
+import { hydrateUserProfile } from "@/lib/persisted-profile";
 import { formatUzbekPlate } from "@/lib/plate";
 import { calculateFinalTotal } from "@/lib/reservation";
 import { clearAccountStorage } from "@/lib/account-storage";
@@ -149,7 +150,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
           const parsed = JSON.parse(saved) as Partial<Omit<BSpaceState, "hydrated">>;
           // A blob written before the booking registry existed simply has no
           // key for these, and the spread leaves the empty defaults in place.
-          setState({ ...initialState, ...parsed, hydrated: true });
+          setState({
+            ...initialState,
+            ...parsed,
+            // The profile is the one part that needs more than a spread: an
+            // older build stored the vehicle under a different key, and the
+            // value is still good.
+            user: hydrateUserProfile(parsed.user),
+            hydrated: true,
+          });
         } else {
           setState((current) => ({ ...current, hydrated: true }));
         }

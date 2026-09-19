@@ -14,6 +14,7 @@ import { useRouter } from 'next/navigation'
 import { useEffect, useMemo, useState } from 'react'
 
 import { ParkingMap } from '@/components/map/parking-map'
+import { SelectedParkingCard } from '@/components/map/selected-parking-card'
 import { ActiveBookingBanner } from '@/components/parking/active-booking-banner'
 import { OccupancyForecastCard } from '@/components/parking/occupancy-forecast-card'
 import { ParkingBookingSheet } from '@/components/parking/parking-booking-sheet'
@@ -90,6 +91,28 @@ export default function ParkingListPage() {
 		)
 	}, [results])
 
+	// Only ever a parking the filters actually left on screen. Reading it back
+	// out of `results` is what stops a pin selected before a filter changed
+	// from carrying a stale card — and from offering «Bron qilish» for a lot
+	// that is no longer among the results the customer is looking at.
+	const selectedParking = useMemo(
+		() => results.find(item => item.parking.id === selectedId)?.parking,
+		[results, selectedId],
+	)
+
+	// Map → list. Tapping a marker should not leave the customer scrolling the
+	// list to find what they just pressed; the card it corresponds to comes to
+	// them. Selecting from the list already has the parking on screen, so that
+	// direction deliberately does not scroll.
+	function selectFromMap(parkingId: string) {
+		setSelectedId(parkingId)
+		window.setTimeout(() => {
+			document
+				.getElementById(`parking-row-${parkingId}`)
+				?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+		}, 60)
+	}
+
 	const forecastParking =
 		PARKINGS.find(parking => parking.id === forecastId) ?? PARKINGS[0]
 	const sortLabel =
@@ -130,8 +153,8 @@ export default function ParkingListPage() {
 							parkings={results.map(item => item.parking)}
 							userLocation={location}
 							locateRevision={locateRevision}
-							selectedParkingId={selectedId ?? undefined}
-							onSelect={id => setSelectedId(id)}
+							selectedParkingId={selectedParking?.id}
+							onSelect={selectFromMap}
 							showPrices={filters.showPrices}
 							className='h-[246px]'
 						/>
@@ -163,6 +186,19 @@ export default function ParkingListPage() {
 								<Tag className='size-[18px]' />
 							</IconButton>
 						</div>
+
+						{/* Over the map rather than under it: the answer to "which
+						    pin is that" belongs where the customer is looking, and
+						    an overlay keeps the list below exactly as it was. It
+						    covers the lower strip only, so the map stays pannable. */}
+						{selectedParking && (
+							<SelectedParkingCard
+								parking={selectedParking}
+								onClose={() => setSelectedId(null)}
+								onBook={() => setBookingParkingId(selectedParking.id)}
+								className='absolute inset-x-2.5 bottom-2.5'
+							/>
+						)}
 
 						{results.length === 0 && (
 							<div className='absolute inset-0 grid place-items-center bg-white/85 px-6 text-center'>
@@ -259,13 +295,18 @@ export default function ParkingListPage() {
 				<div className='space-y-3 px-4'>
 					{results.length ? (
 						results.map(({ parking, km }) => (
-							<ParkingCard
-								key={parking.id}
-								parking={parking}
-								distance={km}
-								onOpen={() => router.push(`/parking/${parking.id}`)}
-								onBook={() => setBookingParkingId(parking.id)}
-							/>
+							// The scroll target for a marker tap, and the other half of
+							// «which one did I pick» — the map highlights the pin, the
+							// list highlights the row.
+							<div key={parking.id} id={`parking-row-${parking.id}`} className='scroll-mt-4'>
+								<ParkingCard
+									parking={parking}
+									distance={km}
+									selected={parking.id === selectedParking?.id}
+									onOpen={() => router.push(`/parking/${parking.id}`)}
+									onBook={() => setBookingParkingId(parking.id)}
+								/>
+							</div>
 						))
 					) : (
 						<EmptyState

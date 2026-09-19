@@ -37,6 +37,7 @@ import { LoadingScreen } from '@/components/ui/loading-screen'
 import { Toast } from '@/components/ui/toast'
 import { HorizontalRail } from '@/components/ui/horizontal-rail'
 import { CityMap } from '@/components/map/city-map'
+import { SelectedParkingCard } from '@/components/map/selected-parking-card'
 import { ServiceBookingSheet } from '@/components/booking/service-booking-sheet'
 import { TableBookingFlow } from '@/components/booking/table-booking-flow'
 import { ParkingBookingSheet } from '@/components/parking/parking-booking-sheet'
@@ -650,38 +651,11 @@ function HomeView() {
 					)}
 
 					{selectedParking && (
-						<div className='animate-map-card-in absolute inset-x-3 bottom-14 z-20 flex items-center gap-2 rounded-2xl bg-white p-3 shadow-xl ring-1 ring-line'>
-							<span
-								className={`grid size-10 shrink-0 place-items-center rounded-xl bg-linear-to-br ${selectedParking.accent} text-white`}
-							>
-								<CircleParking className='size-5' />
-							</span>
-							<div className='min-w-0 flex-1'>
-								<p className='truncate text-sm font-black text-ink'>
-									{selectedParking.name}
-								</p>
-								<p className='mt-0.5 text-[10px] font-semibold text-ink-3'>
-									{selectedParking.availableSpaces > 0
-										? `${selectedParking.availableSpaces} bo‘sh joy`
-										: 'TO‘LA'}{' '}
-									· {formatUZS(selectedParking.pricePerHour)}/soat
-								</p>
-							</div>
-							<Link
-								href={`/parking/${selectedParking.id}`}
-								className='inline-flex h-9 shrink-0 items-center rounded-xl bg-brand px-3 text-[11px] font-black text-white'
-							>
-								Ochish
-							</Link>
-							<button
-								type='button'
-								onClick={() => setSelectedParkingId(null)}
-								className='grid size-8 shrink-0 place-items-center rounded-lg bg-card-2 text-ink-3'
-								aria-label='Kartani yopish'
-							>
-								<X className='size-4' />
-							</button>
-						</div>
+						<SelectedParkingCard
+							parking={selectedParking}
+							onClose={() => setSelectedParkingId(null)}
+							className='absolute inset-x-3 bottom-14'
+						/>
 					)}
 
 					<div className='pointer-events-none absolute inset-x-3 bottom-3 z-20 flex items-center justify-between gap-2'>

@@ -26,16 +26,23 @@ export function ParkingCard({
 	distance,
 	onOpen,
 	onBook,
+	// Set when this row is the one currently picked on the map above, so the
+	// two halves of the screen agree on what is selected.
+	selected = false,
 }: {
 	parking: Parking
 	distance: number
 	onOpen: () => void
 	onBook: () => void
+	selected?: boolean
 }) {
 	const { percent, full, tone } = parkingAvailability(parking)
 
 	return (
-		<Card variant='bare'>
+		<Card
+			variant='bare'
+			className={cn(selected && 'ring-2 ring-brand')}
+		>
 			<button
 				type='button'
 				onClick={onOpen}
