@@ -24,7 +24,7 @@ import { useApp } from '@/context/app-context'
 import { getParking } from '@/data/parkings'
 import { useBookingMeta } from '@/hooks/use-booking-meta'
 import { formatDuration, formatTime, formatUZS } from '@/lib/format'
-import { formatUzbekPlate } from '@/lib/plate'
+import { displayUzbekPlate } from '@/lib/plate'
 import { calculateFinalTotal } from '@/lib/reservation'
 
 export default function SessionPage() {
@@ -145,7 +145,7 @@ export default function SessionPage() {
 						</div>
 						<div className='min-w-0 flex-1'>
 							<p className='truncate text-[15px] font-extrabold text-ink'>
-								{formatUzbekPlate(reservation.vehiclePlate)}
+								{displayUzbekPlate(reservation.vehiclePlate)}
 							</p>
 							<p className='mt-1 text-[11.5px] text-ink-3'>
 								Kirish {formatTime(

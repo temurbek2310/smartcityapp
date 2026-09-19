@@ -20,6 +20,7 @@ import type {
   UserProfile,
 } from "@/lib/types";
 import type { ServiceBookingDraft } from "@/lib/bookings";
+import { formatUzbekPlate } from "@/lib/plate";
 import { calculateFinalTotal } from "@/lib/reservation";
 import { clearAccountStorage } from "@/lib/account-storage";
 
@@ -295,7 +296,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
         id: uid("booking"),
         parkingId: input.parkingId,
         userPhone: state.user.phone,
-        vehiclePlate: state.user.vehiclePlate,
+        // Copied through the formatter rather than raw. A profile hydrated
+        // from a blob this build did not write can have no plate, and the
+        // reservation was silently taking the undefined with it — which is
+        // how a freshly made booking, not only a legacy one, reached the
+        // session screen with nothing to format. It is left off entirely
+        // rather than stored as an empty string, so "no plate" has one shape.
+        vehiclePlate: formatUzbekPlate(state.user.vehiclePlate) || undefined,
         startAt: start.toISOString(),
         endAt: end.toISOString(),
         durationHours: input.durationHours,

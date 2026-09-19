@@ -39,7 +39,7 @@ import { PAYMENT_METHODS, PREMIUM_PERKS, PREMIUM_PRICE_UZS } from '@/data/profil
 import { useToast } from '@/hooks/use-toast'
 import { cn } from '@/lib/cn'
 import { formatDate, formatUZS } from '@/lib/format'
-import { formatUzbekPlate } from '@/lib/plate'
+import { displayUzbekPlate, formatUzbekPlate } from '@/lib/plate'
 import type { NotificationPrefId } from '@/lib/types'
 
 const PLATE_OPTIONS = ['01 A 123 AA', '01 B 774 CA', '10 A 019 BB']
@@ -233,7 +233,7 @@ export default function ProfilePage() {
 				<Row
 					icon={CarFront}
 					label='Avtomobil'
-					value={formatUzbekPlate(user.vehiclePlate)}
+					value={displayUzbekPlate(user.vehiclePlate)}
 					onClick={() => setSheet('plate')}
 				/>
 				<Row
@@ -403,7 +403,7 @@ export default function ProfilePage() {
 				<BottomSheet title='Avtomobil' onClose={() => setSheet(null)}>
 					<Card className='text-center'>
 						<p className='font-mono text-3xl font-black text-ink'>
-							{formatUzbekPlate(user.vehiclePlate)}
+							{displayUzbekPlate(user.vehiclePlate)}
 						</p>
 						<p className='mt-2 text-[12px] text-ink-3'>
 							Raqam faqat siz bron qilgan joyga, faqat bron vaqtiga uzatiladi
@@ -608,7 +608,7 @@ export default function ProfilePage() {
 							<KeyValue label='Telefon' value={user.phone} />
 							<KeyValue
 								label='Avtomobil'
-								value={formatUzbekPlate(user.vehiclePlate)}
+								value={displayUzbekPlate(user.vehiclePlate)}
 							/>
 							<KeyValue label='Til' value='O‘zbekcha' />
 							{user.joinedAt && (

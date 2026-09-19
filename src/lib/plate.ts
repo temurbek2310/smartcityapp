@@ -14,9 +14,20 @@
 
 const MAX_PLATE_CHARS = 8
 
+// What a plate can actually arrive as. The declared types say `string`, but
+// these functions also read persisted state, and localStorage is not a
+// contract: a blob written by an older build — or any profile saved without
+// a vehicle — hydrates with no plate at all. Every screen showing a vehicle
+// then called .toUpperCase() on undefined and took the whole page down with
+// it, which is a crash in place of a missing value.
+export type PlateInput = string | null | undefined
+
 // Compact, uppercase, punctuation-free form — useful for comparing two
-// plates that were typed differently.
-export function normalizeUzbekPlate(value: string) {
+// plates that were typed differently. A missing plate normalises to the
+// empty string: what an absent plate should *say* is a question for the
+// screen showing it, not for the formatter.
+export function normalizeUzbekPlate(value: PlateInput) {
+	if (typeof value !== 'string') return ''
 	return value
 		.toUpperCase()
 		.replace(/[^A-Z0-9]/g, '')
@@ -25,7 +36,7 @@ export function normalizeUzbekPlate(value: string) {
 
 // Display/entry form. Groups progressively, so it is safe to call on every
 // keystroke: "01A7" becomes "01 A 7" rather than waiting for a full plate.
-export function formatUzbekPlate(value: string) {
+export function formatUzbekPlate(value: PlateInput) {
 	const raw = normalizeUzbekPlate(value)
 	if (raw.length <= 2) return raw
 
@@ -43,4 +54,15 @@ export function formatUzbekPlate(value: string) {
 	groups.push(raw.slice(start))
 
 	return groups.filter(Boolean).join(' ')
+}
+
+// What a read-only row shows. formatUzbekPlate() answers with an empty
+// string because the registration field has to stay empty while it is being
+// typed into; a row on a receipt or a session card has nothing to put there
+// instead, so it says the plate is missing rather than rendering a blank
+// that reads as a layout bug.
+export const NO_PLATE = '—'
+
+export function displayUzbekPlate(value: PlateInput, fallback = NO_PLATE) {
+	return formatUzbekPlate(value) || fallback
 }

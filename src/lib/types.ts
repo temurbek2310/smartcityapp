@@ -55,7 +55,11 @@ export type Parking = {
 export type UserProfile = {
   name: string;
   phone: string;
-  vehiclePlate: string;
+  // Signup always asks for one, so a profile created by this app has it.
+  // Optional all the same, because a profile restored from localStorage was
+  // not necessarily written by this build, and claiming a string that is not
+  // there is what crashed every screen that formats a plate.
+  vehiclePlate?: string;
   // Set at signup so the profile can say how long someone has been here.
   // Optional because blobs written before this existed have no value, and
   // inventing a join date would be a lie rather than a default.
@@ -80,7 +84,10 @@ export type Reservation = {
   id: string;
   parkingId: string;
   userPhone: string;
-  vehiclePlate: string;
+  // The plate as it stood when the booking was made. Absent when the profile
+  // had none to copy — the booking records that honestly instead of inventing
+  // a vehicle, and the screens show «—».
+  vehiclePlate?: string;
   startAt: string;
   endAt: string;
   durationHours: number;

@@ -15,7 +15,7 @@ import { getParking } from '@/data/parkings'
 import { useBookingMeta } from '@/hooks/use-booking-meta'
 import { useToast } from '@/hooks/use-toast'
 import { formatDateTime, formatUZS } from '@/lib/format'
-import { formatUzbekPlate } from '@/lib/plate'
+import { displayUzbekPlate } from '@/lib/plate'
 
 export default function ReceiptPage() {
 	const params = useParams<{ id: string }>()
@@ -90,7 +90,7 @@ export default function ReceiptPage() {
 						/>
 						<KeyValue
 							label='Avtomobil'
-							value={formatUzbekPlate(reservation.vehiclePlate)}
+							value={displayUzbekPlate(reservation.vehiclePlate)}
 						/>
 						{meta && (
 							<KeyValue label='Joy' value={`${meta.bay} · ${meta.level}-daraja`} />
