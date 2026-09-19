@@ -68,6 +68,14 @@ export function formatDate(value: string | number | Date) {
   return `${formatDayMonth(value)}, ${tashkentParts(value).year}`;
 }
 
+// "2026-09-11" — the Tashkent calendar day an instant falls on. Not shown to
+// anyone; it is the stable key a date picker selects by and slot arithmetic
+// builds instants from, so neither has to carry a Date around.
+export function tashkentDayKey(value: string | number | Date) {
+  const { year, month, day } = tashkentParts(value);
+  return `${year}-${pad(month)}-${pad(day)}`;
+}
+
 export function formatTime(value: string | number | Date) {
   const { hour, minute } = tashkentParts(value);
   return `${pad(hour)}:${pad(minute)}`;

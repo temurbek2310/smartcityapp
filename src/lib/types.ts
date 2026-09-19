@@ -144,6 +144,12 @@ export type ServiceBooking = {
   subtitle: string;
   code: string;
   whenLabel: string;
+  // The moment actually reserved. The label above is only what the sheet
+  // wrote at the time; this is what Bron re-derives its date and time from,
+  // so a table booked for tomorrow evening stops reading as "Bugun, 12:30".
+  // Optional because a blob persisted before this field existed has none —
+  // those keep falling back to their stored label.
+  startAt?: string;
   status: ServiceBookingStatus;
   createdAt: string;
 };

@@ -1,12 +1,14 @@
 import { getParking } from '@/data/parkings'
 import { getQueueOrg } from '@/data/queue-orgs'
 import { formatDateTime, formatTime, formatUZS } from '@/lib/format'
+import { serviceWhenLabel } from '@/lib/service-slots'
 import type {
 	BookingKind,
 	BSpaceState,
 	QueueTicket,
 	Reservation,
 	ServiceBooking,
+	ServiceBookingKind,
 } from '@/lib/types'
 
 // Three stores, one list. Parking reservations, queue tickets and the light
@@ -138,7 +140,12 @@ function fromServiceBooking(booking: ServiceBooking): BookingRow {
 		title: booking.title,
 		subtitle: booking.subtitle,
 		code: booking.code,
-		whenLabel: booking.whenLabel,
+		// The stored instant wins over the stored label: a booking made for
+		// tomorrow has to read as tomorrow here, and as "Bugun" once tomorrow
+		// comes. Bookings persisted before startAt existed keep their label.
+		whenLabel: booking.startAt
+			? serviceWhenLabel(booking.startAt)
+			: booking.whenLabel,
 		status:
 			booking.status === 'active'
 				? 'active'
@@ -174,4 +181,42 @@ export function bookingRows(
 
 export function isOpen(row: BookingRow) {
 	return row.status === 'active' || row.status === 'upcoming'
+}
+
+// --- The other direction -------------------------------------------------
+// What a booking sheet hands the store. It lives next to the row mapping
+// above because the two are one round trip: the sheet's choice has to survive
+// into the Booking Center, and the half that lost it was this one — the sheet
+// wrote «Bugun, 12:30» into a label and kept no record of which venue, day or
+// time the customer had actually picked.
+
+export type ServiceBookingDraft = {
+	kind: ServiceBookingKind
+	// The venue the sheet was opened on, carried through untouched. Nothing
+	// here defaults to a restaurant; a booking with no venue is not a booking.
+	refId: string
+	title: string
+	subtitle: string
+	whenLabel: string
+	startAt: string
+}
+
+export function serviceBookingDraft(input: {
+	kind: ServiceBookingKind
+	refId: string
+	title: string
+	count: number
+	unit: string
+	startAt: Date
+	now?: string | number | Date
+}): ServiceBookingDraft {
+	const time = formatTime(input.startAt)
+	return {
+		kind: input.kind,
+		refId: input.refId,
+		title: input.title,
+		subtitle: `${input.count} ${input.unit} · ${time}`,
+		whenLabel: serviceWhenLabel(input.startAt, input.now),
+		startAt: input.startAt.toISOString(),
+	}
 }

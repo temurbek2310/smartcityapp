@@ -17,9 +17,9 @@ import type {
   Reservation,
   SavedRoute,
   ServiceBooking,
-  ServiceBookingKind,
   UserProfile,
 } from "@/lib/types";
+import type { ServiceBookingDraft } from "@/lib/bookings";
 import { calculateFinalTotal } from "@/lib/reservation";
 import { clearAccountStorage } from "@/lib/account-storage";
 
@@ -83,13 +83,10 @@ type TakeQueueTicketInput = {
   notify: boolean;
 };
 
-type CreateServiceBookingInput = {
-  kind: ServiceBookingKind;
-  refId: string;
-  title: string;
-  subtitle: string;
-  whenLabel: string;
-};
+// Built by lib/bookings' serviceBookingDraft(), which is also where the
+// reverse mapping into a Booking Center row lives — so a field the sheet
+// stops sending cannot quietly go missing from the row that reads it.
+type CreateServiceBookingInput = ServiceBookingDraft;
 
 type AppContextValue = BSpaceState & {
   completeOnboarding: () => void;

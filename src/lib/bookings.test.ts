@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
-import { bookingRows, isOpen } from './bookings'
+import { bookingRows, isOpen, serviceBookingDraft } from './bookings'
+import { tashkentDayKey } from '@/lib/format'
+import { serviceWhenLabel, slotInstant } from '@/lib/service-slots'
 import type {
 	QueueTicket,
 	Reservation,
@@ -131,6 +133,47 @@ describe('bookingRows', () => {
 		expect(row.repeat).toEqual({ kind: 'table', refId: 'urban-food' })
 	})
 
+	// The reserved instant, not the label the sheet happened to write. A
+	// table booked for tomorrow evening used to arrive here still claiming
+	// "Bugun, 12:30", because that string was all the booking carried.
+	it('shows a table booking at the date and time it was made for', () => {
+		const tomorrow = new Date(Date.now() + 86_400_000)
+		const [row] = bookingRows({
+			...empty,
+			serviceBookings: [
+				service({
+					startAt: slotInstant(tashkentDayKey(tomorrow), '19:30').toISOString(),
+					whenLabel: 'Bugun, 12:30',
+				}),
+			],
+		})
+		expect(row.whenLabel).toBe('Ertaga, 19:30')
+	})
+
+	it('keeps the stored label for a booking saved before instants existed', () => {
+		const [row] = bookingRows({
+			...empty,
+			serviceBookings: [service({ startAt: undefined })],
+		})
+		expect(row.whenLabel).toBe('Bugun, 12:30')
+	})
+
+	// Whichever restaurant the sheet was opened on is the one Bron reopens —
+	// the generic shortcut used to book Urban Food whoever was meant.
+	it('keeps each restaurant its own refId', () => {
+		const rows = bookingRows({
+			...empty,
+			serviceBookings: [
+				service({ id: 's1', refId: 'coffee-lab', title: 'Coffee Lab' }),
+				service({ id: 's2', refId: 'urban-food', title: 'Urban Food' }),
+			],
+		})
+		expect(rows.map(row => row.repeat)).toEqual([
+			{ kind: 'table', refId: 'coffee-lab' },
+			{ kind: 'table', refId: 'urban-food' },
+		])
+	})
+
 	// The store refuses to cancel anything but a not-yet-entered booking, so a
 	// row that says otherwise produces a «Bron bekor qilindi» for a session
 	// that keeps running. These mappings are what stops the screen offering it.
@@ -180,6 +223,64 @@ describe('bookingRows', () => {
 
 	it('returns nothing for an empty registry', () => {
 		expect(bookingRows(empty)).toEqual([])
+	})
+})
+
+// The half of the round trip the booking sheet writes. A choice that does
+// not survive into here never reaches Bron at all.
+describe('serviceBookingDraft', () => {
+	const now = new Date('2026-09-18T12:00:00+05:00')
+
+	const draft = (patch: Record<string, unknown> = {}) =>
+		serviceBookingDraft({
+			kind: 'table',
+			refId: 'coffee-lab',
+			title: 'Coffee Lab',
+			count: 2,
+			unit: 'kishi',
+			startAt: slotInstant('2026-09-18', '19:30'),
+			now,
+			...patch,
+		})
+
+	it('stores today at a future time as the instant it is', () => {
+		const table = draft()
+		expect(table.startAt).toBe('2026-09-18T14:30:00.000Z')
+		expect(table.whenLabel).toBe('Bugun, 19:30')
+		expect(table.subtitle).toBe('2 kishi · 19:30')
+	})
+
+	it('stores a booking made for tomorrow as tomorrow', () => {
+		const table = draft({ startAt: slotInstant('2026-09-19', '13:00') })
+		expect(table.startAt).toBe('2026-09-19T08:00:00.000Z')
+		expect(table.whenLabel).toBe('Ertaga, 13:00')
+		expect(table.subtitle).toBe('2 kishi · 13:00')
+	})
+
+	it('keeps whichever restaurant the sheet was opened on', () => {
+		expect(draft().refId).toBe('coffee-lab')
+		expect(
+			draft({ refId: 'urban-food', title: 'Urban Food' }).refId,
+		).toBe('urban-food')
+	})
+
+	// What the sheet writes is what the Booking Center reads back.
+	it('round-trips into a Bron row at the same date and time', () => {
+		const table = draft({ startAt: slotInstant('2026-09-19', '20:00') })
+		const [row] = bookingRows({
+			...empty,
+			serviceBookings: [
+				service({ ...table, id: 's9', code: 'TB-9000', status: 'active', createdAt: now.toISOString() }),
+			],
+		})
+		expect(row.title).toBe('Coffee Lab')
+		expect(row.subtitle).toBe('2 kishi · 20:00')
+		expect(row.repeat).toEqual({ kind: 'table', refId: 'coffee-lab' })
+		expect(row.whenLabel).toBe(serviceWhenLabel(table.startAt))
+	})
+
+	it('keeps the guest count it was given', () => {
+		expect(draft({ count: 6 }).subtitle).toBe('6 kishi · 19:30')
 	})
 })
 
