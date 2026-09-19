@@ -2,7 +2,6 @@ import {
 	Ban,
 	BatteryCharging,
 	Bike,
-	Building2,
 	Camera,
 	CircleDot,
 	Construction,
@@ -10,7 +9,6 @@ import {
 	Flame,
 	Footprints,
 	Gauge,
-	House,
 	LocateFixed,
 	Navigation,
 	ShoppingBag,
@@ -614,31 +612,22 @@ export type DemoDestination = {
 	point?: { lat: number; lng: number }
 }
 
-// City Goo's `ADDR_BOOK`, reproduced as /transport demo content only.
-// Place names and street addresses are kept verbatim — B SPACE has no
-// address catalog of its own and translating them would invent data. None
-// of this is mixed into PARKINGS: each entry only points at a real parking
-// that already exists there, so picking one moves real transport state
-// (distance, ETA, map, route summary, availability) rather than text.
+// Public destinations for the /transport picker. Place names and street
+// addresses are kept verbatim — B SPACE has no address catalog of its own
+// and translating them would invent data. None of this is mixed into
+// PARKINGS: each entry only points at a real parking that already exists
+// there, so picking one moves real transport state (distance, ETA, map,
+// route summary, availability) rather than text.
+//
+// City Goo's ADDR_BOOK also opened with «Uy» and «Ish» at fixed street
+// addresses. Those were this customer's saved places, and this customer has
+// saved none, so they are gone; every row left is a public landmark or the
+// driver's own live position.
 export const DEMO_DESTINATIONS: DemoDestination[] = [
 	{
 		id: 'me',
 		icon: LocateFixed,
 		title: 'Mening joylashuvim',
-	},
-	{
-		id: 'home',
-		icon: House,
-		title: 'Uy',
-		address: 'ул. Буюк Ипак Йули, 12',
-		parkingId: 'amir-temur',
-	},
-	{
-		id: 'work',
-		icon: Building2,
-		title: 'Ish',
-		address: 'Tashkent City BC, ул. Амира Темура, 107',
-		parkingId: 'tashkent-city',
 	},
 	{
 		id: 'magic-city',

@@ -11,6 +11,7 @@ export function clearAccountStorage(storage: Storage) {
 			storage.removeItem(key)
 		}
 	}
-	// An empty value prevents the first-visit sample favorite from reappearing.
-	storage.setItem('citygoo-place-favorites', '[]')
+	// Nothing is written back. There is no first-visit sample favorite left to
+	// suppress, and leaving a key behind would mean a deleted account still
+	// had a trace in storage.
 }

@@ -1,6 +1,7 @@
 import { getParking } from '@/data/parkings'
 import { getQueueOrg } from '@/data/queue-orgs'
 import { formatDateTime, formatTime, formatUZS } from '@/lib/format'
+import { reservationHref } from '@/lib/reservation'
 import { serviceWhenLabel } from '@/lib/service-slots'
 import type {
 	BookingKind,
@@ -27,7 +28,9 @@ export type BookingRow = {
 	whenLabel: string
 	status: BookingRowStatus
 	statusLabel: string
-	// Where "Ochish" goes. Absent when the booking opens a QR sheet instead.
+	// The detail screen this row summarises — where tapping the card goes.
+	// Absent for the kinds that have no screen of their own; those open their
+	// QR sheet instead.
 	href?: string
 	qrValue?: string
 	amountLabel?: string
@@ -39,10 +42,6 @@ export type BookingRow = {
 	// active parking session came to report "Bron bekor qilindi" while its
 	// timer kept running.
 	cancellable: boolean
-	// How an open booking that cannot be cancelled is ended instead. A parking
-	// session the driver has already entered is closed by leaving the lot, not
-	// by cancelling a reservation that has already been honoured.
-	exitHref?: string
 }
 
 const STATUS_LABELS: Record<BookingRowStatus, string> = {
@@ -77,21 +76,13 @@ function fromReservation(reservation: Reservation): BookingRow {
 		code: reservation.id.slice(-8).toUpperCase(),
 		whenLabel: formatDateTime(reservation.startAt),
 		status,
-		href:
-			reservation.status === 'active'
-				? `/session/${reservation.id}`
-				: reservation.status === 'completed'
-					? `/receipt/${reservation.id}`
-					: `/reservation/${reservation.id}`,
+		// The same rule the reservation screen redirects by, so a card and a
+		// deep link can never disagree about where a booking lives.
+		href: reservationHref(reservation),
 		amountLabel: formatUZS(reservation.finalTotal ?? reservation.estimatedTotal),
 		repeat: { kind: 'parking', refId: reservation.parkingId },
 		// app-context's cancelReservation() only mutates a 'reserved' booking.
 		cancellable: reservation.status === 'reserved',
-		// Already inside: the way out is the exit QR on the session screen.
-		exitHref:
-			reservation.status === 'active'
-				? `/session/${reservation.id}?exit=1`
-				: undefined,
 	})
 }
 

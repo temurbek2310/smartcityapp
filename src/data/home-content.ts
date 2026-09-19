@@ -7,7 +7,6 @@ import {
 	Hospital,
 	type LucideIcon,
 	MapPin,
-	Navigation,
 	ShoppingBag,
 	Sparkles,
 	Store,
@@ -29,27 +28,6 @@ export type ServiceItem = {
 	icon: LucideIcon
 	tone: string
 }
-
-export const QUICK_ROUTES = [
-	{
-		id: 'home' as const,
-		title: 'Uy',
-		address: 'Mirzo Ulug‘bek tumani, Buyuk Ipak Yo‘li',
-		minutes: 18,
-		distance: 8.4,
-		parkingId: 'amir-temur',
-		icon: Navigation,
-	},
-	{
-		id: 'work' as const,
-		title: 'Ish',
-		address: 'Tashkent City, Islom Karimov ko‘chasi',
-		minutes: 22,
-		distance: 12.6,
-		parkingId: 'tashkent-city',
-		icon: Building2,
-	},
-]
 
 export const CATEGORIES: {
 	id: PlaceCategory | 'transport' | 'queues' | 'more'

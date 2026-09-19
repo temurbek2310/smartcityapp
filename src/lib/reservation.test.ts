@@ -6,6 +6,8 @@ import {
 	intervalsOverlap,
 	isLiveReservation,
 	reservationCode,
+	reservationHref,
+	supersededReservationHref,
 } from './reservation'
 import type { Reservation } from '@/lib/types'
 
@@ -202,5 +204,52 @@ describe('findOverlappingReservation', () => {
 
 	it('returns nothing when the customer holds no bookings', () => {
 		expect(findOverlappingReservation([], eleventoOne)).toBeUndefined()
+	})
+})
+
+// The detail page owns a booking for its whole live span. /session/[id] is
+// a screen the booking opens — the timer, the running bill, the exit QR —
+// not a replacement for it, so entering the lot must not cost the customer
+// the page that holds the booking's own details and actions.
+describe('reservationHref', () => {
+	it.each([
+		['reserved' as const, '/reservation/booking-1'],
+		// Entered, but still the same booking and still its own page.
+		['active' as const, '/reservation/booking-1'],
+		['completed' as const, '/receipt/booking-1'],
+		['cancelled' as const, '/reservation/booking-1'],
+	])('sends a %s booking to %s', (status, href) => {
+		expect(reservationHref(makeReservation({ status }))).toBe(href)
+	})
+
+	it('agrees with what the reservation screen hands over to', () => {
+		for (const status of ['reserved', 'active', 'completed', 'cancelled'] as const) {
+			const reservation = makeReservation({ status })
+			const superseded = supersededReservationHref(reservation)
+			// Either this screen is the current one, or the hand-off target is
+			// exactly where a Bron card would have gone.
+			expect(superseded ?? `/reservation/${reservation.id}`).toBe(
+				reservationHref(reservation),
+			)
+		}
+	})
+})
+
+describe('supersededReservationHref', () => {
+	it('hands a finished booking over to its receipt', () => {
+		expect(supersededReservationHref(makeReservation({ status: 'completed' })))
+			.toBe('/receipt/booking-1')
+	})
+
+	// None of these leave: one is waiting to be used, one is in use, one is
+	// the read-only record of a booking that never was. An entered booking
+	// staying put is the whole point — it is what makes Back out of a
+	// session land on the booking rather than on the list.
+	it.each([
+		['reserved' as const],
+		['active' as const],
+		['cancelled' as const],
+	])('leaves a %s booking on its detail page', status => {
+		expect(supersededReservationHref(makeReservation({ status }))).toBeNull()
 	})
 })

@@ -106,7 +106,7 @@ export function ActiveBookingBanner({
 						<Button
 							size='sm'
 							variant='outline'
-							onClick={() => router.push(`/session/${reservation.id}?exit=1`)}
+							onClick={() => router.push(`/reservation/${reservation.id}?exit=1`)}
 						>
 							<LogOut className='size-3.5' /> Chiqish
 						</Button>

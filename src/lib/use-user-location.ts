@@ -19,21 +19,19 @@ export type LocationError =
   | 'outside-uzbekistan'
 
 export function useUserLocation() {
+  // The map has to be centred on something before a fix arrives, and the
+  // city centre is the honest choice. It is never reported as the customer's
+  // position: `status` stays 'idle' until a fix, and anything but 'ready'
+  // means this is a stand-in the screen must label as one.
   const [location, setLocation] = useState<Coordinate>(TASHKENT_CENTER)
   const [status, setStatus] = useState<LocationStatus>('idle')
   const [error, setError] = useState<LocationError>(null)
 
   const locate = useCallback(() => {
-    // The development computer used for this MVP has OS geolocation disabled
-    // by organisation policy. Keep local development testable, while real
-    // production builds always use the device's browser geolocation.
-    if (process.env.NODE_ENV === 'development') {
-      setLocation(TASHKENT_CENTER)
-      setStatus('ready')
-      setError(null)
-      return
-    }
-
+    // No shortcut here, in any environment. A development build used to
+    // report Tashkent's centre as a real fix — status 'ready', no error —
+    // which told every screen the customer was standing there and hid the
+    // permission UX from the only people able to test it.
     if (!navigator.geolocation) {
       setLocation(TASHKENT_CENTER)
       setStatus('fallback')

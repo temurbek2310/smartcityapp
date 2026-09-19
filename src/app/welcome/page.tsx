@@ -86,7 +86,7 @@ function WelcomeView() {
 	const [phoneDigits, setPhoneDigits] = useState('')
 	const [otp, setOtp] = useState('')
 	const [name, setName] = useState('')
-	const [vehiclePlate, setVehiclePlate] = useState('01 A 777 AA')
+	const [vehiclePlate, setVehiclePlate] = useState('')
 	const plateInputRef = useRef<HTMLInputElement>(null)
 	const plateCaretRef = useRef<number | null>(null)
 	const [error, setError] = useState('')

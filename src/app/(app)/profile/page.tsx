@@ -39,10 +39,8 @@ import { PAYMENT_METHODS, PREMIUM_PERKS, PREMIUM_PRICE_UZS } from '@/data/profil
 import { useToast } from '@/hooks/use-toast'
 import { cn } from '@/lib/cn'
 import { formatDate, formatUZS } from '@/lib/format'
-import { displayUzbekPlate, formatUzbekPlate } from '@/lib/plate'
+import { displayUzbekPlate, formatUzbekPlate, normalizeUzbekPlate } from '@/lib/plate'
 import type { NotificationPrefId } from '@/lib/types'
-
-const PLATE_OPTIONS = ['01 A 123 AA', '01 B 774 CA', '10 A 019 BB']
 
 const NOTIFICATION_ROWS: { id: NotificationPrefId; label: string }[] = [
 	{ id: 'bookingReminders', label: 'Bronlar va eslatmalar' },
@@ -84,6 +82,13 @@ export default function ProfilePage() {
 
 	const [sheet, setSheet] = useState<SheetKind | null>(null)
 	const [payments, setPayments] = useState(PAYMENT_METHODS)
+	// Seeded from the customer's own plate, never from a sample one.
+	const [plateDraft, setPlateDraft] = useState('')
+
+	function openPlateSheet() {
+		setPlateDraft(formatUzbekPlate(user?.vehiclePlate ?? ''))
+		setSheet('plate')
+	}
 
 	// Everything here is computed from what the user actually did. City Goo
 	// hardcodes its statistics; inventing "128 trips" in a demo someone will
@@ -234,7 +239,7 @@ export default function ProfilePage() {
 					icon={CarFront}
 					label='Avtomobil'
 					value={displayUzbekPlate(user.vehiclePlate)}
-					onClick={() => setSheet('plate')}
+					onClick={openPlateSheet}
 				/>
 				<Row
 					icon={CreditCard}
@@ -410,31 +415,43 @@ export default function ProfilePage() {
 						</p>
 					</Card>
 
-					<div className='mt-3 space-y-2'>
-						{PLATE_OPTIONS.map(plate => (
-							<button
-								key={plate}
-								type='button'
-								onClick={() => {
-									updateProfile({ vehiclePlate: plate })
-									setSheet(null)
-									toast.show('Avtomobil raqami yangilandi')
-								}}
-								className='flex w-full items-center gap-3 rounded-card-lg bg-card p-3 text-left shadow-card'
-							>
-								<IconTile tone='bg-card-2 text-brand'>
-									<CarFront className='size-[18px]' />
-								</IconTile>
-								<span className='flex-1 font-mono text-[14px] font-bold text-ink'>
-									{plate}
-								</span>
-								{formatUzbekPlate(user.vehiclePlate) ===
-									formatUzbekPlate(plate) && (
-									<span className='text-brand'>✓</span>
-								)}
-							</button>
-						))}
-					</div>
+					{/* Three fixed plates used to sit here as if they were the
+					    customer's other vehicles. They belonged to nobody, and they
+					    were also the only way to change a plate after signing up —
+					    so they are replaced by the field that should have been here,
+					    formatted by the same helper the sign-up form uses. */}
+					<Card className='mt-3'>
+						<label
+							htmlFor='plate-input'
+							className='text-[11px] font-bold uppercase tracking-[.16em] text-ink-3'
+						>
+							Yangi raqam
+						</label>
+						<input
+							id='plate-input'
+							value={plateDraft}
+							onChange={event =>
+								setPlateDraft(formatUzbekPlate(event.target.value))
+							}
+							inputMode='text'
+							autoComplete='off'
+							placeholder='01 A 777 AA'
+							className='mt-2 h-12 w-full rounded-xl border border-line-2 bg-white px-3 text-center font-mono text-[18px] font-black uppercase tracking-wide text-ink placeholder:font-normal placeholder:tracking-normal placeholder:text-ink-3'
+						/>
+						<Button
+							variant='primary'
+							block
+							className='mt-3'
+							disabled={normalizeUzbekPlate(plateDraft).length < 5}
+							onClick={() => {
+								updateProfile({ vehiclePlate: formatUzbekPlate(plateDraft) })
+								setSheet(null)
+								toast.show('Avtomobil raqami yangilandi')
+							}}
+						>
+							Saqlash
+						</Button>
+					</Card>
 				</BottomSheet>
 			)}
 
@@ -631,7 +648,7 @@ export default function ProfilePage() {
 						variant='outline'
 						block
 						className='mt-3'
-						onClick={() => setSheet('plate')}
+						onClick={openPlateSheet}
 					>
 						<CarFront className='size-4 text-brand' /> Avtomobil raqamini
 						o‘zgartirish

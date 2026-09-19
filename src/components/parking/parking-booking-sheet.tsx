@@ -16,7 +16,7 @@ import { bayMap, firstFreeBay, isBaySelectable } from '@/lib/bay-map'
 import { saveBookingMeta } from '@/lib/booking-meta'
 import { useBookingMeta } from '@/hooks/use-booking-meta'
 import { formatDayMonth, formatTime, formatUZS } from '@/lib/format'
-import { findOverlappingReservation } from '@/lib/reservation'
+import { findOverlappingReservation, reservationHref } from '@/lib/reservation'
 
 // The one parking booking UI in the app. It used to live inline in Home
 // and duplicated an older standalone /reserve/[id] form; both are gone and
@@ -516,11 +516,10 @@ function ParkingBookingSheetBody({
 						type='button'
 						onClick={() => {
 							onClose()
-							router.push(
-								conflict.status === 'active'
-									? `/session/${conflict.id}`
-									: `/reservation/${conflict.id}`,
-							)
+							// The one lifecycle rule, not a second copy of it: an
+							// entered conflict opens its session, a not-yet-entered
+							// one its confirmation.
+							router.push(reservationHref(conflict))
 						}}
 						className='mt-3 h-10 w-full rounded-xl border border-line-2 bg-white text-[12px] font-black text-ink'
 					>

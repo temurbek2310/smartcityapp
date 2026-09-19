@@ -3,16 +3,18 @@
 import {
 	CalendarClock,
 	CheckCircle2,
-	CircleParking,
 	MapPin,
 	Navigation,
 	QrCode,
+	Share2,
 	X,
 } from 'lucide-react'
 import Link from 'next/link'
 import { notFound, useParams, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 
+import { ActiveSessionPanel } from '@/components/parking/active-session-panel'
+import { DirectionsSheet } from '@/components/parking/directions-sheet'
 import { AppBar } from '@/components/ui/app-bar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -21,20 +23,36 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { IconTile } from '@/components/ui/icon-tile'
 import { KeyValue } from '@/components/ui/key-value'
 import { QrImage } from '@/components/ui/qr-image'
+import { Toast } from '@/components/ui/toast'
 import { useApp } from '@/context/app-context'
 import { getParking } from '@/data/parkings'
 import { useBookingMeta } from '@/hooks/use-booking-meta'
+import { useToast } from '@/hooks/use-toast'
 import { formatDateTime, formatDuration, formatUZS } from '@/lib/format'
-import { reservationCode } from '@/lib/reservation'
+import { reservationCode, supersededReservationHref } from '@/lib/reservation'
 
 export default function ReservationPage() {
 	const params = useParams<{ id: string }>()
 	const router = useRouter()
 	const { reservations, cancelReservation, enterReservation } = useApp()
+	const toast = useToast<string>()
 
 	const reservation = reservations.find(item => item.id === params.id)
 	const parking = reservation ? getParking(reservation.parkingId) : undefined
 	const meta = useBookingMeta(reservation?.id)
+
+	// A finished booking is the one stage this page cannot describe — its
+	// figures are the receipt's. Every other stage renders here, entry
+	// included: one page, one booking, no screen to bounce to.
+	const redirectTo = reservation ? supersededReservationHref(reservation) : null
+
+	useEffect(() => {
+		// replace, not push: there is no reason to leave a paid-up booking's
+		// pre-payment page sitting in the stack behind its receipt.
+		if (redirectTo) router.replace(redirectTo)
+	}, [redirectTo, router])
+
+	const [directionsOpen, setDirectionsOpen] = useState(false)
 
 	// Deferred past the first paint so the countdown does not disagree between
 	// the server's render and the client's.
@@ -58,36 +76,35 @@ export default function ReservationPage() {
 		<div className='-mx-5 -mt-6 min-h-[calc(100dvh-var(--spacing-nav))] bg-canvas pb-28 pt-5'>
 			<div className='mx-auto w-full max-w-md space-y-3 px-4'>
 				<AppBar
-					title='Bron'
+					// One page, so the heading is what says which stage the booking
+					// has reached. The panel's FAOL / VAQT TUGADI badge below keeps
+					// the live detail; repeating it here would say it twice.
+					title={
+						reservation.status === 'active' ? 'Parking sessiyasi faol' : 'Bron'
+					}
 					subtitle={parking.name}
 					onBack={() => router.push('/bookings')}
 				/>
 				{children}
 			</div>
+			{directionsOpen && (
+				<DirectionsSheet
+					parking={parking}
+					reservationId={reservation.id}
+					onClose={() => setDirectionsOpen(false)}
+				/>
+			)}
+			<Toast open={toast.open} message={toast.payload ?? ''} />
 		</div>
 	)
 
-	if (reservation.status === 'active') {
+	// The effect above is already on its way there; this is the one frame in
+	// between, and it deliberately shows none of the confirmation UI.
+	if (redirectTo) {
 		return frame(
-			<EmptyState
-				icon={CircleParking}
-				title='Bron faol sessiyaga aylandi'
-				text='Avtomobil parkingda — taymer ishlamoqda.'
-				href={`/session/${reservation.id}`}
-				action='Faol sessiya'
-			/>,
-		)
-	}
-
-	if (reservation.status === 'completed') {
-		return frame(
-			<EmptyState
-				icon={CheckCircle2}
-				title='Sessiya yakunlangan'
-				text='To‘lov amalga oshirildi — chekni ko‘rishingiz mumkin.'
-				href={`/receipt/${reservation.id}`}
-				action='Chekni ko‘rish'
-			/>,
+			<Card className='text-center'>
+				<p className='text-[12.5px] text-ink-3'>Yo‘naltirilmoqda…</p>
+			</Card>,
 		)
 	}
 
@@ -100,6 +117,70 @@ export default function ReservationPage() {
 				href='/parking'
 				action='Yangi parking topish'
 			/>,
+		)
+	}
+
+	// The booking is the same thing before and after entry; what changes is
+	// which of its actions are still ahead of the customer.
+	const entered = reservation.status === 'active'
+
+	// Shared by both stages. The clipboard needs a secure context and
+	// permission, so a refusal falls back to putting the code in the toast.
+	async function share() {
+		const text = `${parking!.name} · ${reservationCode(reservation!.id)}`
+		try {
+			await navigator.clipboard.writeText(text)
+			toast.show('Bron nusxalandi')
+		} catch {
+			toast.show(text)
+		}
+	}
+
+	const directions = (
+		<Button variant='outline' onClick={() => setDirectionsOpen(true)}>
+			<Navigation className='size-4' /> Yo‘nalish
+		</Button>
+	)
+
+	const shareAction = (
+		<Button variant='outline' onClick={() => share()}>
+			<Share2 className='size-4' /> Ulashish
+		</Button>
+	)
+
+	// Entered: the booking's own detail, with the running session in place of
+	// the confirmation it has already used up. The panel is the same code
+	// /session/[id] used to be, so there is one clock and one exit, not two.
+	if (entered) {
+		return frame(
+			<>
+				<ActiveSessionPanel reservation={reservation} meta={meta} />
+
+				<Card>
+					<KeyValue
+						label='Parking'
+						value={
+							<Link href={`/parking/${parking.id}`} className='text-brand'>
+								{parking.name}
+							</Link>
+						}
+					/>
+					<KeyValue
+						label='Kelish vaqti'
+						value={formatDateTime(reservation.startAt)}
+					/>
+					<KeyValue
+						label='Davomiylik'
+						value={`${reservation.durationHours} soat`}
+					/>
+					<KeyValue label='Bron raqami' value={reservation.id.slice(-8).toUpperCase()} />
+				</Card>
+
+				<div className='grid grid-cols-2 gap-2'>
+					{directions}
+					{shareAction}
+				</div>
+			</>,
 		)
 	}
 
@@ -169,23 +250,28 @@ export default function ReservationPage() {
 			</Card>
 
 			<div className='grid grid-cols-2 gap-2'>
-				<Button
-					variant='outline'
-					onClick={() => router.push(`/navigate/parking/${parking.id}`)}
-				>
-					<Navigation className='size-4' /> Yo‘nalish
-				</Button>
+				{directions}
 				<Button
 					variant='primary'
 					onClick={() => {
+						// No navigation: the booking is already on its own page, and
+						// this page renders the session. Sending the customer to a
+						// second screen and back was the whole friction.
 						enterReservation(reservation.id)
-						router.push(`/session/${reservation.id}`)
 					}}
 				>
 					<QrCode className='size-4' /> Kirishni boshlash
 				</Button>
 			</div>
 
+			{/* Sharing moved here off the Bron summary card, which now only
+			    summarises. */}
+			<Button variant='outline' block onClick={() => share()}>
+				<Share2 className='size-4' /> Ulashish
+			</Button>
+
+			{/* An entered booking has no cancel: the car is already inside, and
+			    the way out is the exit QR the session panel draws. */}
 			<Button
 				variant='outline'
 				danger

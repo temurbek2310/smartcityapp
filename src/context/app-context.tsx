@@ -24,49 +24,9 @@ import { hydrateUserProfile } from "@/lib/persisted-profile";
 import { formatUzbekPlate } from "@/lib/plate";
 import { calculateFinalTotal } from "@/lib/reservation";
 import { clearAccountStorage } from "@/lib/account-storage";
+import { initialState } from "@/lib/initial-state";
 
 const STORAGE_KEY = "b-space-mvp-v1";
-
-const initialState: BSpaceState = {
-  hydrated: false,
-  onboardingDone: false,
-  user: null,
-  favorites: [],
-  favoriteQueueOrgs: [],
-  favoriteEvents: [],
-  savedRoutes: [],
-  reservations: [],
-  queueTickets: [],
-  serviceBookings: [],
-  // Defaults mirror City Goo's: the things that affect a booking you already
-  // made are on, marketing is off.
-  notificationPrefs: {
-    bookingReminders: true,
-    freeSpaces: true,
-    queueTurn: true,
-    roadClosures: true,
-    cityEvents: false,
-    partnerOffers: false,
-  },
-  notifications: [
-    {
-      id: "full-parking-demo",
-      title: "Alternativ parking",
-      message: "Next Mall Parking hozir FULL. Tashkent City Parkingda bo'sh joylar mavjud.",
-      createdAt: new Date().toISOString(),
-      read: false,
-      type: "parking",
-    },
-    {
-      id: "welcome-system",
-      title: "B SPACE MVP",
-      message: "Demo rejim tayyor. Uzbekistan bo'ylab parkinglarni sinab ko'ring.",
-      createdAt: new Date().toISOString(),
-      read: false,
-      type: "system",
-    },
-  ],
-};
 
 type CreateReservationInput = {
   parkingId: string;
@@ -284,7 +244,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const resetDemo = useCallback(() => {
     clearAccountStorage(localStorage);
-    setState({ ...initialState, hydrated: true, notifications: [] });
+    // initialState is already empty of activity, so there is nothing left to
+    // blank out by hand here.
+    setState({ ...initialState, hydrated: true });
   }, []);
 
   const toggleFavorite = useCallback((parkingId: string) => {

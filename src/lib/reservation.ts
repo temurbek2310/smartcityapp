@@ -1,4 +1,35 @@
-import type { Reservation } from "@/lib/types";
+import type { Reservation, ReservationStatus } from "@/lib/types";
+
+// --- Where a booking lives right now ------------------------------------
+// /reservation/[id] is the booking's page for its whole live span. Before
+// entry it is the confirmation; after entry the same page renders the
+// running session itself. So every entry point — the card in Bron, a
+// conflict link, a deep link someone kept, and /session/[id] itself, which
+// is now only a shim — lands there, and only a finished booking is described
+// somewhere else.
+export type ReservationRef = Pick<Reservation, "id" | "status">;
+
+export function reservationHref(reservation: ReservationRef) {
+  const screens: Record<ReservationStatus, string> = {
+    // Waiting to be used: confirmation, QR, «Kirishni boshlash», cancel.
+    reserved: `/reservation/${reservation.id}`,
+    // Inside. The same page, with the timer, the running bill and the exit
+    // in place of the confirmation it has used up.
+    active: `/reservation/${reservation.id}`,
+    // Paid and gone — the only stage with a screen of its own.
+    completed: `/receipt/${reservation.id}`,
+    // Read-only notice, still on the detail page.
+    cancelled: `/reservation/${reservation.id}`,
+  };
+  return screens[reservation.status];
+}
+
+// Where /reservation/[id] has to hand over to, or null while it is still
+// the page that describes this booking — which is every stage but the last.
+export function supersededReservationHref(reservation: ReservationRef) {
+  const href = reservationHref(reservation);
+  return href === `/reservation/${reservation.id}` ? null : href;
+}
 
 export function reservationCode(id: string) {
   return `BSPACE:${id}`;

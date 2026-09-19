@@ -10,9 +10,9 @@ import { useCallback, useEffect, useState } from 'react'
 // Home and Favorites each used to read and write this key themselves, with
 // different seeds (Home showed Coffee Lab pre-saved, Favorites showed an
 // empty list) and Home read storage inside a useState initializer, which
-// can disagree with the server-rendered markup. One hook now owns it.
+// can disagree with the server-rendered markup. One hook now owns it, and
+// it seeds nothing: a customer who has saved nothing has saved nothing.
 const STORAGE_KEY = 'citygoo-place-favorites'
-const DEMO_SEED = ['coffee-lab']
 
 // Home wrote the cinema as 'cinema-magic', Favorites looked for
 // 'magic-cinema'. 'cinema-magic' is what is actually sitting in users'
@@ -42,10 +42,10 @@ export function usePlaceFavorites() {
 		const timer = window.setTimeout(() => {
 			try {
 				const raw = window.localStorage.getItem(STORAGE_KEY)
-				if (raw === null) {
-					setIds(DEMO_SEED)
-					return
-				}
+				// Nothing stored means nothing saved. reconcile() would return the
+				// same empty list, but writing it back would create the key on a
+				// first visit for no reason.
+				if (raw === null) return
 				const reconciled = reconcile(JSON.parse(raw))
 				setIds(reconciled)
 				// Write the cleaned list back so the migration runs once.

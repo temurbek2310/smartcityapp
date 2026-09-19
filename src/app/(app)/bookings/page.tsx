@@ -4,8 +4,6 @@ import {
 	CalendarDays,
 	ChevronRight,
 	CircleParking,
-	LogOut,
-	QrCode,
 	Repeat,
 	Share2,
 	Stethoscope,
@@ -15,7 +13,7 @@ import {
 	type LucideIcon,
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type KeyboardEvent, type MouseEvent } from 'react'
 
 import { ServiceBookingSheet } from '@/components/booking/service-booking-sheet'
 import { TableBookingFlow } from '@/components/booking/table-booking-flow'
@@ -32,6 +30,7 @@ import { SectionHeader } from '@/components/ui/section-header'
 import { SegmentedTabs } from '@/components/ui/segmented-tabs'
 import { Toast } from '@/components/ui/toast'
 import { useApp } from '@/context/app-context'
+import { useBookingMetaMap } from '@/hooks/use-booking-meta'
 import { useToast } from '@/hooks/use-toast'
 import { bookingRows, isOpen, type BookingRow } from '@/lib/bookings'
 import { cn } from '@/lib/cn'
@@ -87,6 +86,36 @@ export default function BookingsPage() {
 	const open = rows.filter(isOpen)
 	const history = rows.filter(row => !isOpen(row))
 	const list = tab === 'open' ? open : history
+
+	// Bay and level for the parking rows, so a summary card can say which
+	// space is being held without opening the booking.
+	const parkingMeta = useBookingMetaMap(
+		rows.filter(row => row.kind === 'parking').map(row => row.id),
+	)
+
+	// Where tapping a card goes. The kinds with a screen of their own open it;
+	// the light service bookings have none, so their QR sheet is the detail
+	// view and carries the actions that used to sit on the card.
+	function openRow(row: BookingRow) {
+		if (isOpen(row) && row.qrValue) setQrRow(row)
+		else if (row.href) router.push(row.href)
+	}
+
+	function canOpen(row: BookingRow) {
+		return Boolean(row.href) || (isOpen(row) && Boolean(row.qrValue))
+	}
+
+	async function share(row: BookingRow) {
+		const text = `${row.title} · ${row.code}`
+		try {
+			await navigator.clipboard.writeText(text)
+			toast.show('Bron nusxalandi')
+		} catch {
+			// Clipboard needs a secure context and permission; the code is on
+			// screen either way.
+			toast.show(text)
+		}
+	}
 
 	function cancel(row: BookingRow) {
 		// The row knows whether the store will actually honour this. Without
@@ -152,10 +181,34 @@ export default function BookingsPage() {
 					list.map(row => {
 						const Icon = KIND_ICON[row.kind]
 						const live = isOpen(row)
+						const meta = row.kind === 'parking' ? parkingMeta[row.id] : undefined
+						const openable = canOpen(row)
+						const repeatable = !live && row.status !== 'cancelled'
 						return (
 							<Card
 								key={row.id}
-								className={cn(row.status === 'active' && 'border-[1.5px] border-brand')}
+								as='article'
+								{...(openable && {
+									role: 'button',
+									tabIndex: 0,
+									'aria-label': `${row.title} — ${row.statusLabel}. Batafsil`,
+									onClick: () => openRow(row),
+									onKeyDown: (event: KeyboardEvent<HTMLElement>) => {
+										// Only the card's own key presses open it. A nested
+										// «Takrorlash» activates on the same keys and its
+										// keydown bubbles here, so without this the card
+										// would navigate out from under the sheet it opened.
+										if (event.target !== event.currentTarget) return
+										if (event.key === 'Enter' || event.key === ' ') {
+											event.preventDefault()
+											openRow(row)
+										}
+									},
+								})}
+								className={cn(
+									row.status === 'active' && 'border-[1.5px] border-brand',
+									openable && 'cursor-pointer text-left transition active:scale-[0.99]',
+								)}
 							>
 								<div className='flex items-start justify-between gap-3'>
 									<div className='flex min-w-0 items-start gap-3'>
@@ -199,68 +252,53 @@ export default function BookingsPage() {
 									)}
 								</div>
 
-								{live ? (
-									<div className='mt-3 grid grid-cols-3 gap-2'>
-										<Button
-											size='sm'
-											variant='outline'
-											onClick={() =>
-												row.qrValue ? setQrRow(row) : router.push(row.href ?? '/home')
-											}
-										>
-											<QrCode className='size-3.5' /> Ochish
-										</Button>
-										<Button
-											size='sm'
-											variant='outline'
-											onClick={async () => {
-												const text = `${row.title} · ${row.code}`
-												try {
-													await navigator.clipboard.writeText(text)
-													toast.show('Bron nusxalandi')
-												} catch {
-													// Clipboard needs a secure context and permission;
-													// the code is on screen either way.
-													toast.show(text)
-												}
-											}}
-										>
-											<Share2 className='size-3.5' /> Ulashish
-										</Button>
-										{/* A booking that has already started is ended, not
-										    cancelled. Parking is the only kind with that
-										    stage, and its exit lives on the session screen. */}
-										{row.cancellable ? (
+								{/* Only parking holds a named space, and only once the
+								    booking sheet has written one. */}
+								{meta && (
+									<p className='mt-1 text-[11.5px] text-ink-3'>
+										{meta.bay} · {meta.level}-daraja
+									</p>
+								)}
+
+								{/* Summary only. Opening, sharing, cancelling and leaving all
+								    live on the detail screen this card points at — an equal
+								    «Bekor» next to «Ochish» made the list read as a control
+								    panel and put a destructive action one mistap away. */}
+								{(repeatable || openable) && (
+									<div
+										className={cn(
+											'mt-3 flex items-center gap-3',
+											repeatable ? 'justify-between' : 'justify-end',
+										)}
+									>
+										{repeatable && (
 											<Button
 												size='sm'
 												variant='outline'
-												danger
-												onClick={() => setCancelRow(row)}
+												onPointerDown={event => event.stopPropagation()}
+												onClick={(event: MouseEvent<HTMLButtonElement>) => {
+													// Nested in a clickable card: without this the
+													// card would navigate away from the sheet.
+													event.stopPropagation()
+													repeat(row)
+												}}
 											>
-												<X className='size-3.5' /> Bekor
-											</Button>
-										) : (
-											<Button
-												size='sm'
-												variant='outline'
-												onClick={() => router.push(row.exitHref ?? row.href ?? '/home')}
-											>
-												<LogOut className='size-3.5' /> Chiqish
+												<Repeat className='size-3.5' /> Takrorlash
 											</Button>
 										)}
+										{openable && (
+											// The card itself is the control, and its aria-label
+											// already ends in «Batafsil»; this is the visible hint
+											// that it is one.
+											<span
+												aria-hidden
+												className='inline-flex items-center gap-0.5 text-[11.5px] font-semibold text-ink-3'
+											>
+												Batafsil
+												<ChevronRight className='size-3.5' />
+											</span>
+										)}
 									</div>
-								) : (
-									row.status !== 'cancelled' && (
-										<Button
-											size='sm'
-											variant='outline'
-											block
-											className='mt-3'
-											onClick={() => repeat(row)}
-										>
-											<Repeat className='size-3.5' /> Takrorlash
-										</Button>
-									)
 								)}
 							</Card>
 						)
@@ -337,16 +375,36 @@ export default function BookingsPage() {
 							)}
 						</KeyValueList>
 					</Card>
-					{qrRow.href && (
-						<Button
-							variant='primary'
-							block
-							className='mt-4'
-							onClick={() => router.push(qrRow.href!)}
-						>
-							Batafsil
+					{/* A queue ticket or a table booking has no detail route of its
+					    own, so this sheet is it — the share and cancel that used to
+					    crowd the summary card belong here. */}
+					<div className='mt-4 space-y-2'>
+						{qrRow.href && (
+							<Button
+								variant='primary'
+								block
+								onClick={() => router.push(qrRow.href!)}
+							>
+								Batafsil
+							</Button>
+						)}
+						<Button variant='outline' block onClick={() => share(qrRow)}>
+							<Share2 className='size-4' /> Ulashish
 						</Button>
-					)}
+						{qrRow.cancellable && (
+							<Button
+								variant='outline'
+								danger
+								block
+								onClick={() => {
+									setQrRow(null)
+									setCancelRow(qrRow)
+								}}
+							>
+								<X className='size-4' /> Bronni bekor qilish
+							</Button>
+						)}
+					</div>
 				</BottomSheet>
 			)}
 

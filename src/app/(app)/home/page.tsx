@@ -2,7 +2,6 @@
 
 import {
 	Bell,
-	Building2,
 	CalendarDays,
 	Check,
 	ChevronDown,
@@ -57,7 +56,6 @@ import { distanceKm } from '@/lib/geo'
 import {
 	AI_TIPS,
 	CATEGORIES,
-	QUICK_ROUTES,
 	SERVICES,
 } from '@/data/home-content'
 import {
@@ -77,7 +75,6 @@ type SortMode = 'distance' | 'rating' | 'free'
 type SheetState =
 	| { type: 'city' }
 	| { type: 'weather' }
-	| { type: 'route'; routeId: 'home' | 'work' }
 	| { type: 'history' }
 	| { type: 'sort' }
 	| { type: 'categories' }
@@ -295,7 +292,7 @@ function HomeView() {
 			return
 		}
 		if (id === 'transport') {
-			setSheet({ type: 'route', routeId: 'work' })
+			router.push('/transport')
 			return
 		}
 		if (id === 'parking') {
@@ -552,21 +549,12 @@ function HomeView() {
 					</button>
 				</div>
 
+				{/* The «Uy · 18 daq» / «Ish · 22 daq» chips that used to lead this
+				    rail were a fabricated address book with fabricated commute
+				    times, shown to a customer who had saved neither address. What
+				    is left is the customer's own: their favourites and their
+				    history, both of which start empty. */}
 				<HorizontalRail className='gap-2'>
-					{QUICK_ROUTES.map(route => {
-						const Icon = route.icon
-						return (
-							<button
-								key={route.id}
-								type='button'
-								onClick={() => setSheet({ type: 'route', routeId: route.id })}
-								className='inline-flex h-10 shrink-0 items-center gap-2 rounded-xl border border-line bg-white px-3 text-xs font-bold text-ink-2'
-							>
-								<Icon className='size-4 text-brand' />
-								{route.title} · {route.minutes} daq
-							</button>
-						)
-					})}
 					<button
 						type='button'
 						onClick={() => setFavoriteOnly(value => !value)}
@@ -720,7 +708,7 @@ function HomeView() {
 			{/* Existing B SPACE active-session capability preserved */}
 			{activeReservation && (
 				<Link
-					href={`/session/${activeReservation.id}`}
+					href={`/reservation/${activeReservation.id}`}
 					className='flex items-center justify-between gap-3 rounded-2xl bg-ok p-4 text-white shadow-lg shadow-[0_8px_24px_rgb(18_183_106/.22)]'
 				>
 					<div>
@@ -1646,74 +1634,6 @@ function HomeView() {
 					</div>
 				</BottomSheet>
 			)}
-
-			{sheet?.type === 'route' &&
-				(() => {
-					const route =
-						QUICK_ROUTES.find(item => item.id === sheet.routeId) ??
-						QUICK_ROUTES[0]
-					return (
-						<BottomSheet
-							title={`Marshrut: ${route.title}`}
-							onClose={() => setSheet(null)}
-						>
-							<div className='flex items-center gap-3 rounded-2xl bg-white p-4 shadow-card'>
-								<span className='grid size-11 shrink-0 place-items-center rounded-xl bg-brand-50 text-brand'>
-									<Building2 className='size-5' />
-								</span>
-								<div className='min-w-0'>
-									<p className='text-sm font-black text-ink'>
-										{route.title}
-									</p>
-									<p className='mt-1 text-xs leading-5 text-ink-3'>
-										{route.address}
-									</p>
-								</div>
-							</div>
-							<div className='mt-3 grid grid-cols-2 gap-3'>
-								{TRANSPORT_MODES.map(mode => {
-									const Icon = mode.icon
-									const minutes = Math.round((route.minutes * mode.time) / 15)
-									return (
-										<button
-											key={mode.id}
-											type='button'
-											onClick={() => setTransportMode(mode.id)}
-											className={`rounded-2xl bg-white p-4 text-center shadow-sm ring-1 ${transportMode === mode.id ? 'ring-brand' : 'ring-line'}`}
-										>
-											<Icon className='mx-auto size-5 text-brand' />
-											<p className='mt-2 text-lg font-black text-ink'>
-												{minutes} daq
-											</p>
-											<p className='mt-1 text-xs text-ink-3'>
-												{mode.label}
-											</p>
-										</button>
-									)
-								})}
-							</div>
-							<div className='mt-3 rounded-2xl border border-brand-100 bg-brand-50 p-4'>
-								<p className='text-xs font-black text-brand-600'>
-									Eng tez — avto
-								</p>
-								<p className='mt-1 text-xs leading-5 text-ink-2'>
-									{route.distance} km, tirbandlik o‘rtacha. Maqsad yaqinida
-									parking mavjud.
-								</p>
-							</div>
-							<button
-								type='button'
-								onClick={() => {
-									setSheet(null)
-									router.push(`/navigate/parking/${route.parkingId}`)
-								}}
-								className='mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-brand text-sm font-black text-white'
-							>
-								<Navigation className='size-5' /> Marshrutni ochish
-							</button>
-						</BottomSheet>
-					)
-				})()}
 
 			{sheet?.type === 'history' && (
 				<BottomSheet title='Tarix' onClose={() => setSheet(null)}>

@@ -114,18 +114,35 @@ describe('bookingRows', () => {
 		expect(waiting.subtitle).toContain('12')
 	})
 
-	it('routes each kind somewhere it can actually be opened', () => {
-		const [active] = bookingRows({
+	// Tapping a card is now the only way into a booking, so every status has
+	// to name the screen that can actually show it. The detail page covers
+	// three of the four, entered included — it offers «Faol sessiyaga
+	// qaytish» rather than sending the card straight past itself.
+	it.each([
+		['reserved' as const, '/reservation/r1'],
+		['active' as const, '/reservation/r1'],
+		['completed' as const, '/receipt/r1'],
+		['cancelled' as const, '/reservation/r1'],
+	])('sends a %s parking booking to %s', (status, href) => {
+		const [row] = bookingRows({
 			...empty,
-			reservations: [reservation({ status: 'active' })],
+			reservations: [reservation({ status })],
 		})
-		expect(active.href).toBe('/session/r1')
+		expect(row.href).toBe(href)
+	})
 
-		const [done] = bookingRows({
-			...empty,
-			reservations: [reservation({ status: 'completed' })],
+	// Parking opens a screen; the kinds without one carry a QR instead, which
+	// is what their card opens.
+	it('gives every row something to open', () => {
+		const rows = bookingRows({
+			reservations: [reservation()],
+			queueTickets: [ticket()],
+			serviceBookings: [service()],
 		})
-		expect(done.href).toBe('/receipt/r1')
+		for (const row of rows) expect(row.href ?? row.qrValue).toBeTruthy()
+
+		const [parking] = bookingRows({ ...empty, reservations: [reservation()] })
+		expect(parking.qrValue).toBeUndefined()
 	})
 
 	it('carries what a Takrorlash should reopen', () => {
@@ -180,24 +197,24 @@ describe('bookingRows', () => {
 	it('only lets a parking booking be cancelled before the driver enters', () => {
 		const [reserved] = bookingRows({ ...empty, reservations: [reservation()] })
 		expect(reserved.cancellable).toBe(true)
-		expect(reserved.exitHref).toBeUndefined()
 
+		// An entered session is ended by leaving the lot, not by cancelling.
+		// The card opens the booking, whose detail page drops the cancel and
+		// points on to the running session instead.
 		const [active] = bookingRows({
 			...empty,
 			reservations: [reservation({ status: 'active' })],
 		})
 		expect(active.cancellable).toBe(false)
-		// An entered session is ended by leaving the lot, not by cancelling.
-		expect(active.exitHref).toBe('/session/r1?exit=1')
+		expect(active.href).toBe('/reservation/r1')
 	})
 
 	it.each([
 		['completed' as const],
 		['cancelled' as const],
-	])('offers no cancel and no exit on a %s booking', status => {
+	])('offers no cancel on a %s booking', status => {
 		const [row] = bookingRows({ ...empty, reservations: [reservation({ status })] })
 		expect(row.cancellable).toBe(false)
-		expect(row.exitHref).toBeUndefined()
 	})
 
 	it('keeps queue tickets and table bookings cancellable while they are live', () => {

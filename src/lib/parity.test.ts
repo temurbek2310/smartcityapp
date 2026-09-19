@@ -80,8 +80,18 @@ describe('Home map layers', () => {
 })
 
 describe('route endpoints', () => {
-	it('resolves all six address-book choices', () => {
+	it('resolves every destination choice', () => {
 		for (const item of DEMO_DESTINATIONS) expect(resolveRouteEndpoint(item.id, TASHKENT_CENTER)?.title).toBe(item.title)
+	})
+
+	// «Uy» and «Ish» were a saved address book belonging to nobody, offered to
+	// a customer who had saved neither. What is left is public landmarks and
+	// the driver's own live position.
+	it('offers no pre-saved home or work address', () => {
+		expect(DEMO_DESTINATIONS.map(item => item.id)).not.toContain('home')
+		expect(DEMO_DESTINATIONS.map(item => item.id)).not.toContain('work')
+		expect(resolveRouteEndpoint('home', TASHKENT_CENTER)).toBeNull()
+		expect(resolveRouteEndpoint('work', TASHKENT_CENTER)).toBeNull()
 	})
 	it('keeps GPS as the destination after swapping with the default route', () => {
 		const from = resolveRouteEndpoint('me', TASHKENT_CENTER)!
@@ -108,7 +118,7 @@ describe('route endpoints', () => {
 		expect(resolveRouteEndpoint('parking:missing', TASHKENT_CENTER)).toBeNull()
 	})
 	it('sends both picked endpoints and transport mode to the external navigator', () => {
-		const from = resolveRouteEndpoint('work', TASHKENT_CENTER)!
+		const from = resolveRouteEndpoint('magic-city', TASHKENT_CENTER)!
 		const to = resolveRouteEndpoint('me', TASHKENT_CENTER)!
 		const url = new URL(externalNavigationHref(from, to, 'walk'))
 		expect(url.searchParams.get('origin')).toBe(`${from.lat},${from.lng}`)
@@ -144,6 +154,9 @@ describe('account deletion', () => {
 			removeItem: key => { data.delete(key) }, clear: () => data.clear(),
 		}
 		clearAccountStorage(storage)
-		expect([...data.entries()]).toEqual([['another-app', 'keep'], ['citygoo-place-favorites', '[]']])
+		// Nothing of this account's is left, not even an empty list: the saved
+		// places key used to be rewritten as '[]' to stop a sample favorite
+		// reappearing, and there is no sample favorite any more.
+		expect([...data.entries()]).toEqual([['another-app', 'keep']])
 	})
 })
