@@ -196,6 +196,12 @@ export type SavedRoute = {
   from: string;
   to: string;
   mode: string;
+  // The route's own endpoints as resolveRouteEndpoint() ids — the place the
+  // customer was going, never the car park suggested beside it.
+  destinationId?: string;
+  originId?: string;
+  // Legacy: routes saved before destinationId existed recorded only the lot
+  // nearest their destination. Read for those alone, never written.
   parkingId?: string;
   createdAt: string;
 };

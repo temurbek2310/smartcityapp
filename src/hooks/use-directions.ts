@@ -1,31 +1,43 @@
 'use client'
 
-import { useCallback, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { useCallback } from 'react'
 
-import { destinationIdFrom, type DestinationSource } from '@/lib/navigation'
+import {
+	destinationIdFrom,
+	routeHref,
+	type DestinationSource,
+} from '@/lib/navigation'
+import { DEFAULT_TRANSPORT_MODE, type TransportMode } from '@/lib/transport'
 
-// Every screen that offers «Yo‘nalish» holds one of these and renders one
-// <DirectionsSheet>. The screen names what the customer is looking at; the
-// shared model turns it into a destination, and nothing opens on a guess:
-// open() returns false when the reference resolves to nowhere, so the caller
-// can say so instead of routing somewhere else.
+// Every «Yo‘nalish» on a known destination goes through here: the screen
+// names what the customer is looking at, the shared model turns it into a
+// destination id, and the customer lands on /transport with it — no sheet
+// asking them to confirm a place they already picked. Nothing opens on a
+// guess: open() returns false when the reference resolves to nowhere, so the
+// caller can say so instead of routing somewhere else.
 export function useDirections() {
-	const [destinationId, setDestinationId] = useState<string | null>(null)
+	const router = useRouter()
 
-	const open = useCallback((source: DestinationSource) => {
-		const id = destinationIdFrom(source)
-		if (!id) return false
-		setDestinationId(id)
-		return true
-	}, [])
+	const openId = useCallback(
+		(
+			id: string | null | undefined,
+			// Callers that already know a mode pass it; the shared default
+			// covers the rest, and /transport lets the customer switch.
+			mode: TransportMode = DEFAULT_TRANSPORT_MODE,
+		) => {
+			if (!id) return false
+			router.push(routeHref({ mode, destinationId: id }))
+			return true
+		},
+		[router],
+	)
 
-	const openId = useCallback((id: string | null | undefined) => {
-		if (!id) return false
-		setDestinationId(id)
-		return true
-	}, [])
+	const open = useCallback(
+		(source: DestinationSource, mode?: TransportMode) =>
+			openId(destinationIdFrom(source), mode),
+		[openId],
+	)
 
-	const close = useCallback(() => setDestinationId(null), [])
-
-	return { destinationId, open, openId, close }
+	return { open, openId }
 }

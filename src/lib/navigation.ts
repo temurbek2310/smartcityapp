@@ -4,6 +4,7 @@ import { getPlace } from '@/data/places'
 import { getQueueOrg } from '@/data/queue-orgs'
 import { mapObjectKey } from '@/lib/map-objects'
 import { isTransportMode, type TransportMode } from '@/lib/transport'
+import type { SavedRoute } from '@/lib/types'
 
 // One navigation system for the whole app.
 //
@@ -135,4 +136,19 @@ export function readRouteParams(params: {
 		destinationId: target || (parkingId ? `${PARKING_PREFIX}${parkingId}` : null),
 		originId: params.get('from'),
 	}
+}
+
+// «Qayta qurish» on a saved route: the same trip, to the same place. A route
+// saved before destinationId existed only knows its parking, so that is the
+// one case that still replays to a lot.
+export function savedRouteHref(
+	route: Pick<SavedRoute, 'mode' | 'destinationId' | 'originId' | 'parkingId'>,
+) {
+	return routeHref({
+		mode: isTransportMode(route.mode) ? route.mode : null,
+		destinationId:
+			route.destinationId ??
+			destinationIdFrom({ from: 'parking', parkingId: route.parkingId }),
+		originId: route.originId,
+	})
 }

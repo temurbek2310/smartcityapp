@@ -14,7 +14,6 @@ import { notFound, useParams, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 
 import { ActiveSessionPanel } from '@/components/parking/active-session-panel'
-import { DirectionsSheet } from '@/components/navigation/directions-sheet'
 import { AppBar } from '@/components/ui/app-bar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -27,6 +26,7 @@ import { Toast } from '@/components/ui/toast'
 import { useApp } from '@/context/app-context'
 import { getParking } from '@/data/parkings'
 import { useBookingMeta } from '@/hooks/use-booking-meta'
+import { useDirections } from '@/hooks/use-directions'
 import { useToast } from '@/hooks/use-toast'
 import { formatDateTime, formatDuration, formatUZS } from '@/lib/format'
 import { destinationIdFrom } from '@/lib/navigation'
@@ -53,9 +53,7 @@ export default function ReservationPage() {
 		if (redirectTo) router.replace(redirectTo)
 	}, [redirectTo, router])
 
-	// Holds the destination id while the sheet is up: the booking's own lot,
-	// resolved through the shared model rather than named here.
-	const [directionsOpen, setDirectionsOpen] = useState<string | null>(null)
+	const directionsTo = useDirections()
 
 	// Deferred past the first paint so the countdown does not disagree between
 	// the server's render and the client's.
@@ -90,10 +88,6 @@ export default function ReservationPage() {
 				/>
 				{children}
 			</div>
-			<DirectionsSheet
-				destinationId={directionsOpen}
-				onClose={() => setDirectionsOpen(null)}
-			/>
 			<Toast open={toast.open} message={toast.payload ?? ''} />
 		</div>
 	)
@@ -142,7 +136,7 @@ export default function ReservationPage() {
 	})
 
 	const directions = destinationId && (
-		<Button variant='outline' onClick={() => setDirectionsOpen(destinationId)}>
+		<Button variant='outline' onClick={() => directionsTo.openId(destinationId)}>
 			<Navigation className='size-4' /> Yo‘nalish
 		</Button>
 	)

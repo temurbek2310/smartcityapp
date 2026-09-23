@@ -10,7 +10,6 @@ import {
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Suspense, useMemo, useState } from 'react'
 
-import { DirectionsSheet } from '@/components/navigation/directions-sheet'
 import { QueueForecastCard } from '@/components/queues/queue-forecast-card'
 import { QueueOrgCard } from '@/components/queues/queue-org-card'
 import { QueueTicketCard } from '@/components/queues/queue-ticket-card'
@@ -561,11 +560,6 @@ function QueuesView() {
 					</Button>
 				</BottomSheet>
 			)}
-
-			<DirectionsSheet
-				destinationId={directions.destinationId}
-				onClose={directions.close}
-			/>
 
 			<Toast open={toast.open} message={toast.payload ?? ''} />
 		</div>

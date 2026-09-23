@@ -199,7 +199,7 @@ export function RouteMap({
 				))}
 			</div>
 			<p className='px-3 pb-3 text-[10.5px] leading-4 text-ink-3'>
-				Namunaviy yo‘nalish va yo‘l holati. Yo‘l bo‘ylab navigatsiya uchun tashqi navigatorni oching.
+				Namunaviy yo‘nalish va yo‘l holati. Yo‘l bo‘ylab navigatsiya uchun 2GISni oching.
 			</p>
 		</div>
 	)

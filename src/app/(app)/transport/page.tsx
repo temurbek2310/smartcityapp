@@ -70,7 +70,12 @@ import {
 } from '@/lib/transport'
 import { readRouteParams, routeHref } from '@/lib/navigation'
 import { useUserLocation } from '@/lib/use-user-location'
-import { externalNavigationHref, nearestParking, resolveRouteEndpoint } from '@/lib/route-endpoints'
+import {
+	externalNavigationHref,
+	externalNavigationOrigin,
+	nearestParking,
+	resolveRouteEndpoint,
+} from '@/lib/route-endpoints'
 
 const MODE_COST_LABEL: Record<TransportMode, string> = {
 	car: 'yoqilg‘i',
@@ -164,9 +169,8 @@ function TransportView() {
 	const destinationPoint = useMemo(() => selectedDestinationId
 		? resolveRouteEndpoint(selectedDestinationId, location) : null,
 		[selectedDestinationId, location])
-	// The lot this route ends at or beside — used for the destination's city
-	// and for the saved-route record, neither of which is a claim about
-	// parking. What the screen actually offers the customer is `suggestion`.
+	// The lot this route ends at or beside — used for the destination's city,
+	// which is not a claim about parking. What the screen actually offers the customer is `suggestion`.
 	const arrivalParking = useMemo(() => destinationPoint
 		? getParking(destinationPoint.parkingId ?? '') ?? nearestParking(destinationPoint)
 		: undefined, [destinationPoint])
@@ -448,7 +452,12 @@ function TransportView() {
 	const cityMeta = CITY_META[arrivalParking.city] ?? CITY_META.Toshkent
 	const WeatherIcon = weatherIconFor(cityMeta.sky)
 
-	const navigateHref = externalNavigationHref(originPoint, destinationPoint, mode)
+	// null for scooter, which 2GIS has no route type for.
+	const navigateHref = externalNavigationHref({
+		origin: externalNavigationOrigin(originPoint, status === 'ready'),
+		destination: destinationPoint,
+		mode,
+	})
 
 	const notices: RouteNotice[] = [
 		{
@@ -551,7 +560,10 @@ function TransportView() {
 						from: originStatusLabel,
 						to: destinationValue,
 						mode,
-						parkingId: arrivalParking.id,
+						// The place itself, not the lot beside it: replaying the route
+						// from Favorites has to end where this one does.
+						destinationId: destinationPoint.id,
+						originId: selectedOriginId,
 					})
 					notifyBooking('Marshrut sevimlilarga saqlandi')
 				}}

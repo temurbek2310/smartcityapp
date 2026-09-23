@@ -14,7 +14,6 @@ import { useRouter } from 'next/navigation'
 import { useEffect, useMemo, useState } from 'react'
 
 import { ParkingMap } from '@/components/map/parking-map'
-import { DirectionsSheet } from '@/components/navigation/directions-sheet'
 import { SelectedParkingCard } from '@/components/map/selected-parking-card'
 import { ActiveBookingBanner } from '@/components/parking/active-booking-banner'
 import { OccupancyForecastCard } from '@/components/parking/occupancy-forecast-card'
@@ -384,11 +383,6 @@ export default function ParkingListPage() {
 				parkingId={bookingParkingId}
 				onClose={() => setBookingParkingId(null)}
 				onNotify={toast.show}
-			/>
-
-			<DirectionsSheet
-				destinationId={directions.destinationId}
-				onClose={directions.close}
 			/>
 
 			<Toast open={toast.open} message={toast.payload ?? ''} />

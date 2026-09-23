@@ -15,7 +15,6 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 
-import { DirectionsSheet } from '@/components/navigation/directions-sheet'
 import { AppBar } from '@/components/ui/app-bar'
 import { Badge, type BadgeTone } from '@/components/ui/badge'
 import { BottomSheet } from '@/components/ui/bottom-sheet'
@@ -97,11 +96,6 @@ export function BookingDetail({
 				/>
 				{children}
 			</div>
-
-			<DirectionsSheet
-				destinationId={directions.destinationId}
-				onClose={directions.close}
-			/>
 
 			<Toast open={toast.open} message={toast.payload ?? ''} />
 		</div>

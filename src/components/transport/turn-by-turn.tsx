@@ -20,9 +20,11 @@ export function TurnByTurn({
 }: {
 	steps: TimelineStep[]
 	minutes: number
-	// The app has no road graph, so the hand-off to a real navigator stays
-	// available from inside the navigator rather than being dropped.
-	navigateHref: string
+	// The app has no road graph, so the hand-off to 2GIS stays available from
+	// inside the navigator rather than being dropped. null when 2GIS has no
+	// route type for the mode (scooter): the route then stays in B SPACE and
+	// says so, instead of opening 2GIS on a different vehicle.
+	navigateHref: string | null
 	onClose: () => void
 	onComplete?: () => void
 }) {
@@ -160,15 +162,21 @@ export function TurnByTurn({
 					</div>
 				))}
 
-				<a
-					href={navigateHref}
-					target='_blank'
-					rel='noreferrer'
-					className='mt-3 flex items-center justify-center gap-1.5 rounded-xl bg-white/9 py-2.5 text-[12.5px] font-semibold text-white/75'
-				>
-					Tashqi navigatorda ochish
-					<ExternalLink className='size-3.5' />
-				</a>
+				{navigateHref ? (
+					<a
+						href={navigateHref}
+						target='_blank'
+						rel='noreferrer'
+						className='mt-3 flex items-center justify-center gap-1.5 rounded-xl bg-white/9 py-2.5 text-[12.5px] font-semibold text-white/75'
+					>
+						2GISda navigatsiyani boshlash
+						<ExternalLink className='size-3.5' />
+					</a>
+				) : (
+					<p className='mt-3 rounded-xl bg-white/9 px-3 py-2.5 text-center text-[12px] leading-5 text-white/65'>
+						2GIS skuter marshrutini ochmaydi — navigatsiya B SPACE’da davom etadi.
+					</p>
+				)}
 			</div>
 
 			<div className='flex gap-2.5 px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-3.5'>

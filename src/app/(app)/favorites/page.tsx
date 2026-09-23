@@ -34,10 +34,8 @@ import { usePlaceFavorites } from '@/hooks/use-place-favorites'
 import { useToast } from '@/hooks/use-toast'
 import { parkingAvailability } from '@/lib/availability'
 import { formatDistance, formatUZS } from '@/lib/format'
-import { destinationIdFrom, routeHref } from '@/lib/navigation'
-import { DirectionsSheet } from '@/components/navigation/directions-sheet'
+import { savedRouteHref } from '@/lib/navigation'
 import { useDirections } from '@/hooks/use-directions'
-import { isTransportMode } from '@/lib/transport'
 import type { Place } from '@/lib/types'
 
 type FavoriteTab = 'places' | 'parking' | 'queues' | 'routes' | 'events'
@@ -388,13 +386,7 @@ export default function FavoritesPage() {
 											</button>
 										</div>
 										<Link
-											href={routeHref({
-												mode: isTransportMode(route.mode) ? route.mode : null,
-												destinationId: destinationIdFrom({
-													from: 'parking',
-													parkingId: route.parkingId,
-												}),
-											})}
+											href={savedRouteHref(route)}
 											className='mt-3 flex h-9 items-center justify-center gap-1.5 rounded-[10px] bg-brand text-[11.5px] font-extrabold text-white'
 										>
 											<Navigation className='size-3.5' /> Qayta qurish
@@ -474,11 +466,6 @@ export default function FavoritesPage() {
 				parkingId={bookingParkingId}
 				onClose={() => setBookingParkingId(null)}
 				onNotify={toast.show}
-			/>
-
-			<DirectionsSheet
-				destinationId={directions.destinationId}
-				onClose={directions.close}
 			/>
 
 			<Toast open={toast.open} message={toast.payload ?? ''} />

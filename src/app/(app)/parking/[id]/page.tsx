@@ -22,7 +22,6 @@ import {
 import { notFound, useParams, useRouter } from 'next/navigation'
 import { useMemo, useState } from 'react'
 
-import { DirectionsSheet } from '@/components/navigation/directions-sheet'
 import { BayGrid } from '@/components/parking/bay-grid'
 import { ParkingBookingSheet } from '@/components/parking/parking-booking-sheet'
 import { AppBar } from '@/components/ui/app-bar'
@@ -522,11 +521,6 @@ export default function ParkingDetailPage() {
 				initialLevel={level}
 				onClose={() => setBookingOpen(false)}
 				onNotify={toast.show}
-			/>
-
-			<DirectionsSheet
-				destinationId={directions.destinationId}
-				onClose={directions.close}
 			/>
 
 			<Toast open={toast.open} message={toast.payload ?? ''} />

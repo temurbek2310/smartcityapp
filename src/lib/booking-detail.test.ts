@@ -215,30 +215,53 @@ describe('the removed /navigate preview', () => {
 	})
 })
 
-describe('the standardized directions sheet', () => {
-	const sheet = sources.find(
-		file => file.path === 'components/navigation/directions-sheet.tsx',
-	)!
+describe('«Yo‘nalish» on a known destination', () => {
+	const hook = sources.find(file => file.path === 'hooks/use-directions.ts')!
 
-	it('is the only directions sheet in the tree', () => {
-		expect(sheet).toBeDefined()
-		expect(
-			sources.filter(file => file.path.endsWith('directions-sheet.tsx')),
-		).toHaveLength(1)
+	it('opens /transport directly through the shared URL builder', () => {
+		expect(hook.text).toContain('router.push(routeHref({ mode, destinationId: id }))')
+		expect(hook.text).toContain('DEFAULT_TRANSPORT_MODE')
 	})
 
-	it('offers viewing the route and starting navigation, and nothing else', () => {
-		expect(sheet.text).toContain('Marshrutni ko‘rish')
-		expect(sheet.text).toContain('Navigatsiyani boshlash')
-		// The old wording: the customer views a route B SPACE calculated, they
-		// do not construct one.
-		expect(sheet.text).not.toContain('Marshrut qurish')
+	it('has no intermediate directions sheet left anywhere', () => {
+		expect(sources.filter(file => file.path.endsWith('directions-sheet.tsx'))).toEqual([])
+		const offenders = sources.filter(
+			file =>
+				file.text.includes('DirectionsSheet') ||
+				file.text.includes('Marshrutni ko‘rish'),
+		)
+		expect(offenders.map(file => file.path)).toEqual([])
+	})
+
+	it('is wired through the one hook on every screen that offers it', () => {
+		const screens = [
+			'app/(app)/favorites/page.tsx',
+			'app/(app)/home/page.tsx',
+			'app/(app)/map/page.tsx',
+			'app/(app)/parking/page.tsx',
+			'app/(app)/parking/[id]/page.tsx',
+			'app/(app)/queues/page.tsx',
+			'app/(app)/reservation/[id]/page.tsx',
+			'components/booking/booking-detail.tsx',
+		]
+		for (const path of screens) {
+			expect(sources.find(file => file.path === path)!.text, path).toContain(
+				'useDirections()',
+			)
+		}
+	})
+
+	it('hands off to 2GIS, never Google Maps', () => {
+		const google = sources.filter(file =>
+			/google\.[a-z.]+\/maps|maps\.google\.|travelmode/.test(file.text),
+		)
+		expect(google.map(file => file.path)).toEqual([])
 	})
 
 	it('has no «Xaritada ko‘rish» branch anywhere in the flow', () => {
 		// Two unrelated screens keep the words — /map's list/map toggle and an
 		// AI tip that highlights a lot on the Home map. Neither is a way out of
-		// the directions sheet, which no longer has a third door.
+		// a «Yo‘nalish», which goes straight to /transport.
 		const allowed = ['app/(app)/map/page.tsx', 'data/home-content.ts']
 		const offenders = sources.filter(file => file.text.includes('Xaritada ko‘rish'))
 		expect(offenders.map(file => file.path).sort()).toEqual(allowed.sort())
@@ -256,8 +279,10 @@ describe('Home no longer plans trips', () => {
 
 	it('still offers directions and the shared destination picker', () => {
 		expect(home.text).toContain('Yo‘nalish')
-		expect(home.text).toContain('DirectionsSheet')
+		// The generic «Qayerga?» has no destination yet, so it keeps the picker;
+		// the pick then goes straight to /transport like any other.
 		expect(home.text).toContain('DestinationSheet')
+		expect(home.text).toContain('directions.openId(id)')
 	})
 })
 

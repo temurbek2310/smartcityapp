@@ -25,7 +25,6 @@ import { PARKINGS } from '@/data/parkings'
 import { useToast } from '@/hooks/use-toast'
 import { cn } from '@/lib/cn'
 import { formatDistance } from '@/lib/format'
-import { DirectionsSheet } from '@/components/navigation/directions-sheet'
 import { useDirections } from '@/hooks/use-directions'
 import { useRefreshSignal } from '@/components/ui/pull-to-refresh'
 import { liveAvailabilityAll } from '@/lib/live-availability'
@@ -328,11 +327,6 @@ export default function MapPage() {
 					)}
 				</div>
 			)}
-
-			<DirectionsSheet
-				destinationId={directions.destinationId}
-				onClose={directions.close}
-			/>
 
 			<Toast open={toast.open} message={toast.payload ?? ''} />
 		</div>

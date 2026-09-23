@@ -117,13 +117,12 @@ describe('route endpoints', () => {
 		expect(point.lat).toBe(parking.lat)
 		expect(resolveRouteEndpoint('parking:missing', TASHKENT_CENTER)).toBeNull()
 	})
-	it('sends both picked endpoints and transport mode to the external navigator', () => {
+	it('sends both picked endpoints and transport mode to 2GIS', () => {
 		const from = resolveRouteEndpoint('magic-city', TASHKENT_CENTER)!
 		const to = resolveRouteEndpoint('me', TASHKENT_CENTER)!
-		const url = new URL(externalNavigationHref(from, to, 'walk'))
-		expect(url.searchParams.get('origin')).toBe(`${from.lat},${from.lng}`)
-		expect(url.searchParams.get('destination')).toBe(`${to.lat},${to.lng}`)
-		expect(url.searchParams.get('travelmode')).toBe('walking')
+		expect(externalNavigationHref({ origin: from, destination: to, mode: 'walk' })).toBe(
+			`https://2gis.ru/routeSearch/rsType/pedestrian/from/${from.lng},${from.lat}/to/${to.lng},${to.lat}`,
+		)
 	})
 })
 

@@ -116,9 +116,54 @@ export function destinationOptions({
 	]
 }
 
-export function externalNavigationHref(from: Coordinate, to: Coordinate, mode: TransportMode) {
-	const travelmode = { car: 'driving', metro: 'transit', scooter: 'bicycling', walk: 'walking' }[mode]
-	const query = new URLSearchParams({ api: '1', origin: `${from.lat},${from.lng}`,
-		destination: `${to.lat},${to.lng}`, travelmode })
-	return `https://www.google.com/maps/dir/?${query}`
+// --- Hand-off to 2GIS ----------------------------------------------------
+// 2GIS's documented route deep link (help.2gis.com, "launching 2GIS
+// navigation using deeplink"): /routeSearch/rsType/<type>[/from/<lon>,<lat>]
+// /to/<lon>,<lat> on 2gis.ru — longitude first. Served over https rather
+// than the dgis:// scheme so it still opens in a browser when the app is not
+// installed; with the app, the phone hands the same link to it.
+const TWO_GIS_ROUTE_BASE = 'https://2gis.ru/routeSearch/rsType'
+
+// Only the route types 2GIS documents: car, ctx (public transport),
+// pedestrian and taxi. It has no scooter type, and passing car or pedestrian
+// instead would open a route for a different vehicle under a scooter label,
+// so scooter has no hand-off and stays inside B SPACE.
+const TWO_GIS_ROUTE_TYPE: Record<TransportMode, string | null> = {
+	car: 'car',
+	metro: 'ctx',
+	scooter: null,
+	walk: 'pedestrian',
+}
+
+export function supportsExternalNavigation(mode: TransportMode) {
+	return TWO_GIS_ROUTE_TYPE[mode] !== null
+}
+
+// `origin` is null unless it is a real position: a picked place, or a GPS
+// fix. The stand-in centre useUserLocation() reports without one is not where
+// the customer is, so it is never sent — 2GIS, given no departure point,
+// starts the route from the device's own location instead.
+export function externalNavigationHref({
+	origin,
+	destination,
+	mode,
+}: {
+	origin: Coordinate | null
+	destination: Coordinate
+	mode: TransportMode
+}): string | null {
+	const type = TWO_GIS_ROUTE_TYPE[mode]
+	if (!type) return null
+	const point = ({ lat, lng }: Coordinate) => `${lng},${lat}`
+	const from = origin ? `/from/${point(origin)}` : ''
+	return `${TWO_GIS_ROUTE_BASE}/${type}${from}/to/${point(destination)}`
+}
+
+// Which origin the hand-off may carry: anything the customer picked, and
+// their own position only when the GPS actually produced it.
+export function externalNavigationOrigin(
+	origin: RouteEndpoint,
+	gpsReady: boolean,
+): Coordinate | null {
+	return origin.kind !== 'me' || gpsReady ? origin : null
 }

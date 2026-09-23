@@ -38,7 +38,6 @@ import { HorizontalRail } from '@/components/ui/horizontal-rail'
 import { CityMap } from '@/components/map/city-map'
 import { SelectedParkingCard } from '@/components/map/selected-parking-card'
 import { DestinationSheet } from '@/components/transport/destination-sheet'
-import { DirectionsSheet } from '@/components/navigation/directions-sheet'
 import { ServiceBookingSheet } from '@/components/booking/service-booking-sheet'
 import { TableBookingFlow } from '@/components/booking/table-booking-flow'
 import { ParkingBookingSheet } from '@/components/parking/parking-booking-sheet'
@@ -312,7 +311,7 @@ function HomeView() {
 	}
 
 	// Every «Yo‘nalish» on this screen goes through here: resolve the thing
-	// the customer is looking at, then open the one directions sheet on it.
+	// the customer is looking at, then open /transport on it directly.
 	// Nothing opens on a stand-in — an unresolvable reference says so.
 	function routeTo(source: DestinationSource) {
 		setSheet(null)
@@ -2144,12 +2143,6 @@ function HomeView() {
 				parkingId={bookingParkingId}
 				onClose={() => setBookingParkingId(null)}
 				onNotify={showToast}
-			/>
-
-			{/* The one «Yo‘nalish» sheet, on whatever the customer opened. */}
-			<DirectionsSheet
-				destinationId={directions.destinationId}
-				onClose={directions.close}
 			/>
 
 			{/* The picker /transport already owns, not a second address book.

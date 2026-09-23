@@ -22,7 +22,7 @@ export const TRANSPORT_MODES: {
 	{ id: 'walk', label: 'Piyoda', icon: Footprints },
 ]
 
-// What a route opens on when nobody has chosen yet — the directions sheet,
+// What a route opens on when nobody has chosen yet — every «Yo‘nalish» link,
 // and /transport itself when the link carries no ?mode=. One constant so the
 // two can never disagree about where a trip starts.
 export const DEFAULT_TRANSPORT_MODE: TransportMode = 'car'
