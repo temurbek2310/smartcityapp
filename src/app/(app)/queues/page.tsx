@@ -485,7 +485,6 @@ function QueuesView() {
 				<TakeTicketSheet
 					org={org}
 					onClose={() => setTakeOpen(false)}
-					onNotify={toast.show}
 				/>
 			)}
 

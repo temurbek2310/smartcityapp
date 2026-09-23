@@ -1,5 +1,6 @@
 'use client'
 
+import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 
 import { BottomSheet } from '@/components/ui/bottom-sheet'
@@ -9,6 +10,7 @@ import { Card } from '@/components/ui/card'
 import { KeyValue, KeyValueList } from '@/components/ui/key-value'
 import { Switch } from '@/components/ui/switch'
 import { useApp } from '@/context/app-context'
+import { queueTicketHref } from '@/lib/bookings'
 import type { QueueOrg, QueueService } from '@/lib/types'
 
 // Two steps, the way City Goo splits them: pick the service (the number and
@@ -36,12 +38,11 @@ function leaveInMinutes(service: QueueService, distanceKm: number) {
 export function TakeTicketSheet({
 	org,
 	onClose,
-	onNotify,
 }: {
 	org: QueueOrg
 	onClose: () => void
-	onNotify: (message: string) => void
 }) {
+	const router = useRouter()
 	const { takeQueueTicket } = useApp()
 	const [service, setService] = useState<QueueService | null>(null)
 	const [notify, setNotify] = useState(true)
@@ -146,7 +147,7 @@ export function TakeTicketSheet({
 				block
 				className='mt-4'
 				onClick={() => {
-					takeQueueTicket({
+					const ticket = takeQueueTicket({
 						orgId: org.id,
 						serviceId: service.id,
 						number,
@@ -155,8 +156,10 @@ export function TakeTicketSheet({
 						windowNumber: service.windows,
 						notify,
 					})
+					// The ticket's own page is the confirmation, the same
+					// way parking lands on its reservation.
 					onClose()
-					onNotify(`${number} · taxminan ${service.avgWaitMinutes} daqiqa`)
+					router.push(queueTicketHref(ticket.id))
 				}}
 			>
 				Navbat olish

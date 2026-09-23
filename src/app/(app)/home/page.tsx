@@ -2136,7 +2136,6 @@ function HomeView() {
 						<TakeTicketSheet
 							org={org}
 							onClose={() => setQueueOrgId(null)}
-							onNotify={showToast}
 						/>
 					)
 				})()}

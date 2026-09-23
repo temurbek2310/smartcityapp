@@ -23,6 +23,7 @@ export default function robots(): MetadataRoute.Robots {
 				'/parking',
 				'/transport',
 				'/booking/',
+				'/queue-ticket/',
 				'/reservation/',
 				'/session/',
 				'/receipt/',

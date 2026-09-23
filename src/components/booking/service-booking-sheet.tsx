@@ -1,6 +1,7 @@
 'use client'
 
 import { Minus, Plus } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 import { useMemo, useState } from 'react'
 
 import { BottomSheet } from '@/components/ui/bottom-sheet'
@@ -12,7 +13,7 @@ import { KeyValue, KeyValueList } from '@/components/ui/key-value'
 import { useApp } from '@/context/app-context'
 import { getParking } from '@/data/parkings'
 import { getPlace } from '@/data/places'
-import { serviceBookingDraft } from '@/lib/bookings'
+import { serviceBookingDraft, serviceBookingHref } from '@/lib/bookings'
 import { tashkentDayKey } from '@/lib/format'
 import {
 	bookingDays,
@@ -86,6 +87,7 @@ export function ServiceBookingSheet({
 	onClose: () => void
 	onNotify: (message: string) => void
 }) {
+	const router = useRouter()
 	const { createServiceBooking } = useApp()
 	const dated = kind === 'table'
 
@@ -158,8 +160,11 @@ export function ServiceBookingSheet({
 				now,
 			}),
 		)
+		// Straight to the booking itself, the way parking lands on its
+		// reservation: the page is the confirmation. A toast on the screen
+		// being left would be gone before it could be read.
 		onClose()
-		onNotify(`${title} · ${booking.code}`)
+		router.push(serviceBookingHref(booking.id))
 	}
 
 	return (

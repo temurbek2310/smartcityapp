@@ -57,6 +57,20 @@ const STATUS_LABELS: Record<BookingRowStatus, string> = {
 	cancelled: 'Bekor qilindi',
 }
 
+// --- Canonical detail routes ---------------------------------------------
+// One page per booking object, and the only place its URL is spelled. The
+// sheet that creates a booking and the Bron card that lists it both link
+// through these, so "the page after booking" and "the page from Bron" cannot
+// drift into two different screens. Parking's equivalent is reservationHref().
+
+export function serviceBookingHref(id: string) {
+	return `/booking/${id}`
+}
+
+export function queueTicketHref(id: string) {
+	return `/queue-ticket/${id}`
+}
+
 function row(partial: Omit<BookingRow, 'statusLabel'>): BookingRow {
 	return { ...partial, statusLabel: STATUS_LABELS[partial.status] }
 }
@@ -138,7 +152,7 @@ function fromQueueTicket(ticket: QueueTicket): BookingRow {
 		// used to point at /queues, which is the organisation's screen rather
 		// than this booking's — and the ticket's only real detail view was a
 		// QR modal in the list.
-		href: `/booking/${ticket.id}`,
+		href: queueTicketHref(ticket.id),
 		qrValue: `BSPACE:QUEUE:${ticket.id}`,
 		repeat: { kind: 'queue', refId: ticket.orgId },
 		// The venue the number was taken at, not the car park beside it.
@@ -170,7 +184,7 @@ function fromServiceBooking(booking: ServiceBooking): BookingRow {
 					: 'cancelled',
 		// A table, a film, a clinic slot and an event ticket each get the same
 		// full detail page every other booking has.
-		href: `/booking/${booking.id}`,
+		href: serviceBookingHref(booking.id),
 		qrValue: `BSPACE:${booking.kind.toUpperCase()}:${booking.code}`,
 		repeat: { kind: booking.kind, refId: booking.refId },
 		// The restaurant, cinema or clinic the booking was made at, read back
@@ -202,6 +216,30 @@ export function bookingRows(
 		cancelled: 3,
 	}
 	return rows.sort((a, b) => weight[a.status] - weight[b.status])
+}
+
+// What a detail route resolves its [id] to. Each route reads only its own
+// store, so a queue ticket's id pasted into /booking/ is "not found" rather
+// than a ticket rendered on the service-booking page. Null for anything
+// missing — a stale link, a cleared device, a mistyped id.
+export type BookingDetail =
+	| { source: 'service'; row: BookingRow; booking: ServiceBooking }
+	| { source: 'queue'; row: BookingRow; ticket: QueueTicket }
+
+export function resolveBookingDetail(
+	state: Pick<BSpaceState, 'queueTickets' | 'serviceBookings'>,
+	source: BookingDetail['source'],
+	id: string | undefined,
+): BookingDetail | null {
+	if (!id) return null
+	if (source === 'service') {
+		const booking = state.serviceBookings.find(item => item.id === id)
+		return booking
+			? { source, row: fromServiceBooking(booking), booking }
+			: null
+	}
+	const ticket = state.queueTickets.find(item => item.id === id)
+	return ticket ? { source, row: fromQueueTicket(ticket), ticket } : null
 }
 
 export function isOpen(row: BookingRow) {

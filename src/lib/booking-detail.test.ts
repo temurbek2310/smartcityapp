@@ -3,7 +3,13 @@ import { join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
-import { bookingRows, isOpen } from '@/lib/bookings'
+import {
+	bookingRows,
+	isOpen,
+	queueTicketHref,
+	resolveBookingDetail,
+	serviceBookingHref,
+} from '@/lib/bookings'
 import { routeHref } from '@/lib/navigation'
 import { reservationHref } from '@/lib/reservation'
 import type { QueueTicket, Reservation, ServiceBooking } from '@/lib/types'
@@ -66,13 +72,15 @@ describe('one booking-detail pattern', () => {
 	})
 
 	it('sends a queue ticket to its own booking, not to the organisation screen', () => {
-		expect(byId.t1.href).toBe('/booking/t1')
+		expect(byId.t1.href).toBe(queueTicketHref('t1'))
+		expect(byId.t1.href).toBe('/queue-ticket/t1')
 		expect(byId.t1.href).not.toContain('/queues')
 	})
 
 	it.each(serviceBookings.map(booking => [booking.kind, booking.id] as const))(
 		'sends a %s booking to its own detail page',
 		(_kind, id) => {
+			expect(byId[id].href).toBe(serviceBookingHref(id))
 			expect(byId[id].href).toBe(`/booking/${id}`)
 		},
 	)
@@ -83,6 +91,53 @@ describe('one booking-detail pattern', () => {
 			expect(row.statusLabel).toBeTruthy()
 		}
 		expect(isOpen(byId.t1)).toBe(true)
+	})
+})
+
+describe('resolving a detail route to its booking', () => {
+	const state = { queueTickets: [ticket], serviceBookings }
+
+	it.each(serviceBookings.map(booking => [booking.kind, booking.id] as const))(
+		'finds a %s booking on /booking/[id]',
+		(_kind, id) => {
+			const detail = resolveBookingDetail(state, 'service', id)
+			expect(detail?.source).toBe('service')
+			expect(detail?.row.id).toBe(id)
+			// The page and the Bron card are the same row, not two mappings.
+			expect(detail?.row).toEqual(byId[id])
+		},
+	)
+
+	it('finds a queue ticket on /queue-ticket/[id]', () => {
+		const detail = resolveBookingDetail(state, 'queue', 't1')
+		expect(detail?.source).toBe('queue')
+		expect(detail?.source === 'queue' && detail.ticket.number).toBe('A-14')
+		expect(detail?.row).toEqual(byId.t1)
+	})
+
+	it("does not render one store's booking on the other's route", () => {
+		expect(resolveBookingDetail(state, 'service', 't1')).toBeNull()
+		expect(resolveBookingDetail(state, 'queue', 's-table')).toBeNull()
+	})
+
+	it('returns nothing for a missing or unknown id instead of throwing', () => {
+		expect(resolveBookingDetail(state, 'service', undefined)).toBeNull()
+		expect(resolveBookingDetail(state, 'service', 'nope')).toBeNull()
+		expect(resolveBookingDetail(state, 'queue', '')).toBeNull()
+		expect(
+			resolveBookingDetail({ queueTickets: [], serviceBookings: [] }, 'queue', 't1'),
+		).toBeNull()
+	})
+
+	it('keeps a cancelled booking reachable, with nothing left to cancel', () => {
+		const cancelled = { ...serviceBookings[0], status: 'cancelled' as const }
+		const detail = resolveBookingDetail(
+			{ queueTickets: [], serviceBookings: [cancelled] },
+			'service',
+			cancelled.id,
+		)
+		expect(detail?.row.status).toBe('cancelled')
+		expect(detail?.row.cancellable).toBe(false)
 	})
 })
 
@@ -123,6 +178,29 @@ const sources = sourceFiles(SRC).map(path => ({
 	path: path.slice(SRC.length + 1).replace(/\\/g, '/'),
 	text: readFileSync(path, 'utf8'),
 }))
+
+describe('landing on the booking after making it', () => {
+	const file = (path: string) => sources.find(item => item.path === path)!.text
+
+	it("opens the new service booking's own page, like parking does", () => {
+		const sheet = file('components/booking/service-booking-sheet.tsx')
+		expect(sheet).toContain('router.push(serviceBookingHref(booking.id))')
+	})
+
+	it("opens the new queue ticket's own page", () => {
+		const sheet = file('components/queues/take-ticket-sheet.tsx')
+		expect(sheet).toContain('router.push(queueTicketHref(ticket.id))')
+	})
+
+	it('spells each detail URL in one place only', () => {
+		// The sheets and the Bron rows link through the helpers; a literal
+		// path anywhere else would be a second, driftable destination.
+		const literal = sources.filter(item =>
+			/['"`]\/(booking|queue-ticket)\/\$\{/.test(item.text),
+		)
+		expect(literal.map(item => item.path)).toEqual(['lib/bookings.ts'])
+	})
+})
 
 describe('the removed /navigate preview', () => {
 	it('has no route left in the app directory', () => {
