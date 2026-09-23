@@ -58,6 +58,22 @@ export function isLiveReservation(reservation: Reservation) {
   return reservation.status === "reserved" || reservation.status === "active";
 }
 
+// The booking the customer already holds for one exact car park, if any.
+// Matched on the stable parking id and on nothing else — not a name, not an
+// address, not whichever lot happens to be nearest — so a booking at one lot
+// can never suppress the «Bron qilish» on another. Lives here so there is
+// one definition of "already booked", next to the one definition of "live".
+export function findLiveReservationForParking(
+  reservations: readonly Reservation[],
+  parkingId: string | null | undefined,
+) {
+  if (!parkingId) return undefined;
+  return reservations.find(
+    (reservation) =>
+      reservation.parkingId === parkingId && isLiveReservation(reservation),
+  );
+}
+
 function msOf(value: string | number | Date) {
   return value instanceof Date ? value.getTime() : new Date(value).getTime();
 }

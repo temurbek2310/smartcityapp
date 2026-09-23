@@ -37,12 +37,15 @@ import { Toast } from '@/components/ui/toast'
 import { HorizontalRail } from '@/components/ui/horizontal-rail'
 import { CityMap } from '@/components/map/city-map'
 import { SelectedParkingCard } from '@/components/map/selected-parking-card'
+import { DestinationSheet } from '@/components/transport/destination-sheet'
+import { DirectionsSheet } from '@/components/navigation/directions-sheet'
 import { ServiceBookingSheet } from '@/components/booking/service-booking-sheet'
 import { TableBookingFlow } from '@/components/booking/table-booking-flow'
 import { ParkingBookingSheet } from '@/components/parking/parking-booking-sheet'
 import { TakeTicketSheet } from '@/components/queues/take-ticket-sheet'
 import { useApp } from '@/context/app-context'
 import { useMapLayers } from '@/hooks/use-map-layers'
+import { useDirections } from '@/hooks/use-directions'
 import { usePlaceFavorites } from '@/hooks/use-place-favorites'
 import { useToast } from '@/hooks/use-toast'
 import { CITY_META } from '@/data/city-meta'
@@ -68,7 +71,8 @@ import { buildHomeMapObjects, HOME_BIKE_LINES } from '@/lib/home-map'
 import { useRefreshSignal } from '@/components/ui/pull-to-refresh'
 import { liveAvailabilityAll } from '@/lib/live-availability'
 import { MAP_LAYERS, activeLayerCount } from '@/lib/map-layers'
-import { TRANSPORT_MODES, type TransportMode } from '@/lib/transport'
+import { destinationIdFrom, type DestinationSource } from '@/lib/navigation'
+import { originLabel } from '@/lib/transport'
 import { useUserLocation } from '@/lib/use-user-location'
 
 type SortMode = 'distance' | 'rating' | 'free'
@@ -85,6 +89,7 @@ type SheetState =
 	| { type: 'events' }
 	| { type: 'recommendations' }
 	| { type: 'layers' }
+	| { type: 'destination' }
 	| null
 
 export default function HomePage() {
@@ -117,7 +122,12 @@ function HomeView() {
 	const [selectedParkingId, setSelectedParkingId] = useState<string | null>(
 		null,
 	)
-	const [transportMode, setTransportMode] = useState<TransportMode>('car')
+	// What «Yo‘nalish» on the map would route to, as a route endpoint id.
+	// Null until the customer selects something: the strip that used to sit
+	// here offered four travel times belonging to no destination at all, and
+	// choosing how to travel belongs on /transport, after the destination.
+	const [destinationId, setDestinationId] = useState<string | null>(null)
+	const directions = useDirections()
 	const [activeCategory, setActiveCategory] = useState<PlaceCategory>('all')
 	const [sortMode, setSortMode] = useState<SortMode>('distance')
 	const [favoriteOnly, setFavoriteOnly] = useState(false)
@@ -209,6 +219,10 @@ function HomeView() {
 		[selectedParkingId, mapParkings, layers.parking],
 	)
 
+	// How the destination picker names the customer's own position. The same
+	// wording /transport uses, and never a claim of GPS there is no fix for.
+	const originValue = originLabel(status)
+
 	const visiblePlaces = useMemo(() => {
 		let list = PLACES.filter(
 			place => activeCategory === 'all' || place.category === activeCategory,
@@ -279,11 +293,41 @@ function HomeView() {
 
 	function selectParking(parkingId: string) {
 		setSelectedParkingId(parkingId)
+		// Picking a lot on the map is picking where you are going, so the
+		// transport strip follows it instead of quietly keeping the old target.
+		setDestinationId(`parking:${parkingId}`)
 		window.setTimeout(() => {
 			document
 				.getElementById('parking-map')
 				?.scrollIntoView({ behavior: 'smooth', block: 'center' })
 		}, 60)
+	}
+
+	function openDestinationPicker() {
+		setSheet({ type: 'destination' })
+	}
+
+	function closeDestinationPicker() {
+		setSheet(null)
+	}
+
+	// Every «Yo‘nalish» on this screen goes through here: resolve the thing
+	// the customer is looking at, then open the one directions sheet on it.
+	// Nothing opens on a stand-in — an unresolvable reference says so.
+	function routeTo(source: DestinationSource) {
+		setSheet(null)
+		const id = destinationIdFrom(source)
+		if (!id) return showToast('Bu joy uchun manzil topilmadi')
+		setDestinationId(id)
+		directions.openId(id)
+	}
+
+	// Home's own "where are you going?" — the generic way in, for when the
+	// customer has not opened a place first.
+	function chooseDestination(id: string) {
+		setDestinationId(id)
+		closeDestinationPicker()
+		directions.openId(id)
 	}
 
 	function chooseCategory(id: PlaceCategory | 'transport' | 'queues' | 'more') {
@@ -650,9 +694,11 @@ function HomeView() {
 						<button
 							type='button'
 							onClick={() => {
-								const target = selectedParking ?? parkingResults[0]?.parking
-								if (!target) return showToast('Yo‘nalish uchun parking tanlang')
-								router.push(`/navigate/parking/${target.id}`)
+								// Directions to whatever is actually selected on the map,
+								// and a question when nothing is. This used to fall
+								// through to whichever lot happened to sort first.
+								if (!destinationId) return openDestinationPicker()
+								directions.openId(destinationId)
 							}}
 							className='pointer-events-auto inline-flex h-9 items-center gap-2 rounded-xl bg-brand px-3 text-xs font-black text-white shadow-lg shadow-[0_6px_16px_rgb(108_71_224/.28)]'
 						>
@@ -668,34 +714,6 @@ function HomeView() {
 							Butun xarita
 						</button>
 					</div>
-				</div>
-
-				<div className='grid grid-cols-4 gap-1 p-2'>
-					{TRANSPORT_MODES.map(mode => {
-						const Icon = mode.icon
-						const selected = transportMode === mode.id
-						return (
-							<button
-								key={mode.id}
-								type='button'
-								onClick={() => {
-									setTransportMode(mode.id)
-									const target = selectedParking ?? parkingResults[0]?.parking
-									const query = target
-										? `?mode=${mode.id}&parkingId=${target.id}`
-										: `?mode=${mode.id}`
-									router.push(`/transport${query}`)
-								}}
-								className={`rounded-2xl px-1 py-2.5 text-center transition ${
-									selected ? 'bg-brand-50 text-brand-600' : 'text-ink-3'
-								}`}
-							>
-								<Icon className='mx-auto size-5' />
-								<p className='mt-1 text-xs font-black'>{mode.time} daq</p>
-								<p className='mt-0.5 text-[10px] font-semibold'>{mode.label}</p>
-							</button>
-						)
-					})}
 				</div>
 			</section>
 
@@ -1140,8 +1158,7 @@ function HomeView() {
 							type='button'
 							onClick={() => {
 								if (aiIndex === 1) openParkingBooking(aiTip.parkingId)
-								else if (aiIndex === 2)
-									router.push(`/navigate/parking/${aiTip.parkingId}`)
+								else if (aiIndex === 2) routeTo({ from: 'parking', parkingId: aiTip.parkingId })
 								else selectParking(aiTip.parkingId)
 							}}
 							className='mt-3 inline-flex h-9 items-center gap-2 rounded-xl bg-brand px-3 text-xs font-black text-white'
@@ -1441,7 +1458,7 @@ function HomeView() {
 													onClick={() => {
 														rememberQuery(searchQuery)
 														setSearchOpen(false)
-														router.push(`/transport?parkingId=${hit.parkingId}`)
+														routeTo({ from: 'parking', parkingId: hit.parkingId })
 													}}
 													className={`flex w-full items-center gap-3 px-4 py-3 text-left ${index ? 'border-t border-line' : ''}`}
 												>
@@ -1524,6 +1541,9 @@ function HomeView() {
 									onClick={() => {
 										setSelectedCity(city)
 										setSelectedParkingId(null)
+										// Another city means another map; keeping the old target would
+										// leave the transport strip routing across the country.
+										setDestinationId(null)
 										setSheet(null)
 										showToast(`Shahar: ${city}`)
 									}}
@@ -2024,11 +2044,10 @@ function HomeView() {
 							<div className='mt-3 grid grid-cols-4 gap-2'>
 								<button
 									type='button'
-									onClick={() => {
-										if (place.parkingId)
-											router.push(`/navigate/parking/${place.parkingId}`)
-										else showToast('Marshrut tayyorlandi')
-									}}
+									// The venue, not the lot beside it. This used to route to
+									// place.parkingId, so «Yo‘nalish» on Coffee Lab asked for
+									// directions to Amir Temur Square Parking.
+									onClick={() => routeTo({ from: 'place', placeId: place.id })}
 									className='flex flex-col items-center gap-2 rounded-2xl bg-white p-3 text-[10px] font-bold text-ink-2 shadow-card'
 								>
 									<Navigation className='size-5 text-brand' /> Yo‘nalish
@@ -2128,6 +2147,23 @@ function HomeView() {
 				onNotify={showToast}
 			/>
 
+			{/* The one «Yo‘nalish» sheet, on whatever the customer opened. */}
+			<DirectionsSheet
+				destinationId={directions.destinationId}
+				onClose={directions.close}
+			/>
+
+			{/* The picker /transport already owns, not a second address book.
+			    «Mening joylashuvim» is left out: Home always routes from there. */}
+			<DestinationSheet
+				open={sheet?.type === 'destination'}
+				onClose={closeDestinationPicker}
+				onSelect={chooseDestination}
+				selectedId={destinationId}
+				currentLocationLabel={originValue}
+				excludeId='me'
+			/>
+
 			{sheet?.type === 'servicesAll' && (
 				<BottomSheet title='Barcha xizmatlar' onClose={() => setSheet(null)}>
 					<div className='flex flex-col gap-2'>
@@ -2225,7 +2261,7 @@ function HomeView() {
 									type='button'
 									onClick={() => {
 										setSheet(null)
-										router.push(`/navigate/parking/${event.parkingId}`)
+										routeTo({ from: 'event', eventId: event.id })
 									}}
 									className='h-12 rounded-2xl bg-brand text-sm font-black text-white'
 								>

@@ -8,8 +8,6 @@ import {
 	Star,
 	Umbrella,
 } from 'lucide-react'
-import Link from 'next/link'
-
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Meter } from '@/components/ui/meter'
@@ -26,6 +24,7 @@ export function ParkingCard({
 	distance,
 	onOpen,
 	onBook,
+	onDirections,
 	// Set when this row is the one currently picked on the map above, so the
 	// two halves of the screen agree on what is selected.
 	selected = false,
@@ -33,6 +32,7 @@ export function ParkingCard({
 	parking: Parking
 	distance: number
 	onOpen: () => void
+	onDirections: () => void
 	onBook: () => void
 	selected?: boolean
 }) {
@@ -114,12 +114,9 @@ export function ParkingCard({
 			</button>
 
 			<div className='grid grid-cols-2 gap-2 px-3 pb-3'>
-				<Link
-					href={`/navigate/parking/${parking.id}`}
-					className='flex h-9 items-center justify-center gap-1.5 rounded-[10px] border-[1.5px] border-line-2 bg-white text-[11.5px] font-bold text-ink'
-				>
+				<Button size='sm' variant='outline' onClick={onDirections}>
 					<Navigation className='size-3.5' /> Yo‘nalish
-				</Link>
+				</Button>
 				<Button size='sm' variant='primary' disabled={full} onClick={onBook}>
 					{full ? 'Joy yo‘q' : 'Bron qilish'}
 				</Button>

@@ -1,10 +1,10 @@
 'use client'
 
 import { Check, ChevronRight, Search } from 'lucide-react'
-import { useCallback, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 
 import { BottomSheet } from '@/components/ui/bottom-sheet'
-import { DEMO_DESTINATIONS } from '@/data/demo-transport'
+import { destinationOptions } from '@/lib/route-endpoints'
 
 // City Goo design tokens used by this sheet's rows, copied from
 // reference/city go.html rather than approximated:
@@ -27,6 +27,10 @@ type DestinationSheetProps = {
 	// useUserLocation — reused here so the sheet never invents an accuracy
 	// or a second location system.
 	currentLocationLabel: string
+	// A row to leave out, for the caller that cannot use it: Home routes from
+	// the customer's own position, so offering it as the destination too would
+	// only ever produce a route of length zero.
+	excludeId?: string
 }
 
 export function DestinationSheet({ open, ...props }: DestinationSheetProps) {
@@ -42,26 +46,14 @@ function DestinationSheetBody({
 	onSelect,
 	selectedId,
 	currentLocationLabel,
+	excludeId,
 }: Omit<DestinationSheetProps, 'open'>) {
 	const [query, setQuery] = useState('')
 
-	const subtitleFor = useCallback(
-		(id: string, address?: string) =>
-			id === 'me' ? currentLocationLabel : (address ?? ''),
-		[currentLocationLabel],
+	const results = useMemo(
+		() => destinationOptions({ query, currentLocationLabel, excludeId }),
+		[query, currentLocationLabel, excludeId],
 	)
-
-	// Filter on exactly the text each row shows, so the live location line
-	// is searchable too and nothing matches that the user cannot see.
-	const results = useMemo(() => {
-		const needle = query.trim().toLowerCase()
-		if (!needle) return DEMO_DESTINATIONS
-		return DEMO_DESTINATIONS.filter(item =>
-			`${item.title} ${subtitleFor(item.id, item.address)}`
-				.toLowerCase()
-				.includes(needle),
-		)
-	}, [query, subtitleFor])
 
 	return (
 		<BottomSheet title={title} onClose={onClose} slideUp>
@@ -90,7 +82,7 @@ function DestinationSheetBody({
 				>
 					{results.map((item, index) => {
 						const Icon = item.icon
-						const subtitle = subtitleFor(item.id, item.address)
+						const subtitle = item.subtitle
 						const selected = item.id === selectedId
 
 						return (

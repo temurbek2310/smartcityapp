@@ -14,6 +14,7 @@ import { useRouter } from 'next/navigation'
 import { useEffect, useMemo, useState } from 'react'
 
 import { ParkingMap } from '@/components/map/parking-map'
+import { DirectionsSheet } from '@/components/navigation/directions-sheet'
 import { SelectedParkingCard } from '@/components/map/selected-parking-card'
 import { ActiveBookingBanner } from '@/components/parking/active-booking-banner'
 import { OccupancyForecastCard } from '@/components/parking/occupancy-forecast-card'
@@ -34,6 +35,7 @@ import { Toast } from '@/components/ui/toast'
 import { useApp } from '@/context/app-context'
 import { NEWS } from '@/data/news'
 import { PARKINGS } from '@/data/parkings'
+import { useDirections } from '@/hooks/use-directions'
 import { useToast } from '@/hooks/use-toast'
 import {
 	LOAD_BANDS,
@@ -49,6 +51,7 @@ import { useUserLocation } from '@/lib/use-user-location'
 export default function ParkingListPage() {
 	const router = useRouter()
 	const toast = useToast<string>()
+	const directions = useDirections()
 	const { reservations } = useApp()
 	const { location, status, locate } = useUserLocation()
 
@@ -304,6 +307,9 @@ export default function ParkingListPage() {
 									distance={km}
 									selected={parking.id === selectedParking?.id}
 									onOpen={() => router.push(`/parking/${parking.id}`)}
+									onDirections={() =>
+										directions.open({ from: 'parking', parkingId: parking.id })
+									}
 									onBook={() => setBookingParkingId(parking.id)}
 								/>
 							</div>
@@ -378,6 +384,11 @@ export default function ParkingListPage() {
 				parkingId={bookingParkingId}
 				onClose={() => setBookingParkingId(null)}
 				onNotify={toast.show}
+			/>
+
+			<DirectionsSheet
+				destinationId={directions.destinationId}
+				onClose={directions.close}
 			/>
 
 			<Toast open={toast.open} message={toast.payload ?? ''} />

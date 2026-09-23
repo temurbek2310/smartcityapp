@@ -33,6 +33,7 @@ import { NEWS } from '@/data/news'
 import { getParking } from '@/data/parkings'
 import { useToast } from '@/hooks/use-toast'
 import { cn } from '@/lib/cn'
+import { routeHref } from '@/lib/navigation'
 import type { NewsItem, NewsSeverity } from '@/lib/types'
 
 const SEVERITY_ICON: Record<NewsSeverity, LucideIcon> = {
@@ -265,7 +266,7 @@ function NewsView() {
 							className='mt-4'
 							onClick={() => {
 								setOpenItem(null)
-								router.push('/transport?mode=car')
+								router.push(routeHref({ mode: 'car' }))
 							}}
 						>
 							<Navigation className='size-4' /> Aylanma yo‘l qurish

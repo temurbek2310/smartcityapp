@@ -2,6 +2,7 @@ import { Bike, Bus, TrainFront, TriangleAlert } from 'lucide-react'
 
 import { distanceKm, type Coordinate } from '@/lib/geo'
 import { buildMapObjects, type MapObject } from '@/lib/map-objects'
+import { routeHref } from '@/lib/navigation'
 import type { MapLayerState } from '@/lib/map-layers'
 import type { Parking, PlaceCategory } from '@/lib/types'
 
@@ -21,11 +22,11 @@ const OVERLAYS: (MapObject & { layer: 'transit' | 'traffic' | 'bike' })[] = [
 	{ kind: 'transit', id: 'metro', layer: 'transit', title: 'Mustaqillik metrosi',
 		subtitle: 'Metro', address: 'Mustaqillik maydoni', meta: 'Namuna · poyezd 2 daqiqada',
 		tag: 'Metro · 2 daq', lat: 41.3110, lng: 69.2690, distanceKm: 0,
-		icon: TrainFront, symbol: 'metro', color: '#12b76a', href: '/transport?mode=metro', parkingId: null },
+		icon: TrainFront, symbol: 'metro', color: '#12b76a', href: routeHref({ mode: 'metro' }), parkingId: null },
 	{ kind: 'transit', id: 'bus-72', layer: 'transit', title: '72-avtobus',
 		subtitle: 'Avtobus', address: 'Amir Temur ko‘chasi', meta: 'Namuna · avtobus 4 daqiqada',
 		tag: '№72 · 4 daq', lat: 41.3140, lng: 69.2850, distanceKm: 0,
-		icon: Bus, color: '#2e90fa', href: '/transport?mode=metro', parkingId: null },
+		icon: Bus, color: '#2e90fa', href: routeHref({ mode: 'metro' }), parkingId: null },
 	{ kind: 'traffic', id: 'nukus-traffic', layer: 'traffic', title: 'Nukus ko‘chasida tirbandlik',
 		subtitle: 'Yo‘l holati', address: 'Nukus ko‘chasi', meta: 'Namuna · taxminan 7 daqiqa kechikish',
 		tag: '+7 daq', lat: 41.3000, lng: 69.2800, distanceKm: 0,
@@ -33,7 +34,7 @@ const OVERLAYS: (MapObject & { layer: 'transit' | 'traffic' | 'bike' })[] = [
 	{ kind: 'bike', id: 'city-bike-lane', layer: 'bike', title: 'Tashkent City velo yo‘lagi',
 		subtitle: 'Velosiped yo‘lagi', address: 'Tashkent City bog‘i', meta: 'Namuna · velosiped va skuter yo‘nalishi',
 		tag: 'Velo yo‘lak', lat: 41.3140, lng: 69.2550, distanceKm: 0,
-		icon: Bike, color: '#2e90fa', href: '/transport?mode=scooter', parkingId: null },
+		icon: Bike, color: '#2e90fa', href: routeHref({ mode: 'scooter' }), parkingId: null },
 ]
 
 export function buildHomeMapObjects({ parkings, layers, city, category, origin, favoritePlaceIds }: {

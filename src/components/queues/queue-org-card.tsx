@@ -1,7 +1,6 @@
 'use client'
 
 import { Heart, Navigation, Repeat, Star, Users } from 'lucide-react'
-import { useRouter } from 'next/navigation'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -20,11 +19,12 @@ import type { QueueOrg } from '@/lib/types'
 export function QueueOrgCard({
 	org,
 	onSwitch,
+	onDirections,
 }: {
 	org: QueueOrg
 	onSwitch: () => void
+	onDirections: () => void
 }) {
-	const router = useRouter()
 	const { favoriteQueueOrgs, toggleQueueOrgFavorite } = useApp()
 	const load = queueLoadPercent(org)
 	const saved = favoriteQueueOrgs.includes(org.id)
@@ -92,11 +92,9 @@ export function QueueOrgCard({
 				<Button size='sm' variant='outline' onClick={onSwitch}>
 					<Repeat className='size-3.5' /> Boshqa joy
 				</Button>
-				<Button
-					size='sm'
-					variant='outline'
-					onClick={() => router.push(`/navigate/parking/${org.parkingId}`)}
-				>
+				{/* The desk itself — its own place in the catalog when it has
+				    one, its own recorded address otherwise. */}
+				<Button size='sm' variant='outline' onClick={onDirections}>
 					<Navigation className='size-3.5' /> Yo‘nalish
 				</Button>
 			</div>

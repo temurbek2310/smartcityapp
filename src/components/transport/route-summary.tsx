@@ -17,7 +17,10 @@ type RouteSummaryProps = {
 	costUZS: number
 	costLabel: string
 	facts: RouteFactRow[]
-	destination: Parking
+	// The car park this route suggests, and what to call it. Absent whenever
+	// there is nothing to suggest — arriving by metro, on a scooter or on
+	// foot needs no parking, so the row is left out rather than emptied.
+	parkingSuggestion?: { label: string; parking: Parking }
 }
 
 function SummaryRow({
@@ -89,10 +92,9 @@ export function RouteSummary({
 	costUZS,
 	costLabel,
 	facts,
-	destination,
+	parkingSuggestion,
 }: RouteSummaryProps) {
 	const modeInfo = TRANSPORT_MODES.find(item => item.id === mode)
-	const availabilityTone = parkingAvailability(destination).tone.text
 
 	return (
 		<section>
@@ -124,18 +126,22 @@ export function RouteSummary({
 						explain={fact.explain}
 					/>
 				))}
-				<SummaryRow
-					icon={MapPin}
-					label='Manzildagi parkovka'
-					value={
-						destination.availableSpaces > 0
-							? `${destination.availableSpaces} joy`
-							: 'Joy yo‘q'
-					}
-					valueClassName={availabilityTone}
-					sublabel={`${destination.totalSpaces} tadan`}
-					href={`/parking/${destination.id}`}
-				/>
+				{parkingSuggestion && (
+					<SummaryRow
+						icon={MapPin}
+						label={parkingSuggestion.label}
+						value={
+							parkingSuggestion.parking.availableSpaces > 0
+								? `${parkingSuggestion.parking.availableSpaces} joy`
+								: 'Joy yo‘q'
+						}
+						valueClassName={
+							parkingAvailability(parkingSuggestion.parking).tone.text
+						}
+						sublabel={parkingSuggestion.parking.name}
+						href={`/parking/${parkingSuggestion.parking.id}`}
+					/>
+				)}
 			</div>
 
 			<div className='mt-2.5 flex items-center justify-between rounded-[16px] bg-white px-3.5 py-3 shadow-card'>

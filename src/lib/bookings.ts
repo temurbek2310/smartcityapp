@@ -1,6 +1,7 @@
 import { getParking } from '@/data/parkings'
 import { getQueueOrg } from '@/data/queue-orgs'
 import { formatDateTime, formatTime, formatUZS } from '@/lib/format'
+import { destinationIdFrom } from '@/lib/navigation'
 import { reservationHref } from '@/lib/reservation'
 import { serviceWhenLabel } from '@/lib/service-slots'
 import type {
@@ -36,6 +37,11 @@ export type BookingRow = {
 	amountLabel?: string
 	// What a "Takrorlash" from history should reopen.
 	repeat?: { kind: BookingKind; refId: string }
+	// Where «Yo‘nalish» on this booking's detail goes, resolved through the
+	// app's one destination model. Absent when the booking names something
+	// the catalogs no longer contain — the detail then offers no directions
+	// rather than routing to a stand-in.
+	destinationId?: string
 	// Whether cancelling this row actually cancels anything. These mirror the
 	// guards the store itself applies, so a screen can no longer offer a
 	// «Bekor» that calls a mutation the reducer will refuse — which is how an
@@ -55,16 +61,25 @@ function row(partial: Omit<BookingRow, 'statusLabel'>): BookingRow {
 	return { ...partial, statusLabel: STATUS_LABELS[partial.status] }
 }
 
+// Where a parking booking sits in the list's four states, and what to call
+// it. Exported because /transport's destination-parking card has to name the
+// same booking, and naming it a second way would mean the same reservation
+// read «Kutilmoqda» in Bron and something else on the route screen.
+export function reservationRowStatus(
+	status: Reservation['status'],
+): BookingRowStatus {
+	if (status === 'active') return 'active'
+	if (status === 'reserved') return 'upcoming'
+	return status === 'completed' ? 'done' : 'cancelled'
+}
+
+export function reservationStatusLabel(status: Reservation['status']) {
+	return STATUS_LABELS[reservationRowStatus(status)]
+}
+
 function fromReservation(reservation: Reservation): BookingRow {
 	const parking = getParking(reservation.parkingId)
-	const status: BookingRowStatus =
-		reservation.status === 'active'
-			? 'active'
-			: reservation.status === 'reserved'
-				? 'upcoming'
-				: reservation.status === 'completed'
-					? 'done'
-					: 'cancelled'
+	const status = reservationRowStatus(reservation.status)
 
 	return row({
 		id: reservation.id,
@@ -81,6 +96,11 @@ function fromReservation(reservation: Reservation): BookingRow {
 		href: reservationHref(reservation),
 		amountLabel: formatUZS(reservation.finalTotal ?? reservation.estimatedTotal),
 		repeat: { kind: 'parking', refId: reservation.parkingId },
+		// The lot this booking is for, whatever its stage — an active session
+		// still needs to be able to say how to get back to the car.
+		destinationId:
+			destinationIdFrom({ from: 'parking', parkingId: reservation.parkingId }) ??
+			undefined,
 		// app-context's cancelReservation() only mutates a 'reserved' booking.
 		cancellable: reservation.status === 'reserved',
 	})
@@ -114,11 +134,16 @@ function fromQueueTicket(ticket: QueueTicket): BookingRow {
 					? `taxminan ${ticket.etaMinutes} daqiqa`
 					: formatDateTime(ticket.closedAt ?? ticket.createdAt),
 		status,
-		// The organisation, not the bare screen: /queues opens on QUEUE_ORGS[0]
-		// otherwise, so a ticket taken anywhere else led to someone else's queue.
-		href: `/queues?org=${ticket.orgId}`,
+		// The ticket's own page, the same way a parking booking has one. It
+		// used to point at /queues, which is the organisation's screen rather
+		// than this booking's — and the ticket's only real detail view was a
+		// QR modal in the list.
+		href: `/booking/${ticket.id}`,
 		qrValue: `BSPACE:QUEUE:${ticket.id}`,
 		repeat: { kind: 'queue', refId: ticket.orgId },
+		// The venue the number was taken at, not the car park beside it.
+		destinationId:
+			destinationIdFrom({ from: 'queueOrg', orgId: ticket.orgId }) ?? undefined,
 		// closeQueueTicket() accepts both of the live statuses.
 		cancellable: ticket.status === 'waiting' || ticket.status === 'called',
 	})
@@ -143,8 +168,17 @@ function fromServiceBooking(booking: ServiceBooking): BookingRow {
 				: booking.status === 'completed'
 					? 'done'
 					: 'cancelled',
+		// A table, a film, a clinic slot and an event ticket each get the same
+		// full detail page every other booking has.
+		href: `/booking/${booking.id}`,
 		qrValue: `BSPACE:${booking.kind.toUpperCase()}:${booking.code}`,
 		repeat: { kind: booking.kind, refId: booking.refId },
+		// The restaurant, cinema or clinic the booking was made at, read back
+		// from the refId the sheet stored. A booking whose venue has since
+		// left the catalog resolves to nothing and simply offers no route.
+		destinationId:
+			destinationIdFrom({ from: 'serviceBooking', refId: booking.refId }) ??
+			undefined,
 		// cancelServiceBooking() only mutates an 'active' booking.
 		cancellable: booking.status === 'active',
 	})

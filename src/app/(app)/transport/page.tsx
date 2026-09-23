@@ -9,6 +9,7 @@ import {
 	CloudRain,
 	Construction,
 	LocateFixed,
+	MapPin,
 	Navigation,
 	Sun,
 } from 'lucide-react'
@@ -38,6 +39,8 @@ import { Card } from '@/components/ui/card'
 import { KeyValue, KeyValueList } from '@/components/ui/key-value'
 import { Toast } from '@/components/ui/toast'
 import { useApp } from '@/context/app-context'
+import { destinationParkingFor } from '@/lib/destination-parking'
+import { reservationHref } from '@/lib/reservation'
 import { CITY_META } from '@/data/city-meta'
 import {
 	DEMO_ALTERNATIVE_ROUTES,
@@ -59,7 +62,13 @@ import {
 	fastestMode,
 } from '@/lib/eta'
 import { distanceKm } from '@/lib/geo'
-import { isTransportMode, TRANSPORT_MODES, type TransportMode } from '@/lib/transport'
+import {
+	DEFAULT_TRANSPORT_MODE,
+	originLabel,
+	TRANSPORT_MODES,
+	type TransportMode,
+} from '@/lib/transport'
+import { readRouteParams, routeHref } from '@/lib/navigation'
 import { useUserLocation } from '@/lib/use-user-location'
 import { externalNavigationHref, nearestParking, resolveRouteEndpoint } from '@/lib/route-endpoints'
 
@@ -97,14 +106,14 @@ function TransportRoute() {
 
 function TransportView() {
 	const router = useRouter()
-	const { saveRoute } = useApp()
+	const { saveRoute, reservations } = useApp()
 	const searchParams = useSearchParams()
-	const modeParam = searchParams.get('mode')
-	const parkingIdParam = searchParams.get('parkingId')
-	const targetParam = searchParams.get('target')
+	// One reader for the whole app's route links, so a deep link built on
+	// Home, in Bron or on the map is understood the same way here.
+	const requested = useMemo(() => readRouteParams(searchParams), [searchParams])
 
-	const [mode, setMode] = useState<TransportMode>(() =>
-		isTransportMode(modeParam) ? modeParam : 'car',
+	const [mode, setMode] = useState<TransportMode>(
+		() => requested.mode ?? DEFAULT_TRANSPORT_MODE,
 	)
 	const [showRoute, setShowRoute] = useState(true)
 	const [locateRevision, setLocateRevision] = useState(0)
@@ -117,15 +126,23 @@ function TransportView() {
 	)
 	const [selectedAltIndex, setSelectedAltIndex] = useState(0)
 	const [publicTab, setPublicTab] = useState<PublicTransportTab>('bus')
-	const [destinationSheetOpen, setDestinationSheetOpen] = useState(false)
+	// With nowhere to go, the picker is the screen: asking is the only honest
+	// alternative to inventing a destination.
+	const [destinationSheetOpen, setDestinationSheetOpen] = useState(
+		() => !requested.destinationId,
+	)
 	// Kept in page state, so the pick survives every other interaction on
-	// this screen for as long as the user stays in the transport flow.
+	// this screen for as long as the user stays in the transport flow. null
+	// is a real state: arriving here without a destination used to silently
+	// plot a route to Magic City, which is not where anybody asked to go.
 	const [selectedDestinationId, setSelectedDestinationId] = useState<
 		string | null
-	>(() => targetParam ?? (parkingIdParam ? `parking:${parkingIdParam}` : 'magic-city'))
-	// null means "wherever the GPS says I am" — the screen's default, and what
+	>(() => requested.destinationId)
+	// 'me' is "wherever the GPS says I am" — the screen's default, and what
 	// the address book's own "Mening joylashuvim" entry resolves back to.
-	const [selectedOriginId, setSelectedOriginId] = useState('me')
+	const [selectedOriginId, setSelectedOriginId] = useState(
+		() => requested.originId ?? 'me',
+	)
 	const [originSheetOpen, setOriginSheetOpen] = useState(false)
 	const [openProblem, setOpenProblem] = useState<RouteProblem | null>(null)
 	const [openBus, setOpenBus] = useState<DemoBus | null>(null)
@@ -136,13 +153,28 @@ function TransportView() {
 		locate()
 	}, [locate])
 
+	// An origin that cannot be resolved — a stale ?from= naming a place that
+	// has since left the catalog — falls back to the live position, which is
+	// this screen's default anyway and is never presented as anything else.
 	const originPoint = useMemo(() =>
-		resolveRouteEndpoint(selectedOriginId, location)!, [selectedOriginId, location])
-	const destinationPoint = useMemo(() =>
-		resolveRouteEndpoint(selectedDestinationId ?? 'magic-city', location) ??
-		resolveRouteEndpoint('magic-city', location)!, [selectedDestinationId, location])
-	const destination = useMemo(() => getParking(destinationPoint.parkingId ?? '') ??
-		nearestParking(destinationPoint), [destinationPoint])
+		resolveRouteEndpoint(selectedOriginId, location) ??
+		resolveRouteEndpoint('me', location)!, [selectedOriginId, location])
+	// No substitute here. A destination that will not resolve leaves the
+	// screen in its "choose somewhere" state rather than routing elsewhere.
+	const destinationPoint = useMemo(() => selectedDestinationId
+		? resolveRouteEndpoint(selectedDestinationId, location) : null,
+		[selectedDestinationId, location])
+	// The lot this route ends at or beside — used for the destination's city
+	// and for the saved-route record, neither of which is a claim about
+	// parking. What the screen actually offers the customer is `suggestion`.
+	const arrivalParking = useMemo(() => destinationPoint
+		? getParking(destinationPoint.parkingId ?? '') ?? nearestParking(destinationPoint)
+		: undefined, [destinationPoint])
+	// Somewhere to leave the car, and only when there is a car and it is not
+	// the destination itself. Null for metro, scooter and walking.
+	const suggestion = useMemo(() => destinationPoint
+		? destinationParkingFor({ destination: destinationPoint, mode, reservations })
+		: null, [destinationPoint, mode, reservations])
 
 	// Toast. A recalculation only records that it happened — its duration is
 	// read from the live route further down, so the text can never drift
@@ -231,15 +263,122 @@ function TransportView() {
 	// swap that sends the current location to the destination slot keeps it
 	// nameable rather than silently becoming "nearest parking".
 	const swapEnds = useCallback(() => {
+		if (!destinationPoint) return
 		setSelectedOriginId(destinationPoint.id)
 		setSelectedDestinationId(originPoint.id)
 		announceRecalc()
-	}, [originPoint.id, destinationPoint.id, announceRecalc])
+	}, [originPoint.id, destinationPoint, announceRecalc])
 
-	if (!destination) {
+	// Shared with Home's transport strip so both screens name the start of a
+	// route, and each of its fallbacks, with exactly the same words.
+	const gpsLabel = originLabel(status)
+
+	const originStatusLabel = originPoint.id === 'me' ? gpsLabel
+		: [originPoint.title, originPoint.address].filter(Boolean).join(', ')
+
+	// The picked place itself, exactly as the picker named it.
+	const destinationValue = !destinationPoint ? '' :
+		destinationPoint.id === 'me' ? gpsLabel
+		: [destinationPoint.title, destinationPoint.address].filter(Boolean).join(', ')
+
+	// Keep the address bar on the trip actually being shown, so refreshing or
+	// sharing the link reproduces it. replaceState rather than router.replace:
+	// this view is keyed on the query string, and a router navigation would
+	// remount it and discard the filters and tabs the customer has set.
+	useEffect(() => {
+		if (!selectedDestinationId) return
+		const href = routeHref({
+			mode,
+			destinationId: selectedDestinationId,
+			originId: selectedOriginId,
+		})
+		if (window.location.pathname + window.location.search !== href)
+			window.history.replaceState(null, '', href)
+	}, [mode, selectedDestinationId, selectedOriginId])
+
+	const filterCount = Object.values(filters).filter(Boolean).length
+
+	const destinationSheet = (
+		<DestinationSheet
+			open={destinationSheetOpen}
+			onClose={closeDestinationSheet}
+			onSelect={pickDestination}
+			selectedId={selectedDestinationId}
+			currentLocationLabel={gpsLabel}
+		/>
+	)
+
+	const locationCard = (
+		<LocationCard
+			originLabel='Qayerdan'
+			originValue={originStatusLabel}
+			onOriginClick={() => setOriginSheetOpen(true)}
+			onRefreshOrigin={refreshOrigin}
+			refreshing={status === 'loading'}
+			destinationLabel='Qayerga'
+			destinationValue={destinationValue || 'Manzil tanlang'}
+			onDestinationClick={() => setDestinationSheetOpen(true)}
+			onSwap={swapEnds}
+		/>
+	)
+
+	// Nowhere to go yet — either nothing was passed in, or the id that was
+	// names something the catalogs no longer contain. Both are states the
+	// screen shows and asks about; neither is a reason to route elsewhere.
+	if (!destinationPoint || !arrivalParking) {
 		return (
-			<div className='rounded-3xl bg-bad-bg p-6 text-sm text-bad'>
-				Parking topilmadi.
+			<div className='-mx-1 space-y-5 pb-4'>
+				<TransportHeader
+					title='Transport'
+					subtitle='Qayerga borishni tanlang'
+					filterCount={filterCount}
+					onBack={() => router.back()}
+					onFilterClick={() => setFiltersOpen(true)}
+				/>
+
+				{locationCard}
+
+				<TransportModeSelector selected={mode} onSelect={setMode} />
+
+				<Card className='text-center'>
+					<span className='mx-auto grid size-12 place-items-center rounded-2xl bg-brand-50 text-brand'>
+						<MapPin className='size-6' />
+					</span>
+					<p className='mt-3 text-[15px] font-extrabold text-ink'>
+						Manzil tanlanmagan
+					</p>
+					<p className='mt-1.5 text-[12.5px] leading-5 text-ink-3'>
+						{selectedDestinationId
+							? 'Bu manzil endi mavjud emas. Boshqa joyni tanlang.'
+							: 'Parking, restoran yoki boshqa joyni tanlang — marshrut shundan keyin quriladi.'}
+					</p>
+					<Button
+						variant='primary'
+						block
+						className='mt-4'
+						onClick={() => setDestinationSheetOpen(true)}
+					>
+						<MapPin className='size-4' /> Manzilni tanlash
+					</Button>
+				</Card>
+
+				<RouteFiltersSheet
+					open={filtersOpen}
+					onClose={() => setFiltersOpen(false)}
+					filters={filters}
+					onToggle={toggleFilter}
+				/>
+
+				{destinationSheet}
+
+				<DestinationSheet
+					title='Qayerdan'
+					open={originSheetOpen}
+					onClose={() => setOriginSheetOpen(false)}
+					onSelect={pickOrigin}
+					selectedId={selectedOriginId}
+					currentLocationLabel={gpsLabel}
+				/>
 			</div>
 		)
 	}
@@ -252,8 +391,6 @@ function TransportView() {
 		modesOnly.map(id => [id, estimateMinutesForMode(distanceValue, id)]),
 	) as Record<TransportMode, number>
 
-	const filterCount = Object.values(filters).filter(Boolean).length
-
 	const cost = estimateFareUZS(distanceValue, minutes, mode)
 	const costLabel = MODE_COST_LABEL[mode]
 
@@ -261,22 +398,6 @@ function TransportView() {
 	const speedRange = estimateOptimalSpeedRange(distanceValue, minutes)
 	const tipValue = mode === 'car' ? `${speedRange.low}–${speedRange.high}` : drivingTip.demoValue
 	const tipUnit = mode === 'car' ? 'km/soat' : drivingTip.demoUnit
-
-	const gpsLabel =
-		status === 'ready'
-			? 'Joriy joylashuvingiz (GPS)'
-			: status === 'loading'
-				? 'Joylashuv aniqlanmoqda…'
-				: 'Toshkent markazi (demo joylashuv)'
-
-	const originStatusLabel = originPoint.id === 'me' ? gpsLabel
-		: [originPoint.title, originPoint.address].filter(Boolean).join(', ')
-
-	// City Goo shows the picked place itself in the "Qayerga" row; until
-	// something is picked the row keeps showing the parking this route
-	// already targets.
-	const destinationValue = destinationPoint.id === 'me' ? gpsLabel
-		: [destinationPoint.title, destinationPoint.address].filter(Boolean).join(', ')
 
 	const timelineSteps: TimelineStep[] = [
 		{
@@ -303,7 +424,13 @@ function TransportView() {
 			subtitle: destinationPoint.address,
 			distanceLabel: `${distanceValue.toFixed(1)} km`,
 			distanceKm: distanceValue,
-			note: `${destination.availableSpaces} joy bo‘sh — ${destination.address}dan kirish.`,
+			// Only about parking when parking is being offered, and never
+			// phrased as if the car park were the place you are going.
+			note: !suggestion
+				? undefined
+				: suggestion.kind === 'destination'
+					? `${suggestion.parking.availableSpaces} joy bo‘sh — ${suggestion.parking.address}dan kirish.`
+					: `${suggestion.label}: ${suggestion.parking.name} · ${suggestion.parking.availableSpaces} joy bo‘sh.`,
 		},
 	]
 
@@ -318,7 +445,7 @@ function TransportView() {
 		best: template.best,
 	}))
 
-	const cityMeta = CITY_META[destination.city] ?? CITY_META.Toshkent
+	const cityMeta = CITY_META[arrivalParking.city] ?? CITY_META.Toshkent
 	const WeatherIcon = weatherIconFor(cityMeta.sky)
 
 	const navigateHref = externalNavigationHref(originPoint, destinationPoint, mode)
@@ -336,20 +463,29 @@ function TransportView() {
 			title: DEMO_ROADWORKS_NOTICE.title,
 			message: DEMO_ROADWORKS_NOTICE.message,
 		},
-		{
-			icon: CircleParking,
-			tone: 'brand',
-			title: 'Manzildagi parkovka',
-			message: `${destination.totalSpaces} dan ${destination.availableSpaces} joy bo‘sh. Qidirmaslik uchun bron qiling.`,
-			href:
-				destination.availableSpaces > 0
-					? undefined
-					: `/parking/${destination.id}`,
-			onSelect:
-				destination.availableSpaces > 0
-					? () => setBookingParkingId(destination.id)
-					: undefined,
-		},
+		// Dropped entirely when there is no parking to offer, rather than
+		// kept as an empty claim about the destination.
+		...(suggestion
+			? [
+					{
+						icon: CircleParking,
+						tone: 'brand' as const,
+						title: suggestion.label,
+						message: suggestion.reservation
+							? `${suggestion.parking.name} — bu parkingda broningiz bor.`
+							: `${suggestion.parking.name} · ${suggestion.parking.totalSpaces} dan ${suggestion.parking.availableSpaces} joy bo‘sh.`,
+						href: suggestion.reservation
+							? reservationHref(suggestion.reservation)
+							: suggestion.parking.availableSpaces > 0
+								? undefined
+								: `/parking/${suggestion.parking.id}`,
+						onSelect:
+							!suggestion.reservation && suggestion.parking.availableSpaces > 0
+								? () => setBookingParkingId(suggestion.parking.id)
+								: undefined,
+					},
+				]
+			: []),
 	]
 
 	function toggleFilter(id: RouteFilterId) {
@@ -366,17 +502,7 @@ function TransportView() {
 				onFilterClick={() => setFiltersOpen(true)}
 			/>
 
-			<LocationCard
-				originLabel='Qayerdan'
-				originValue={originStatusLabel}
-				onOriginClick={() => setOriginSheetOpen(true)}
-				onRefreshOrigin={refreshOrigin}
-				refreshing={status === 'loading'}
-				destinationLabel='Qayerga'
-				destinationValue={destinationValue}
-				onDestinationClick={() => setDestinationSheetOpen(true)}
-				onSwap={swapEnds}
-			/>
+			{locationCard}
 
 			<TransportModeSelector
 				selected={mode}
@@ -414,7 +540,7 @@ function TransportView() {
 				costUZS={cost}
 				costLabel={costLabel}
 				facts={DEMO_ROUTE_FACTS[mode]}
-				destination={destination}
+				parkingSuggestion={suggestion ?? undefined}
 			/>
 
 			<button
@@ -425,7 +551,7 @@ function TransportView() {
 						from: originStatusLabel,
 						to: destinationValue,
 						mode,
-						parkingId: destination.id,
+						parkingId: arrivalParking.id,
 					})
 					notifyBooking('Marshrut sevimlilarga saqlandi')
 				}}
@@ -465,15 +591,18 @@ function TransportView() {
 				rows={DEMO_CURRENT_SITUATION}
 				weatherIcon={WeatherIcon}
 				weatherLabel={`+${cityMeta.temp}° ${cityMeta.sky}`}
-				weatherDetail={`${destination.city} uchun B SPACE’ning statik ob-havo ma’lumoti.`}
+				weatherDetail={`${arrivalParking.city} uchun B SPACE’ning statik ob-havo ma’lumoti.`}
 				onRefresh={() => locate()}
 				refreshing={status === 'loading'}
 			/>
 
-			<DestinationParkingCard
-				parking={destination}
-				onReserve={() => setBookingParkingId(destination.id)}
-			/>
+			{suggestion && (
+				<DestinationParkingCard
+					suggestion={suggestion}
+					destinationTitle={destinationPoint.title}
+					onReserve={() => setBookingParkingId(suggestion.parking.id)}
+				/>
+			)}
 
 			<RouteNotices notices={notices} />
 
@@ -484,13 +613,7 @@ function TransportView() {
 				onToggle={toggleFilter}
 			/>
 
-			<DestinationSheet
-				open={destinationSheetOpen}
-				onClose={closeDestinationSheet}
-				onSelect={pickDestination}
-				selectedId={selectedDestinationId}
-				currentLocationLabel={gpsLabel}
-			/>
+			{destinationSheet}
 
 			<DestinationSheet
 				title='Qayerdan'

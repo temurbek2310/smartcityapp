@@ -22,6 +22,7 @@ import {
 import { notFound, useParams, useRouter } from 'next/navigation'
 import { useMemo, useState } from 'react'
 
+import { DirectionsSheet } from '@/components/navigation/directions-sheet'
 import { BayGrid } from '@/components/parking/bay-grid'
 import { ParkingBookingSheet } from '@/components/parking/parking-booking-sheet'
 import { AppBar } from '@/components/ui/app-bar'
@@ -35,6 +36,7 @@ import { IconTile } from '@/components/ui/icon-tile'
 import { Toast } from '@/components/ui/toast'
 import { useApp } from '@/context/app-context'
 import { PARKINGS, getParking } from '@/data/parkings'
+import { useDirections } from '@/hooks/use-directions'
 import { useBookingMeta } from '@/hooks/use-booking-meta'
 import { useToast } from '@/hooks/use-toast'
 import { occupancyTone, parkingAvailability } from '@/lib/availability'
@@ -93,6 +95,7 @@ export default function ParkingDetailPage() {
 	const router = useRouter()
 	const { favorites, toggleFavorite, reservations } = useApp()
 	const toast = useToast<string>()
+	const directions = useDirections()
 
 	const [level, setLevel] = useState(1)
 	const [selectedBay, setSelectedBay] = useState<string | null>(null)
@@ -168,7 +171,7 @@ export default function ParkingDetailPage() {
 		{
 			label: 'Yo‘nalish',
 			icon: Navigation,
-			onClick: () => router.push(`/navigate/parking/${parking.id}`),
+			onClick: () => directions.open({ from: 'parking', parkingId: parking.id }),
 		},
 		{
 			label: favorite ? 'Sevimlida' : 'Sevimliga',
@@ -519,6 +522,11 @@ export default function ParkingDetailPage() {
 				initialLevel={level}
 				onClose={() => setBookingOpen(false)}
 				onNotify={toast.show}
+			/>
+
+			<DirectionsSheet
+				destinationId={directions.destinationId}
+				onClose={directions.close}
 			/>
 
 			<Toast open={toast.open} message={toast.payload ?? ''} />

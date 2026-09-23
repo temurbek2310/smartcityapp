@@ -14,7 +14,7 @@ import { notFound, useParams, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 
 import { ActiveSessionPanel } from '@/components/parking/active-session-panel'
-import { DirectionsSheet } from '@/components/parking/directions-sheet'
+import { DirectionsSheet } from '@/components/navigation/directions-sheet'
 import { AppBar } from '@/components/ui/app-bar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -29,6 +29,7 @@ import { getParking } from '@/data/parkings'
 import { useBookingMeta } from '@/hooks/use-booking-meta'
 import { useToast } from '@/hooks/use-toast'
 import { formatDateTime, formatDuration, formatUZS } from '@/lib/format'
+import { destinationIdFrom } from '@/lib/navigation'
 import { reservationCode, supersededReservationHref } from '@/lib/reservation'
 
 export default function ReservationPage() {
@@ -52,7 +53,9 @@ export default function ReservationPage() {
 		if (redirectTo) router.replace(redirectTo)
 	}, [redirectTo, router])
 
-	const [directionsOpen, setDirectionsOpen] = useState(false)
+	// Holds the destination id while the sheet is up: the booking's own lot,
+	// resolved through the shared model rather than named here.
+	const [directionsOpen, setDirectionsOpen] = useState<string | null>(null)
 
 	// Deferred past the first paint so the countdown does not disagree between
 	// the server's render and the client's.
@@ -87,13 +90,10 @@ export default function ReservationPage() {
 				/>
 				{children}
 			</div>
-			{directionsOpen && (
-				<DirectionsSheet
-					parking={parking}
-					reservationId={reservation.id}
-					onClose={() => setDirectionsOpen(false)}
-				/>
-			)}
+			<DirectionsSheet
+				destinationId={directionsOpen}
+				onClose={() => setDirectionsOpen(null)}
+			/>
 			<Toast open={toast.open} message={toast.payload ?? ''} />
 		</div>
 	)
@@ -136,8 +136,13 @@ export default function ReservationPage() {
 		}
 	}
 
-	const directions = (
-		<Button variant='outline' onClick={() => setDirectionsOpen(true)}>
+	const destinationId = destinationIdFrom({
+		from: 'parking',
+		parkingId: reservation.parkingId,
+	})
+
+	const directions = destinationId && (
+		<Button variant='outline' onClick={() => setDirectionsOpen(destinationId)}>
 			<Navigation className='size-4' /> Yo‘nalish
 		</Button>
 	)

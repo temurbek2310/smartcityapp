@@ -34,6 +34,10 @@ import { usePlaceFavorites } from '@/hooks/use-place-favorites'
 import { useToast } from '@/hooks/use-toast'
 import { parkingAvailability } from '@/lib/availability'
 import { formatDistance, formatUZS } from '@/lib/format'
+import { destinationIdFrom, routeHref } from '@/lib/navigation'
+import { DirectionsSheet } from '@/components/navigation/directions-sheet'
+import { useDirections } from '@/hooks/use-directions'
+import { isTransportMode } from '@/lib/transport'
 import type { Place } from '@/lib/types'
 
 type FavoriteTab = 'places' | 'parking' | 'queues' | 'routes' | 'events'
@@ -77,6 +81,7 @@ export default function FavoritesPage() {
 	const placeFavoriteIds = placeFavorites.ids
 	const [bookingParkingId, setBookingParkingId] = useState<string | null>(null)
 	const toast = useToast<string>()
+	const directions = useDirections()
 
 	useEffect(() => {
 		const timer = window.setTimeout(() => {
@@ -178,6 +183,9 @@ export default function FavoritesPage() {
 										key={place.id}
 										place={place}
 										onRemove={() => removePlace(place.id)}
+										onDirections={() =>
+											directions.open({ from: 'place', placeId: place.id })
+										}
 									/>
 								))
 							) : (
@@ -255,13 +263,16 @@ export default function FavoritesPage() {
 											</Link>
 
 											<div className='flex items-center gap-2 px-4 pb-4'>
-												<Link
-													href={`/navigate/parking/${parking.id}`}
+												<button
+													type='button'
+													onClick={() =>
+														directions.open({ from: 'parking', parkingId: parking.id })
+													}
 													className='flex h-[34px] min-w-0 flex-1 items-center justify-center gap-[7px] whitespace-nowrap rounded-[9px] border-[1.5px] border-line-2 bg-white px-2.5 text-[12px] font-bold active:scale-[0.975]'
 												>
 													<Navigation className='size-3.5 shrink-0' />
 													Yo‘nalish
-												</Link>
+												</button>
 												<button
 													type='button'
 													onClick={() => setBookingParkingId(parking.id)}
@@ -377,7 +388,13 @@ export default function FavoritesPage() {
 											</button>
 										</div>
 										<Link
-											href={`/transport?mode=${route.mode}${route.parkingId ? `&parkingId=${route.parkingId}` : ''}`}
+											href={routeHref({
+												mode: isTransportMode(route.mode) ? route.mode : null,
+												destinationId: destinationIdFrom({
+													from: 'parking',
+													parkingId: route.parkingId,
+												}),
+											})}
 											className='mt-3 flex h-9 items-center justify-center gap-1.5 rounded-[10px] bg-brand text-[11.5px] font-extrabold text-white'
 										>
 											<Navigation className='size-3.5' /> Qayta qurish
@@ -457,6 +474,11 @@ export default function FavoritesPage() {
 				parkingId={bookingParkingId}
 				onClose={() => setBookingParkingId(null)}
 				onNotify={toast.show}
+			/>
+
+			<DirectionsSheet
+				destinationId={directions.destinationId}
+				onClose={directions.close}
 			/>
 
 			<Toast open={toast.open} message={toast.payload ?? ''} />
@@ -563,9 +585,11 @@ function FavoriteTabs({
 function PlaceFavoriteCard({
 	place,
 	onRemove,
+	onDirections,
 }: {
 	place: Place
 	onRemove: () => void
+	onDirections: () => void
 }) {
 	return (
 		<article className='overflow-hidden rounded-[20px] bg-white shadow-[0_4px_14px_rgba(16,24,40,0.07)] ring-1 ring-line'>
@@ -607,14 +631,16 @@ function PlaceFavoriteCard({
 			</Link>
 
 			<div className='grid grid-cols-2 gap-2 px-3 pb-3'>
-				<Link
-					href={
-						place.parkingId ? `/navigate/parking/${place.parkingId}` : '/home'
-					}
+				<button
+					type='button'
+					// The venue itself. Places always carry coordinates, so this no
+					// longer depends on the place having a linked car park — and no
+					// longer quietly lands on /home when it does not.
+					onClick={onDirections}
 					className='flex h-9 items-center justify-center gap-1.5 rounded-[10px] border border-line-2 bg-white px-2 text-[11px] font-bold'
 				>
 					<Navigation className='size-3.5' /> Yo‘nalish
-				</Link>
+				</button>
 				<button
 					type='button'
 					onClick={onRemove}

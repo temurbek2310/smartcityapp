@@ -25,6 +25,8 @@ import { PARKINGS } from '@/data/parkings'
 import { useToast } from '@/hooks/use-toast'
 import { cn } from '@/lib/cn'
 import { formatDistance } from '@/lib/format'
+import { DirectionsSheet } from '@/components/navigation/directions-sheet'
+import { useDirections } from '@/hooks/use-directions'
 import { useRefreshSignal } from '@/components/ui/pull-to-refresh'
 import { liveAvailabilityAll } from '@/lib/live-availability'
 import {
@@ -42,6 +44,7 @@ import { useUserLocation } from '@/lib/use-user-location'
 export default function MapPage() {
 	const router = useRouter()
 	const toast = useToast<string>()
+	const directions = useDirections()
 	const mapHandle = useRef<CityMapHandle>(null)
 
 	const [category, setCategory] = useState<MapCatalogKind | 'all'>('all')
@@ -91,7 +94,7 @@ export default function MapPage() {
 	}
 
 	function routeTo(object: MapObject) {
-		router.push(`/transport?target=${encodeURIComponent(mapObjectKey(object))}`)
+		directions.open({ from: 'mapObject', key: mapObjectKey(object) })
 	}
 
 	// Full-bleed, but stopping at the bottom nav: City Goo keeps the tab bar on
@@ -325,6 +328,11 @@ export default function MapPage() {
 					)}
 				</div>
 			)}
+
+			<DirectionsSheet
+				destinationId={directions.destinationId}
+				onClose={directions.close}
+			/>
 
 			<Toast open={toast.open} message={toast.payload ?? ''} />
 		</div>

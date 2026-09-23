@@ -10,6 +10,7 @@ import {
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Suspense, useMemo, useState } from 'react'
 
+import { DirectionsSheet } from '@/components/navigation/directions-sheet'
 import { QueueForecastCard } from '@/components/queues/queue-forecast-card'
 import { QueueOrgCard } from '@/components/queues/queue-org-card'
 import { QueueTicketCard } from '@/components/queues/queue-ticket-card'
@@ -31,6 +32,7 @@ import { Toast } from '@/components/ui/toast'
 import { useApp } from '@/context/app-context'
 import { getParking } from '@/data/parkings'
 import { QUEUE_HOURS, QUEUE_ORGS, getQueueOrg } from '@/data/queue-orgs'
+import { useDirections } from '@/hooks/use-directions'
 import { useToast } from '@/hooks/use-toast'
 import { occupancyTone } from '@/lib/availability'
 import { cn } from '@/lib/cn'
@@ -65,6 +67,7 @@ export default function QueuesPage() {
 function QueuesView() {
 	const router = useRouter()
 	const toast = useToast<string>()
+	const directions = useDirections()
 	const { queueTickets, notificationPrefs, setNotificationPref } = useApp()
 
 	// /map's "Ochish" lands here on a specific organisation.
@@ -212,7 +215,11 @@ function QueuesView() {
 				</HorizontalRail>
 
 				<div className='px-4'>
-					<QueueOrgCard org={org} onSwitch={() => setSwitchOpen(true)} />
+					<QueueOrgCard
+						org={org}
+						onSwitch={() => setSwitchOpen(true)}
+						onDirections={() => directions.open({ from: 'queueOrg', orgId: org.id })}
+					/>
 				</div>
 
 				<div className='px-4'>
@@ -555,6 +562,11 @@ function QueuesView() {
 					</Button>
 				</BottomSheet>
 			)}
+
+			<DirectionsSheet
+				destinationId={directions.destinationId}
+				onClose={directions.close}
+			/>
 
 			<Toast open={toast.open} message={toast.payload ?? ''} />
 		</div>

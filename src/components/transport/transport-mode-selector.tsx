@@ -5,7 +5,9 @@ import { TRANSPORT_MODES, type TransportMode } from '@/lib/transport'
 
 type TransportModeSelectorProps = {
 	selected: TransportMode
-	minutesByMode: Record<TransportMode, number>
+	// Absent until there is somewhere to go: a duration belongs to a route,
+	// so with no destination the row is four modes and no numbers.
+	minutesByMode?: Record<TransportMode, number>
 	onSelect: (mode: TransportMode) => void
 }
 
@@ -31,7 +33,7 @@ export function TransportModeSelector({
 						}`}
 					>
 						<Icon className='size-4.5' />
-						{mode.label} · {minutesByMode[mode.id]} daq
+						{minutesByMode ? `${mode.label} · ${minutesByMode[mode.id]} daq` : mode.label}
 					</button>
 				)
 			})}

@@ -5,11 +5,9 @@ import {
 	ChevronRight,
 	CircleParking,
 	Repeat,
-	Share2,
 	Stethoscope,
 	Ticket,
 	Users,
-	X,
 	type LucideIcon,
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
@@ -24,8 +22,6 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { EmptyState } from '@/components/ui/empty-state'
 import { IconTile } from '@/components/ui/icon-tile'
-import { KeyValue, KeyValueList } from '@/components/ui/key-value'
-import { QrImage } from '@/components/ui/qr-image'
 import { SectionHeader } from '@/components/ui/section-header'
 import { SegmentedTabs } from '@/components/ui/segmented-tabs'
 import { Toast } from '@/components/ui/toast'
@@ -72,7 +68,6 @@ export default function BookingsPage() {
 	const { cancelReservation, cancelQueueTicket, cancelServiceBooking } = app
 
 	const [tab, setTab] = useState<'open' | 'history'>('open')
-	const [qrRow, setQrRow] = useState<BookingRow | null>(null)
 	const [cancelRow, setCancelRow] = useState<BookingRow | null>(null)
 	const [serviceSheet, setServiceSheet] = useState<{
 		kind: ServiceBookingKind
@@ -93,28 +88,16 @@ export default function BookingsPage() {
 		rows.filter(row => row.kind === 'parking').map(row => row.id),
 	)
 
-	// Where tapping a card goes. The kinds with a screen of their own open it;
-	// the light service bookings have none, so their QR sheet is the detail
-	// view and carries the actions that used to sit on the card.
+	// Where tapping a card goes. One rule for every kind now: the summary in
+	// the list, the whole booking on its own page. Queue tickets and service
+	// bookings used to open a QR modal instead, which made half this list
+	// behave one way and half the other.
 	function openRow(row: BookingRow) {
-		if (isOpen(row) && row.qrValue) setQrRow(row)
-		else if (row.href) router.push(row.href)
+		if (row.href) router.push(row.href)
 	}
 
 	function canOpen(row: BookingRow) {
-		return Boolean(row.href) || (isOpen(row) && Boolean(row.qrValue))
-	}
-
-	async function share(row: BookingRow) {
-		const text = `${row.title} · ${row.code}`
-		try {
-			await navigator.clipboard.writeText(text)
-			toast.show('Bron nusxalandi')
-		} catch {
-			// Clipboard needs a secure context and permission; the code is on
-			// screen either way.
-			toast.show(text)
-		}
+		return Boolean(row.href)
 	}
 
 	function cancel(row: BookingRow) {
@@ -352,61 +335,6 @@ export default function BookingsPage() {
 					bepul bekor qilish mumkin. Agar joy bo‘lmasa, to‘lovni qaytaramiz.
 				</p>
 			</Card>
-
-			{qrRow && (
-				<BottomSheet title={qrRow.title} onClose={() => setQrRow(null)}>
-					<Card className='text-center'>
-						<div className='mx-auto w-fit rounded-3xl border border-line bg-white p-3'>
-							<QrImage value={qrRow.qrValue ?? qrRow.code} size={170} />
-						</div>
-						<p className='mt-4 font-mono text-2xl font-black text-ink'>
-							{qrRow.code}
-						</p>
-						<p className='mt-2 text-[12.5px] text-ink-2'>
-							Kodni joyida ko‘rsating. Internetsiz ham ishlaydi.
-						</p>
-					</Card>
-					<Card className='mt-3'>
-						<KeyValueList>
-							<KeyValue label='Bron' value={qrRow.subtitle} />
-							<KeyValue label='Vaqt' value={qrRow.whenLabel} />
-							{qrRow.amountLabel && (
-								<KeyValue label='Summa' value={qrRow.amountLabel} />
-							)}
-						</KeyValueList>
-					</Card>
-					{/* A queue ticket or a table booking has no detail route of its
-					    own, so this sheet is it — the share and cancel that used to
-					    crowd the summary card belong here. */}
-					<div className='mt-4 space-y-2'>
-						{qrRow.href && (
-							<Button
-								variant='primary'
-								block
-								onClick={() => router.push(qrRow.href!)}
-							>
-								Batafsil
-							</Button>
-						)}
-						<Button variant='outline' block onClick={() => share(qrRow)}>
-							<Share2 className='size-4' /> Ulashish
-						</Button>
-						{qrRow.cancellable && (
-							<Button
-								variant='outline'
-								danger
-								block
-								onClick={() => {
-									setQrRow(null)
-									setCancelRow(qrRow)
-								}}
-							>
-								<X className='size-4' /> Bronni bekor qilish
-							</Button>
-						)}
-					</div>
-				</BottomSheet>
-			)}
 
 			{cancelRow && (
 				<BottomSheet
