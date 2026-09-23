@@ -184,12 +184,13 @@ describe('landing on the booking after making it', () => {
 
 	it("opens the new service booking's own page, like parking does", () => {
 		const sheet = file('components/booking/service-booking-sheet.tsx')
-		expect(sheet).toContain('router.push(serviceBookingHref(booking.id))')
+		expect(sheet).toContain('router.push(serviceBookingHref(attempt.created.id))')
 	})
 
 	it("opens the new queue ticket's own page", () => {
 		const sheet = file('components/queues/take-ticket-sheet.tsx')
-		expect(sheet).toContain('router.push(queueTicketHref(ticket.id))')
+		expect(sheet).toContain('router.push(queueTicketHref(ticketId))')
+		expect(sheet).toContain('openTicket(attempt.created.id)')
 	})
 
 	it('spells each detail URL in one place only', () => {

@@ -1,7 +1,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 
 import { BottomSheet } from '@/components/ui/bottom-sheet'
 import { Badge } from '@/components/ui/badge'
@@ -10,6 +10,10 @@ import { Card } from '@/components/ui/card'
 import { KeyValue, KeyValueList } from '@/components/ui/key-value'
 import { Switch } from '@/components/ui/switch'
 import { useApp } from '@/context/app-context'
+import {
+	QUEUE_CONFLICT_MESSAGE,
+	findLiveQueueTicket,
+} from '@/lib/booking-conflicts'
 import { queueTicketHref } from '@/lib/bookings'
 import type { QueueOrg, QueueService } from '@/lib/types'
 
@@ -43,9 +47,23 @@ export function TakeTicketSheet({
 	onClose: () => void
 }) {
 	const router = useRouter()
-	const { takeQueueTicket } = useApp()
+	const { takeQueueTicket, queueTickets } = useApp()
 	const [service, setService] = useState<QueueService | null>(null)
 	const [notify, setNotify] = useState(true)
+	// A double tap on «Navbat olish» runs both handlers before the sheet
+	// unmounts; only a ref is already set when the second one runs.
+	const submittingRef = useRef(false)
+
+	// Home's place sheet and /queues both open this sheet, and the store's
+	// takeQueueTicket() refuses a second live ticket for the same line
+	// whichever screen asks. These reads only say so up front.
+	const liveFor = (serviceId: string) =>
+		findLiveQueueTicket(queueTickets, { orgId: org.id, serviceId })
+
+	function openTicket(ticketId: string) {
+		onClose()
+		router.push(queueTicketHref(ticketId))
+	}
 
 	if (!service) {
 		return (
@@ -76,17 +94,21 @@ export function TakeTicketSheet({
 									{item.windows} oyna · taxminan {item.avgWaitMinutes} daqiqa
 								</span>
 							</span>
-							<Badge
-								tone={
-									item.avgWaitMinutes < 15
-										? 'ok'
-										: item.avgWaitMinutes < 35
-											? 'warn'
-											: 'bad'
-								}
-							>
-								{item.avgWaitMinutes} daq
-							</Badge>
+							{liveFor(item.id) ? (
+								<Badge tone='ok'>Faol chipta</Badge>
+							) : (
+								<Badge
+									tone={
+										item.avgWaitMinutes < 15
+											? 'ok'
+											: item.avgWaitMinutes < 35
+												? 'warn'
+												: 'bad'
+									}
+								>
+									{item.avgWaitMinutes} daq
+								</Badge>
+							)}
 						</button>
 					))}
 				</div>
@@ -96,6 +118,36 @@ export function TakeTicketSheet({
 
 	const position = positionFor(service)
 	const number = ticketNumberFor(service, position)
+	const existing = liveFor(service.id)
+
+	if (existing) {
+		return (
+			<BottomSheet title='Navbat olish' onClose={onClose}>
+				<Card className='text-center'>
+					<p className='text-[13px] font-bold text-ink'>
+						{QUEUE_CONFLICT_MESSAGE}
+					</p>
+					<p className='mt-2 font-mono text-3xl font-black text-brand'>
+						{existing.number}
+					</p>
+					<p className='mt-2 text-[12.5px] text-ink-2'>
+						{org.title} · {service.title}
+					</p>
+				</Card>
+				<Button
+					variant='primary'
+					block
+					className='mt-4'
+					onClick={() => openTicket(existing.id)}
+				>
+					Navbatni ko‘rish
+				</Button>
+				<Button block className='mt-2' onClick={() => setService(null)}>
+					Boshqa xizmat
+				</Button>
+			</BottomSheet>
+		)
+	}
 
 	return (
 		<BottomSheet title='Navbatni tasdiqlash' onClose={onClose}>
@@ -147,7 +199,9 @@ export function TakeTicketSheet({
 				block
 				className='mt-4'
 				onClick={() => {
-					const ticket = takeQueueTicket({
+					if (submittingRef.current) return
+					submittingRef.current = true
+					const attempt = takeQueueTicket({
 						orgId: org.id,
 						serviceId: service.id,
 						number,
@@ -156,10 +210,15 @@ export function TakeTicketSheet({
 						windowNumber: service.windows,
 						notify,
 					})
+					// Taken from another screen since this render: the notice
+					// above takes over on the next render.
+					if (!attempt.ok) {
+						submittingRef.current = false
+						return
+					}
 					// The ticket's own page is the confirmation, the same
 					// way parking lands on its reservation.
-					onClose()
-					router.push(queueTicketHref(ticket.id))
+					openTicket(attempt.created.id)
 				}}
 			>
 				Navbat olish

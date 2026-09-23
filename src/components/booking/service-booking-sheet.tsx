@@ -2,7 +2,7 @@
 
 import { Minus, Plus } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 
 import { BottomSheet } from '@/components/ui/bottom-sheet'
 import { Button } from '@/components/ui/button'
@@ -13,6 +13,10 @@ import { KeyValue, KeyValueList } from '@/components/ui/key-value'
 import { useApp } from '@/context/app-context'
 import { getParking } from '@/data/parkings'
 import { getPlace } from '@/data/places'
+import {
+	SERVICE_CONFLICT_MESSAGE,
+	findConflictingServiceBooking,
+} from '@/lib/booking-conflicts'
 import { serviceBookingDraft, serviceBookingHref } from '@/lib/bookings'
 import { tashkentDayKey } from '@/lib/format'
 import {
@@ -88,8 +92,12 @@ export function ServiceBookingSheet({
 	onNotify: (message: string) => void
 }) {
 	const router = useRouter()
-	const { createServiceBooking } = useApp()
+	const { createServiceBooking, serviceBookings } = useApp()
 	const dated = kind === 'table'
+	// Two taps can both land before the sheet unmounts; only a ref is already
+	// set by the time the second handler runs. The store refuses the second
+	// booking as a duplicate anyway — this keeps it from reading as an error.
+	const submittingRef = useRef(false)
 
 	// Read once, so the grid does not reshuffle under a thumb while the sheet
 	// is open. Confirm re-reads the real clock and refreshes this if the
@@ -122,6 +130,17 @@ export function ServiceBookingSheet({
 
 	const whenLabel = startAt ? serviceWhenLabel(startAt, now) : '—'
 
+	// The live booking the customer already holds for this venue at this
+	// time, shown before they reach for the button. It is only the early
+	// warning: createServiceBooking() applies the same rule when it stores.
+	const conflict = startAt
+		? findConflictingServiceBooking(serviceBookings, {
+				kind,
+				refId,
+				startAt: startAt.toISOString(),
+			})
+		: undefined
+
 	// Moving to another day must not carry a time that day cannot honour —
 	// coming back to today from tomorrow is exactly where an already-passed
 	// slot would otherwise stay selected and be booked.
@@ -133,7 +152,9 @@ export function ServiceBookingSheet({
 	}
 
 	function confirm() {
+		if (submittingRef.current) return
 		if (!startAt) return onNotify('Bu kunda bo‘sh vaqt qolmadi')
+		if (conflict) return onNotify(SERVICE_CONFLICT_MESSAGE[kind])
 
 		// The clock moved on while the sheet was open: re-pick against the
 		// real time and let the customer see the new choice before it is
@@ -146,7 +167,8 @@ export function ServiceBookingSheet({
 			return onNotify('Bu vaqt o‘tib ketdi — boshqasini tanlang')
 		}
 
-		const booking = createServiceBooking(
+		submittingRef.current = true
+		const attempt = createServiceBooking(
 			serviceBookingDraft({
 				kind,
 				// The venue this sheet was opened on, never a default: the
@@ -160,11 +182,17 @@ export function ServiceBookingSheet({
 				now,
 			}),
 		)
+		if (!attempt.ok) {
+			// Booked from somewhere else since this render. The notice below
+			// picks it up from the store on the next render.
+			submittingRef.current = false
+			return onNotify(SERVICE_CONFLICT_MESSAGE[kind])
+		}
 		// Straight to the booking itself, the way parking lands on its
 		// reservation: the page is the confirmation. A toast on the screen
 		// being left would be gone before it could be read.
 		onClose()
-		router.push(serviceBookingHref(booking.id))
+		router.push(serviceBookingHref(attempt.created.id))
 	}
 
 	return (
@@ -270,11 +298,33 @@ export function ServiceBookingSheet({
 				</KeyValueList>
 			</Card>
 
+			{conflict && (
+				<Card className='mt-3 bg-warn-bg'>
+					<p className='text-[13px] font-bold text-ink'>
+						{SERVICE_CONFLICT_MESSAGE[kind]}
+					</p>
+					<p className='mt-1 text-[11.5px] text-ink-3'>
+						{conflict.code} · boshqa vaqtni tanlang yoki bronni oching.
+					</p>
+					<Button
+						variant='outline'
+						block
+						className='mt-3'
+						onClick={() => {
+							onClose()
+							router.push(serviceBookingHref(conflict.id))
+						}}
+					>
+						Bronni ko‘rish
+					</Button>
+				</Card>
+			)}
+
 			<Button
 				variant='primary'
 				block
 				className='mt-4'
-				disabled={!startAt}
+				disabled={!startAt || Boolean(conflict)}
 				onClick={confirm}
 			>
 				{startAt ? copy.confirm : 'Vaqtni tanlang'}

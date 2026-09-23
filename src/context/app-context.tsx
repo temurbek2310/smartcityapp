@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -22,7 +23,7 @@ import type {
 import type { ServiceBookingDraft } from "@/lib/bookings";
 import { hydrateUserProfile } from "@/lib/persisted-profile";
 import { formatUzbekPlate } from "@/lib/plate";
-import { calculateFinalTotal } from "@/lib/reservation";
+import { calculateFinalTotal, findOverlappingReservation } from "@/lib/reservation";
 import { clearAccountStorage } from "@/lib/account-storage";
 import { initialState } from "@/lib/initial-state";
 import {
@@ -31,6 +32,11 @@ import {
   reconcileBookingLifecycles,
   serveQueueTicket as serveTicket,
 } from "@/lib/booking-lifecycle";
+import {
+  findConflictingServiceBooking,
+  findLiveQueueTicket,
+  type BookingAttempt,
+} from "@/lib/booking-conflicts";
 
 const STORAGE_KEY = "b-space-mvp-v1";
 
@@ -68,7 +74,9 @@ type AppContextValue = BSpaceState & {
   logout: () => void;
   resetDemo: () => void;
   toggleFavorite: (parkingId: string) => void;
-  createReservation: (input: CreateReservationInput) => Reservation;
+  createReservation: (
+    input: CreateReservationInput,
+  ) => BookingAttempt<Reservation>;
   cancelReservation: (reservationId: string) => void;
   enterReservation: (reservationId: string) => void;
   extendReservation: (reservationId: string, hours?: number) => void;
@@ -82,13 +90,17 @@ type AppContextValue = BSpaceState & {
   saveRoute: (route: Omit<SavedRoute, "id" | "createdAt">) => SavedRoute;
   removeRoute: (routeId: string) => void;
 
-  takeQueueTicket: (input: TakeQueueTicketInput) => QueueTicket;
+  takeQueueTicket: (
+    input: TakeQueueTicketInput,
+  ) => BookingAttempt<QueueTicket>;
   advanceQueueTicket: (ticketId: string) => void;
   arriveQueueTicket: (ticketId: string) => void;
   completeQueueTicket: (ticketId: string) => void;
   cancelQueueTicket: (ticketId: string) => void;
 
-  createServiceBooking: (input: CreateServiceBookingInput) => ServiceBooking;
+  createServiceBooking: (
+    input: CreateServiceBookingInput,
+  ) => BookingAttempt<ServiceBooking>;
   cancelServiceBooking: (bookingId: string) => void;
 };
 
@@ -112,6 +124,21 @@ function makeNotification(
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<BSpaceState>(initialState);
+
+  // What the creating mutations check duplicates against. Rendered state is
+  // one tap behind: two taps can both run before React re-renders, and the
+  // second would see a list without the first's booking. Each create appends
+  // to these synchronously, and every render re-syncs them from state — which
+  // is also how cancellations, completions and the hydrated localStorage blob
+  // reach them.
+  const reservationsRef = useRef(state.reservations);
+  const queueTicketsRef = useRef(state.queueTickets);
+  const serviceBookingsRef = useRef(state.serviceBookings);
+  useEffect(() => {
+    reservationsRef.current = state.reservations;
+    queueTicketsRef.current = state.queueTickets;
+    serviceBookingsRef.current = state.serviceBookings;
+  }, [state.reservations, state.queueTickets, state.serviceBookings]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -291,10 +318,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const createReservation = useCallback(
-    (input: CreateReservationInput) => {
+    (input: CreateReservationInput): BookingAttempt<Reservation> => {
       if (!state.user) throw new Error("User must be logged in");
       const start = new Date(input.startAt);
       const end = new Date(start.getTime() + input.durationHours * 3_600_000);
+      // The parking sheet's own rule, unchanged — one car, one space at a
+      // time across every lot — now also enforced here, so no caller can
+      // store a clash the sheet would have refused.
+      const clash = findOverlappingReservation(reservationsRef.current, {
+        startAt: start,
+        endAt: end,
+      });
+      if (clash) return { ok: false, reason: "conflict", existing: clash };
       const reservation: Reservation = {
         id: uid("booking"),
         parkingId: input.parkingId,
@@ -314,6 +349,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         status: "reserved",
         createdAt: new Date().toISOString(),
       };
+      reservationsRef.current = [reservation, ...reservationsRef.current];
       setState((current) => ({
         ...current,
         reservations: [reservation, ...current.reservations],
@@ -326,7 +362,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           ...current.notifications,
         ],
       }));
-      return reservation;
+      return { ok: true, created: reservation };
     },
     [state.user],
   );
@@ -474,29 +510,36 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }));
   }, []);
 
-  const takeQueueTicket = useCallback((input: TakeQueueTicketInput) => {
-    const ticket: QueueTicket = {
-      ...input,
-      id: uid("ticket"),
-      initialPosition: input.position,
-      initialEtaMinutes: input.etaMinutes,
-      status: "waiting",
-      createdAt: new Date().toISOString(),
-    };
-    setState((current) => ({
-      ...current,
-      queueTickets: [ticket, ...current.queueTickets],
-      notifications: [
-        makeNotification(
-          "Navbatga yozildingiz",
-          `Talon ${ticket.number} · taxminan ${ticket.etaMinutes} daqiqa.`,
-          "queue",
-        ),
-        ...current.notifications,
-      ],
-    }));
-    return ticket;
-  }, []);
+  // One live ticket per organisation and service, whichever screen asks.
+  const takeQueueTicket = useCallback(
+    (input: TakeQueueTicketInput): BookingAttempt<QueueTicket> => {
+      const existing = findLiveQueueTicket(queueTicketsRef.current, input);
+      if (existing) return { ok: false, reason: "conflict", existing };
+      const ticket: QueueTicket = {
+        ...input,
+        id: uid("ticket"),
+        initialPosition: input.position,
+        initialEtaMinutes: input.etaMinutes,
+        status: "waiting",
+        createdAt: new Date().toISOString(),
+      };
+      queueTicketsRef.current = [ticket, ...queueTicketsRef.current];
+      setState((current) => ({
+        ...current,
+        queueTickets: [ticket, ...current.queueTickets],
+        notifications: [
+          makeNotification(
+            "Navbatga yozildingiz",
+            `Talon ${ticket.number} · taxminan ${ticket.etaMinutes} daqiqa.`,
+            "queue",
+          ),
+          ...current.notifications,
+        ],
+      }));
+      return { ok: true, created: ticket };
+    },
+    [],
+  );
 
   // Demo: the queue only moves when the user asks it to. A real feed would
   // push this instead. It is also the stand-in for the window's side: once
@@ -570,25 +613,36 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [moveQueueTicket],
   );
 
-  const createServiceBooking = useCallback((input: CreateServiceBookingInput) => {
-    const prefix = { table: "TB", cinema: "CN", clinic: "CL", event: "EV" }[input.kind];
-    const booking: ServiceBooking = {
-      ...input,
-      id: uid("booking"),
-      code: `${prefix}-${Math.floor(1000 + Math.random() * 8999)}`,
-      status: "active",
-      createdAt: new Date().toISOString(),
-    };
-    setState((current) => ({
-      ...current,
-      serviceBookings: [booking, ...current.serviceBookings],
-      notifications: [
-        makeNotification("Bron tasdiqlandi", `${booking.title} · ${booking.code}`, "booking"),
-        ...current.notifications,
-      ],
-    }));
-    return booking;
-  }, []);
+  // The same venue, kind and time cannot be booked twice while the first is
+  // live — lib/booking-conflicts decides what "the same" means per kind.
+  const createServiceBooking = useCallback(
+    (input: CreateServiceBookingInput): BookingAttempt<ServiceBooking> => {
+      const existing = findConflictingServiceBooking(
+        serviceBookingsRef.current,
+        input,
+      );
+      if (existing) return { ok: false, reason: "conflict", existing };
+      const prefix = { table: "TB", cinema: "CN", clinic: "CL", event: "EV" }[input.kind];
+      const booking: ServiceBooking = {
+        ...input,
+        id: uid("booking"),
+        code: `${prefix}-${Math.floor(1000 + Math.random() * 8999)}`,
+        status: "active",
+        createdAt: new Date().toISOString(),
+      };
+      serviceBookingsRef.current = [booking, ...serviceBookingsRef.current];
+      setState((current) => ({
+        ...current,
+        serviceBookings: [booking, ...current.serviceBookings],
+        notifications: [
+          makeNotification("Bron tasdiqlandi", `${booking.title} · ${booking.code}`, "booking"),
+          ...current.notifications,
+        ],
+      }));
+      return { ok: true, created: booking };
+    },
+    [],
+  );
 
   const cancelServiceBooking = useCallback((bookingId: string) => {
     setState((current) => ({

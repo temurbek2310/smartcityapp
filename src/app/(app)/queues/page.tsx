@@ -35,6 +35,7 @@ import { useDirections } from '@/hooks/use-directions'
 import { useToast } from '@/hooks/use-toast'
 import { occupancyTone } from '@/lib/availability'
 import { isQueueTicketLive } from '@/lib/booking-lifecycle'
+import { findLiveQueueTicket } from '@/lib/booking-conflicts'
 import { cn } from '@/lib/cn'
 import { formatDistance, formatTime } from '@/lib/format'
 import type { QueueCategory } from '@/lib/types'
@@ -225,7 +226,9 @@ function QueuesView() {
 				<div className='px-4'>
 					<QueueTicketCard
 						org={org}
-						ticket={activeTicket?.orgId === org.id ? activeTicket : undefined}
+						// This organisation's own live ticket. Reading the first live
+						// ticket anywhere hid it whenever another place's came first.
+						ticket={findLiveQueueTicket(queueTickets, { orgId: org.id })}
 						onTake={() => setTakeOpen(true)}
 						onNotify={toast.show}
 					/>

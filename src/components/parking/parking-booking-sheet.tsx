@@ -226,12 +226,21 @@ function ParkingBookingSheetBody({
 		setSubmitting(true)
 
 		try {
-			const reservation = createReservation({
+			const attempt = createReservation({
 				parkingId: parking.id,
 				startAt: start.toISOString(),
 				durationHours: booking.hours,
 				pricePerHour: parking.pricePerHour,
 			})
+			// The store applies the same overlap rule as the check above; it
+			// only refuses here when the list it holds is newer than this render.
+			if (!attempt.ok) {
+				submittingRef.current = false
+				setSubmitting(false)
+				onNotify('Bu vaqtda sizda boshqa parking broni mavjud')
+				return
+			}
+			const reservation = attempt.created
 
 			saveBookingMeta(reservation.id, {
 				bay: selectedBay,
