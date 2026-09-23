@@ -3,7 +3,9 @@
 import {
 	CalendarDays,
 	CalendarX,
+	Check,
 	Navigation,
+	QrCode,
 	Share2,
 	Stethoscope,
 	Ticket,
@@ -28,8 +30,16 @@ import { Toast } from '@/components/ui/toast'
 import { useApp } from '@/context/app-context'
 import { getPlace } from '@/data/places'
 import { getQueueOrg } from '@/data/queue-orgs'
+import { useClock } from '@/hooks/use-clock'
 import { useDirections } from '@/hooks/use-directions'
 import { useToast } from '@/hooks/use-toast'
+import {
+	ACTION_LABELS,
+	presentActionLabel,
+	queueTicketJourney,
+	serviceBookingJourney,
+	type BookingActionId,
+} from '@/lib/booking-journey'
 import {
 	resolveBookingDetail,
 	type BookingDetail as ResolvedBookingDetail,
@@ -74,10 +84,14 @@ export function BookingDetail({
 }) {
 	const router = useRouter()
 	const app = useApp()
-	const { cancelQueueTicket, cancelServiceBooking } = app
+	const { cancelQueueTicket, cancelServiceBooking, completeQueueTicket } = app
 	const toast = useToast<string>()
 	const directions = useDirections()
 	const [cancelOpen, setCancelOpen] = useState(false)
+	const [presentOpen, setPresentOpen] = useState(false)
+	// Minute precision is all the arrival window needs; the tick is only here
+	// so a page left open moves its primary action across the threshold.
+	const now = useClock(30_000)
 
 	// One normalisation, shared with the Bron list, so a card and its page can
 	// never disagree about a booking's status, code or destination.
@@ -143,6 +157,96 @@ export function BookingDetail({
 	// position left to report, and its stored one is whatever it was at close.
 	const queueLive =
 		ticket && (ticket.status === 'waiting' || ticket.status === 'called')
+	// Which action leads right now — derived from status, start time (or the
+	// queue's estimate) and the clock, never stored.
+	const availability = { hasDestination: Boolean(row.destinationId) }
+	const journey = ticket
+		? queueTicketJourney(ticket, availability)
+		: serviceBookingJourney(booking!, now, availability)
+	const supporting = journey.secondary.filter(
+		id => id !== 'cancel' || row.cancellable,
+	)
+
+	function action(id: BookingActionId, primary = false) {
+		const variant = primary ? 'primary' : 'outline'
+		const icon = primary ? 'size-4' : 'size-4 text-brand'
+		switch (id) {
+			// Resolved by the shared destination model when the booking names
+			// somewhere real, and simply absent when it does not.
+			case 'directions':
+				return (
+					<Button
+						key={id}
+						variant={variant}
+						block
+						onClick={() => directions.openId(row!.destinationId)}
+					>
+						<Navigation className='size-4' /> {ACTION_LABELS.directions}
+					</Button>
+				)
+			// The code staff will scan, drawn large — the arrival action for the
+			// bookings that have no check-in of their own.
+			case 'present':
+				return booking && row!.qrValue ? (
+					<Button
+						key={id}
+						variant={variant}
+						block
+						onClick={() => setPresentOpen(true)}
+					>
+						<QrCode className='size-4' /> {presentActionLabel(booking.kind)}
+					</Button>
+				) : null
+			// The queue card's own «Men keldim», offered here once the number
+			// is called. Same mutation, same message.
+			case 'arrived':
+				return ticket ? (
+					<Button
+						key={id}
+						variant={variant}
+						block
+						onClick={() => {
+							completeQueueTicket(ticket.id)
+							toast.show('Rahmat! Navbat yakunlandi')
+						}}
+					>
+						<Check className='size-4' /> {ACTION_LABELS.arrived}
+					</Button>
+				) : null
+			case 'track':
+				return ticket ? (
+					<Button
+						key={id}
+						variant={variant}
+						block
+						onClick={() => router.push(`/queues?org=${ticket.orgId}`)}
+					>
+						<Icon className={icon} /> {ACTION_LABELS.track}
+					</Button>
+				) : null
+			case 'share':
+				return (
+					<Button key={id} variant={variant} block onClick={() => share()}>
+						<Share2 className='size-4' /> {ACTION_LABELS.share}
+					</Button>
+				)
+			case 'cancel':
+				return (
+					<Button
+						key={id}
+						variant='outline'
+						danger
+						block
+						onClick={() => setCancelOpen(true)}
+					>
+						<X className='size-4' /> {ACTION_LABELS.cancel}
+					</Button>
+				)
+			default:
+				return null
+		}
+	}
+
 	const progress =
 		ticket && ticket.initialPosition
 			? ((ticket.initialPosition - ticket.position) / ticket.initialPosition) * 100
@@ -222,44 +326,31 @@ export function BookingDetail({
 				</KeyValueList>
 			</Card>
 
+			{/* One filled action for what the customer most likely needs now;
+			    everything else stays reachable underneath as outlines. */}
 			<div className='space-y-2'>
-				{/* Resolved by the shared destination model when the booking
-				    names somewhere real, and simply absent when it does not. */}
-				{row.destinationId && (
-					<Button
-						variant='primary'
-						block
-						onClick={() => directions.openId(row.destinationId)}
-					>
-						<Navigation className='size-4' /> Yo‘nalish
-					</Button>
-				)}
-
-				<Button variant='outline' block onClick={() => share()}>
-					<Share2 className='size-4' /> Ulashish
-				</Button>
-
-				{ticket && (
-					<Button
-						variant='outline'
-						block
-						onClick={() => router.push(`/queues?org=${ticket.orgId}`)}
-					>
-						<Icon className='size-4 text-brand' /> Navbatni kuzatish
-					</Button>
-				)}
-
-				{row.cancellable && (
-					<Button
-						variant='outline'
-						danger
-						block
-						onClick={() => setCancelOpen(true)}
-					>
-						<X className='size-4' /> Bronni bekor qilish
-					</Button>
-				)}
+				{journey.primary && action(journey.primary, true)}
+				{supporting.map(id => action(id))}
 			</div>
+
+			{presentOpen && booking && row.qrValue && (
+				<BottomSheet
+					title={presentActionLabel(booking.kind)}
+					onClose={() => setPresentOpen(false)}
+				>
+					<Card className='text-center'>
+						<div className='mx-auto w-fit rounded-3xl border border-line bg-white p-3'>
+							<QrImage value={row.qrValue} size={220} />
+						</div>
+						<p className='mt-4 font-mono text-3xl font-black text-ink'>
+							{row.code}
+						</p>
+						<p className='mt-2 text-[12.5px] text-ink-2'>
+							Kodni joyida ko‘rsating. Internetsiz ham ishlaydi.
+						</p>
+					</Card>
+				</BottomSheet>
+			)}
 
 			{cancelOpen && (
 				<BottomSheet

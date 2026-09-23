@@ -11,7 +11,7 @@ import {
 } from 'lucide-react'
 import Link from 'next/link'
 import { notFound, useParams, useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 
 import { ActiveSessionPanel } from '@/components/parking/active-session-panel'
 import { AppBar } from '@/components/ui/app-bar'
@@ -26,8 +26,14 @@ import { Toast } from '@/components/ui/toast'
 import { useApp } from '@/context/app-context'
 import { getParking } from '@/data/parkings'
 import { useBookingMeta } from '@/hooks/use-booking-meta'
+import { useClock } from '@/hooks/use-clock'
 import { useDirections } from '@/hooks/use-directions'
 import { useToast } from '@/hooks/use-toast'
+import {
+	ACTION_LABELS,
+	reservationJourney,
+	type BookingActionId,
+} from '@/lib/booking-journey'
 import { formatDateTime, formatDuration, formatUZS } from '@/lib/format'
 import { destinationIdFrom } from '@/lib/navigation'
 import { reservationCode, supersededReservationHref } from '@/lib/reservation'
@@ -57,16 +63,9 @@ export default function ReservationPage() {
 
 	// Deferred past the first paint so the countdown does not disagree between
 	// the server's render and the client's.
-	const [now, setNow] = useState<number | null>(null)
-	useEffect(() => {
-		const update = () => setNow(Date.now())
-		const initial = window.setTimeout(update, 0)
-		const interval = window.setInterval(update, 1000)
-		return () => {
-			window.clearTimeout(initial)
-			window.clearInterval(interval)
-		}
-	}, [])
+	// The same tick moves the primary action across the arrival window while
+	// the page stays open.
+	const now = useClock(1000)
 
 	if (!reservation || !parking) notFound()
 
@@ -135,16 +134,64 @@ export default function ReservationPage() {
 		parkingId: reservation.parkingId,
 	})
 
-	const directions = destinationId && (
-		<Button variant='outline' onClick={() => directionsTo.openId(destinationId)}>
-			<Navigation className='size-4' /> Yo‘nalish
-		</Button>
-	)
+	// Which of the booking's actions leads right now. Derived from status,
+	// start time and the clock — never stored — so a refresh agrees with it.
+	const journey = reservationJourney(reservation, now, {
+		hasDestination: Boolean(destinationId),
+	})
 
-	const shareAction = (
-		<Button variant='outline' onClick={() => share()}>
-			<Share2 className='size-4' /> Ulashish
-		</Button>
+	// One button per action; the journey decides which one is filled.
+	// «exit» and «extend» are drawn by the session panel, which owns the exit
+	// QR and the running clock.
+	function action(id: BookingActionId, primary = false) {
+		const variant = primary ? 'primary' : 'outline'
+		switch (id) {
+			case 'directions':
+				return (
+					<Button
+						key={id}
+						variant={variant}
+						block={primary}
+						onClick={() => directionsTo.openId(destinationId)}
+					>
+						<Navigation className='size-4' /> {ACTION_LABELS.directions}
+					</Button>
+				)
+			case 'enter':
+				return (
+					<Button
+						key={id}
+						variant={variant}
+						block={primary}
+						onClick={() => {
+							// No navigation: the booking is already on its own page, and
+							// this page renders the session. Sending the customer to a
+							// second screen and back was the whole friction.
+							enterReservation(reservation!.id)
+						}}
+					>
+						<QrCode className='size-4' /> {ACTION_LABELS.enter}
+					</Button>
+				)
+			case 'share':
+				return (
+					<Button
+						key={id}
+						variant={variant}
+						block={primary}
+						onClick={() => share()}
+					>
+						<Share2 className='size-4' /> {ACTION_LABELS.share}
+					</Button>
+				)
+			default:
+				return null
+		}
+	}
+
+	// Cancel keeps its own full-width danger row below the rest.
+	const supporting = journey.secondary.filter(
+		id => id !== 'cancel' && id !== 'exit' && id !== 'extend',
 	)
 
 	// Entered: the booking's own detail, with the running session in place of
@@ -176,8 +223,7 @@ export default function ReservationPage() {
 				</Card>
 
 				<div className='grid grid-cols-2 gap-2'>
-					{directions}
-					{shareAction}
+					{supporting.map(id => action(id))}
 				</div>
 			</>,
 		)
@@ -248,40 +294,30 @@ export default function ReservationPage() {
 				</p>
 			</Card>
 
-			<div className='grid grid-cols-2 gap-2'>
-				{directions}
-				<Button
-					variant='primary'
-					onClick={() => {
-						// No navigation: the booking is already on its own page, and
-						// this page renders the session. Sending the customer to a
-						// second screen and back was the whole friction.
-						enterReservation(reservation.id)
-					}}
-				>
-					<QrCode className='size-4' /> Kirishni boshlash
-				</Button>
-			</div>
+			{/* One filled action — «Yo‘nalish» while the booking is still ahead,
+			    «Parkingga kirish» once the arrival window opens — and the rest
+			    beneath it as outlines, so nothing competes with it. */}
+			{journey.primary && action(journey.primary, true)}
 
-			{/* Sharing moved here off the Bron summary card, which now only
-			    summarises. */}
-			<Button variant='outline' block onClick={() => share()}>
-				<Share2 className='size-4' /> Ulashish
-			</Button>
+			<div className='grid grid-cols-2 gap-2'>
+				{supporting.map(id => action(id))}
+			</div>
 
 			{/* An entered booking has no cancel: the car is already inside, and
 			    the way out is the exit QR the session panel draws. */}
-			<Button
-				variant='outline'
-				danger
-				block
-				onClick={() => {
-					cancelReservation(reservation.id)
-					router.push('/bookings')
-				}}
-			>
-				<X className='size-4' /> Bronni bekor qilish
-			</Button>
+			{journey.secondary.includes('cancel') && (
+				<Button
+					variant='outline'
+					danger
+					block
+					onClick={() => {
+						cancelReservation(reservation.id)
+						router.push('/bookings')
+					}}
+				>
+					<X className='size-4' /> {ACTION_LABELS.cancel}
+				</Button>
+			)}
 
 			<p className='pb-2 text-center text-[11px] text-ink-3'>
 				Joyni bron vaqtidan keyin 15 daqiqa ushlab turamiz.

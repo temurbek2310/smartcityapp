@@ -11,6 +11,7 @@ import { Card } from '@/components/ui/card'
 import { KeyValue } from '@/components/ui/key-value'
 import { QrImage } from '@/components/ui/qr-image'
 import { useApp } from '@/context/app-context'
+import { ACTION_LABELS } from '@/lib/booking-journey'
 import { cn } from '@/lib/cn'
 import { formatDuration, formatTime, formatUZS } from '@/lib/format'
 import type { ParkingBookingMeta } from '@/lib/booking-meta'
@@ -150,7 +151,7 @@ export function ActiveSessionPanel({
 					className='mt-4'
 					onClick={() => extendReservation(reservation.id, 1)}
 				>
-					<Plus className='size-3.5 text-brand' /> +1 soat
+					<Plus className='size-3.5 text-brand' /> {ACTION_LABELS.extend}
 				</Button>
 
 				{/* Demo note */}
@@ -165,9 +166,10 @@ export function ActiveSessionPanel({
 				<KeyValue label='Joriy hisob' value={formatUZS(runningTotal)} />
 			</Card>
 
-			{/* The one way out, and the only place the exit QR is drawn. */}
+			{/* The one way out, and the only place the exit QR is drawn — the
+			    active session's primary action in reservationJourney(). */}
 			<Button variant='primary' block onClick={() => setShowExitQr(true)}>
-				<LogOut className='size-4' /> Chiqish
+				<LogOut className='size-4' /> {ACTION_LABELS.exit}
 			</Button>
 
 			{showExitQr && (

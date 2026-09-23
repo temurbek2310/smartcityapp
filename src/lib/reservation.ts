@@ -11,7 +11,7 @@ export type ReservationRef = Pick<Reservation, "id" | "status">;
 
 export function reservationHref(reservation: ReservationRef) {
   const screens: Record<ReservationStatus, string> = {
-    // Waiting to be used: confirmation, QR, «Kirishni boshlash», cancel.
+    // Waiting to be used: confirmation, QR, «Parkingga kirish», cancel.
     reserved: `/reservation/${reservation.id}`,
     // Inside. The same page, with the timer, the running bill and the exit
     // in place of the confirmation it has used up.
