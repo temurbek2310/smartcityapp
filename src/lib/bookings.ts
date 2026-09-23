@@ -1,6 +1,10 @@
 import { getParking } from '@/data/parkings'
 import { getQueueOrg } from '@/data/queue-orgs'
 import { formatDateTime, formatTime, formatUZS } from '@/lib/format'
+import {
+	isQueueTicketLive,
+	isServiceBookingLive,
+} from '@/lib/booking-lifecycle'
 import { destinationIdFrom } from '@/lib/navigation'
 import { reservationHref } from '@/lib/reservation'
 import { serviceWhenLabel } from '@/lib/service-slots'
@@ -120,33 +124,48 @@ function fromReservation(reservation: Reservation): BookingRow {
 	})
 }
 
+// Called and checked-in are both "at the window now"; waiting has not got
+// there yet. served and cancelled are history.
+export function queueTicketRowStatus(
+	status: QueueTicket['status'],
+): BookingRowStatus {
+	switch (status) {
+		case 'called':
+		case 'arrived':
+			return 'active'
+		case 'waiting':
+			return 'upcoming'
+		case 'served':
+			return 'done'
+		// cancelled — and anything a blob from another build might hold, which
+		// is safer read as over than as live.
+		default:
+			return 'cancelled'
+	}
+}
+
 function fromQueueTicket(ticket: QueueTicket): BookingRow {
 	const org = getQueueOrg(ticket.orgId)
 	const service = org?.services.find(item => item.id === ticket.serviceId)
-	const status: BookingRowStatus =
-		ticket.status === 'called'
-			? 'active'
-			: ticket.status === 'waiting'
-				? 'upcoming'
-				: ticket.status === 'served'
-					? 'done'
-					: 'cancelled'
+	const status = queueTicketRowStatus(ticket.status)
+	const atWindow = ticket.status === 'called' || ticket.status === 'arrived'
 
 	return row({
 		id: ticket.id,
 		kind: 'queue',
 		title: org?.title ?? 'Navbat',
-		subtitle:
-			ticket.status === 'called'
-				? `${service?.title ?? 'Xizmat'} · ${ticket.windowNumber}-oyna`
-				: `${service?.title ?? 'Xizmat'} · oldingizda ${ticket.position}`,
+		subtitle: atWindow
+			? `${service?.title ?? 'Xizmat'} · ${ticket.windowNumber}-oyna`
+			: `${service?.title ?? 'Xizmat'} · oldingizda ${ticket.position}`,
 		code: ticket.number,
 		whenLabel:
 			ticket.status === 'called'
 				? 'Sizni chaqirishmoqda'
-				: ticket.status === 'waiting'
-					? `taxminan ${ticket.etaMinutes} daqiqa`
-					: formatDateTime(ticket.closedAt ?? ticket.createdAt),
+				: ticket.status === 'arrived'
+					? 'Kelganingiz qayd etildi'
+					: ticket.status === 'waiting'
+						? `taxminan ${ticket.etaMinutes} daqiqa`
+						: formatDateTime(ticket.closedAt ?? ticket.createdAt),
 		status,
 		// The ticket's own page, the same way a parking booking has one. It
 		// used to point at /queues, which is the organisation's screen rather
@@ -158,9 +177,17 @@ function fromQueueTicket(ticket: QueueTicket): BookingRow {
 		// The venue the number was taken at, not the car park beside it.
 		destinationId:
 			destinationIdFrom({ from: 'queueOrg', orgId: ticket.orgId }) ?? undefined,
-		// closeQueueTicket() accepts both of the live statuses.
-		cancellable: ticket.status === 'waiting' || ticket.status === 'called',
+		// cancelQueueTicket() accepts every live status, arrived included.
+		cancellable: isQueueTicketLive(ticket.status),
 	})
+}
+
+// Live until booking-lifecycle's reconciliation completes it on the clock.
+export function serviceBookingRowStatus(
+	status: ServiceBooking['status'],
+): BookingRowStatus {
+	if (isServiceBookingLive(status)) return 'active'
+	return status === 'completed' ? 'done' : 'cancelled'
 }
 
 function fromServiceBooking(booking: ServiceBooking): BookingRow {
@@ -176,12 +203,7 @@ function fromServiceBooking(booking: ServiceBooking): BookingRow {
 		whenLabel: booking.startAt
 			? serviceWhenLabel(booking.startAt)
 			: booking.whenLabel,
-		status:
-			booking.status === 'active'
-				? 'active'
-				: booking.status === 'completed'
-					? 'done'
-					: 'cancelled',
+		status: serviceBookingRowStatus(booking.status),
 		// A table, a film, a clinic slot and an event ticket each get the same
 		// full detail page every other booking has.
 		href: serviceBookingHref(booking.id),
@@ -193,8 +215,8 @@ function fromServiceBooking(booking: ServiceBooking): BookingRow {
 		destinationId:
 			destinationIdFrom({ from: 'serviceBooking', refId: booking.refId }) ??
 			undefined,
-		// cancelServiceBooking() only mutates an 'active' booking.
-		cancellable: booking.status === 'active',
+		// cancelServiceBooking() only mutates a live booking.
+		cancellable: isServiceBookingLive(booking.status),
 	})
 }
 
@@ -242,6 +264,9 @@ export function resolveBookingDetail(
 	return ticket ? { source, row: fromQueueTicket(ticket), ticket } : null
 }
 
+// «Faol» vs «Tarix». Every mapper above lands live bookings on active or
+// upcoming and finished ones on done or cancelled, so the split is read off
+// the row status alone.
 export function isOpen(row: BookingRow) {
 	return row.status === 'active' || row.status === 'upcoming'
 }

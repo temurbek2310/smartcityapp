@@ -40,6 +40,7 @@ import {
 	serviceBookingJourney,
 	type BookingActionId,
 } from '@/lib/booking-journey'
+import { isQueueTicketLive } from '@/lib/booking-lifecycle'
 import {
 	resolveBookingDetail,
 	type BookingDetail as ResolvedBookingDetail,
@@ -84,7 +85,7 @@ export function BookingDetail({
 }) {
 	const router = useRouter()
 	const app = useApp()
-	const { cancelQueueTicket, cancelServiceBooking, completeQueueTicket } = app
+	const { cancelQueueTicket, cancelServiceBooking, arriveQueueTicket } = app
 	const toast = useToast<string>()
 	const directions = useDirections()
 	const [cancelOpen, setCancelOpen] = useState(false)
@@ -155,8 +156,8 @@ export function BookingDetail({
 
 	// Only while the ticket is live: a served or cancelled number has no
 	// position left to report, and its stored one is whatever it was at close.
-	const queueLive =
-		ticket && (ticket.status === 'waiting' || ticket.status === 'called')
+	const queueLive = ticket && isQueueTicketLive(ticket.status)
+	const checkedIn = ticket?.status === 'arrived'
 	// Which action leads right now — derived from status, start time (or the
 	// queue's estimate) and the clock, never stored.
 	const availability = { hasDestination: Boolean(row.destinationId) }
@@ -198,7 +199,8 @@ export function BookingDetail({
 					</Button>
 				) : null
 			// The queue card's own «Men keldim», offered here once the number
-			// is called. Same mutation, same message.
+			// is called. It checks the customer in — the ticket stays live
+			// until the service itself is done.
 			case 'arrived':
 				return ticket ? (
 					<Button
@@ -206,8 +208,8 @@ export function BookingDetail({
 						variant={variant}
 						block
 						onClick={() => {
-							completeQueueTicket(ticket.id)
-							toast.show('Rahmat! Navbat yakunlandi')
+							arriveQueueTicket(ticket.id)
+							toast.show('Kelganingiz qayd etildi')
 						}}
 					>
 						<Check className='size-4' /> {ACTION_LABELS.arrived}
@@ -273,7 +275,27 @@ export function BookingDetail({
 
 			{/* How far through the line this number is — the one thing a queue
 			    has that the other bookings do not. */}
-			{ticket && queueLive && (
+			{/* Checked in: the line no longer matters, the window does. */}
+			{ticket && checkedIn && (
+				<Card>
+					<div className='flex items-center justify-between gap-3'>
+						<div>
+							<p className='text-[11.5px] text-ink-3'>Holat</p>
+							<p className='mt-0.5 text-[16px] font-black text-ink'>
+								Xizmat kutilmoqda
+							</p>
+						</div>
+						<div className='text-right'>
+							<p className='text-[11.5px] text-ink-3'>Oyna</p>
+							<p className='mt-0.5 text-[16px] font-black text-ink'>
+								{ticket.windowNumber}-oyna
+							</p>
+						</div>
+					</div>
+				</Card>
+			)}
+
+			{ticket && queueLive && !checkedIn && (
 				<Card>
 					<div className='flex items-center justify-between gap-3'>
 						<div>

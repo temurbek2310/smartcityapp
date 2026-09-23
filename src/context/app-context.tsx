@@ -25,8 +25,18 @@ import { formatUzbekPlate } from "@/lib/plate";
 import { calculateFinalTotal } from "@/lib/reservation";
 import { clearAccountStorage } from "@/lib/account-storage";
 import { initialState } from "@/lib/initial-state";
+import {
+  arriveQueueTicket as arriveTicket,
+  cancelQueueTicket as cancelTicket,
+  reconcileBookingLifecycles,
+  serveQueueTicket as serveTicket,
+} from "@/lib/booking-lifecycle";
 
 const STORAGE_KEY = "b-space-mvp-v1";
+
+// How often bookings that end on the clock are re-checked while the app is
+// open. Minute precision is all a table or a film needs.
+const LIFECYCLE_TICK_MS = 60_000;
 
 type CreateReservationInput = {
   parkingId: string;
@@ -74,6 +84,7 @@ type AppContextValue = BSpaceState & {
 
   takeQueueTicket: (input: TakeQueueTicketInput) => QueueTicket;
   advanceQueueTicket: (ticketId: string) => void;
+  arriveQueueTicket: (ticketId: string) => void;
   completeQueueTicket: (ticketId: string) => void;
   cancelQueueTicket: (ticketId: string) => void;
 
@@ -110,15 +121,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
           const parsed = JSON.parse(saved) as Partial<Omit<BSpaceState, "hydrated">>;
           // A blob written before the booking registry existed simply has no
           // key for these, and the spread leaves the empty defaults in place.
-          setState({
-            ...initialState,
-            ...parsed,
-            // The profile is the one part that needs more than a spread: an
-            // older build stored the vehicle under a different key, and the
-            // value is still good.
-            user: hydrateUserProfile(parsed.user),
-            hydrated: true,
-          });
+          // Bookings whose time ran out while the app was closed move to
+          // history before the first render reads them, so nothing flashes
+          // in «Faol» on the way.
+          setState(
+            reconcileBookingLifecycles(
+              {
+                ...initialState,
+                ...parsed,
+                // The profile is the one part that needs more than a spread: an
+                // older build stored the vehicle under a different key, and the
+                // value is still good.
+                user: hydrateUserProfile(parsed.user),
+                hydrated: true,
+              },
+              Date.now(),
+            ),
+          );
         } else {
           setState((current) => ({ ...current, hydrated: true }));
         }
@@ -202,6 +221,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
       window.clearTimeout(initialTimer);
       window.clearInterval(timer);
     };
+  }, [state.hydrated]);
+
+  // Tables, films, clinic slots and event tickets end on the clock, and
+  // nobody has to open them for that to happen. One timer for every booking;
+  // reconcileBookingLifecycles() hands back the same state when nothing is
+  // due, so an idle tick neither re-renders nor rewrites storage. It emits no
+  // notification: a booking reaching its end is not news to the customer.
+  useEffect(() => {
+    if (!state.hydrated) return;
+    const reconcile = () =>
+      setState((current) => reconcileBookingLifecycles(current, Date.now()));
+    const timer = window.setInterval(reconcile, LIFECYCLE_TICK_MS);
+    return () => window.clearInterval(timer);
   }, [state.hydrated]);
 
   const completeOnboarding = useCallback(() => {
@@ -467,12 +499,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Demo: the queue only moves when the user asks it to. A real feed would
-  // push this instead.
+  // push this instead. It is also the stand-in for the window's side: once
+  // the customer has checked in, the next move is their service finishing.
   const advanceQueueTicket = useCallback((ticketId: string) => {
     setState((current) => {
       let called = false;
+      const at = new Date();
       const queueTickets = current.queueTickets.map((ticket) => {
-        if (ticket.id !== ticketId || ticket.status !== "waiting") return ticket;
+        if (ticket.id !== ticketId) return ticket;
+        if (ticket.status === "arrived") return serveTicket(ticket, at);
+        if (ticket.status !== "waiting") return ticket;
         const step = 1 + Math.floor(Math.random() * 2);
         const position = Math.max(0, ticket.position - step);
         called = position === 0;
@@ -497,28 +533,41 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const closeQueueTicket = useCallback(
-    (ticketId: string, status: "served" | "cancelled") => {
-      setState((current) => ({
-        ...current,
-        queueTickets: current.queueTickets.map((ticket) =>
-          ticket.id === ticketId && (ticket.status === "waiting" || ticket.status === "called")
-            ? { ...ticket, status, closedAt: new Date().toISOString() }
-            : ticket,
-        ),
-      }));
+  // One ticket through one of booking-lifecycle's transitions. A move that
+  // does not apply leaves the state untouched rather than rewriting it.
+  const moveQueueTicket = useCallback(
+    (ticketId: string, move: (ticket: QueueTicket, at: Date) => QueueTicket) => {
+      setState((current) => {
+        const at = new Date();
+        let changed = false;
+        const queueTickets = current.queueTickets.map((ticket) => {
+          if (ticket.id !== ticketId) return ticket;
+          const next = move(ticket, at);
+          if (next !== ticket) changed = true;
+          return next;
+        });
+        return changed ? { ...current, queueTickets } : current;
+      });
     },
     [],
   );
 
+  // «Men keldim»: called → arrived. The customer has checked in; the ticket
+  // stays live until the service itself is done.
+  const arriveQueueTicket = useCallback(
+    (ticketId: string) => moveQueueTicket(ticketId, arriveTicket),
+    [moveQueueTicket],
+  );
+
+  // arrived → served: the service has actually finished.
   const completeQueueTicket = useCallback(
-    (ticketId: string) => closeQueueTicket(ticketId, "served"),
-    [closeQueueTicket],
+    (ticketId: string) => moveQueueTicket(ticketId, serveTicket),
+    [moveQueueTicket],
   );
 
   const cancelQueueTicket = useCallback(
-    (ticketId: string) => closeQueueTicket(ticketId, "cancelled"),
-    [closeQueueTicket],
+    (ticketId: string) => moveQueueTicket(ticketId, cancelTicket),
+    [moveQueueTicket],
   );
 
   const createServiceBooking = useCallback((input: CreateServiceBookingInput) => {
@@ -592,6 +641,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       removeRoute,
       takeQueueTicket,
       advanceQueueTicket,
+      arriveQueueTicket,
       completeQueueTicket,
       cancelQueueTicket,
       createServiceBooking,
@@ -619,6 +669,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       removeRoute,
       takeQueueTicket,
       advanceQueueTicket,
+      arriveQueueTicket,
       completeQueueTicket,
       cancelQueueTicket,
       createServiceBooking,

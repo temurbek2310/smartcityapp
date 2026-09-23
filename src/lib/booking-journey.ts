@@ -39,7 +39,7 @@ export type BookingActionId =
 	| 'extend' // parking: extendReservation(+1h)
 	| 'receipt' // parking: the finished booking's receipt
 	| 'present' // service booking: its QR, large, for staff
-	| 'arrived' // queue: «Men keldim» — completeQueueTicket()
+	| 'arrived' // queue: «Men keldim» — arriveQueueTicket(), called → arrived
 	| 'track' // queue: the organisation's live queue
 	| 'share'
 	| 'cancel'
@@ -202,9 +202,9 @@ export function serviceBookingJourney(
 // --- Queue ---------------------------------------------------------------
 // A ticket has no start time; its clock is the estimate of when the number
 // comes up. The same window applies to it: far off, the customer still has
-// to get there; close, they are watching the line; called, the existing
-// «Men keldim» closes it. No status is added — only waiting and called are
-// read.
+// to get there; close, they are watching the line; called, «Men keldim»
+// checks them in; arrived, they are at the window and follow the queue until
+// the service is done. Only served and cancelled are over.
 export function queueTicketJourney(
 	ticket: Pick<QueueTicket, 'status' | 'etaMinutes'>,
 	availability: Availability,
@@ -230,6 +230,15 @@ export function queueTicketJourney(
 				'active',
 				'status',
 				['arrived', 'directions', 'track', 'share', 'cancel'],
+				availability,
+			)
+		// Already standing at the window: no route left to take, and nothing
+		// to press but keep an eye on the line.
+		case 'arrived':
+			return journey(
+				'active',
+				'status',
+				['track', 'share', 'cancel'],
 				availability,
 			)
 		case 'served':

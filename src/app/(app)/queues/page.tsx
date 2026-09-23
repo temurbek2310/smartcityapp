@@ -34,6 +34,7 @@ import { QUEUE_HOURS, QUEUE_ORGS, getQueueOrg } from '@/data/queue-orgs'
 import { useDirections } from '@/hooks/use-directions'
 import { useToast } from '@/hooks/use-toast'
 import { occupancyTone } from '@/lib/availability'
+import { isQueueTicketLive } from '@/lib/booking-lifecycle'
 import { cn } from '@/lib/cn'
 import { formatDistance, formatTime } from '@/lib/format'
 import type { QueueCategory } from '@/lib/types'
@@ -84,11 +85,11 @@ function QueuesView() {
 
 	// One live ticket at a time, the way City Goo models it. Closed tickets
 	// stay in the array and become the history list below.
-	const activeTicket = queueTickets.find(
-		ticket => ticket.status === 'waiting' || ticket.status === 'called',
+	const activeTicket = queueTickets.find(ticket =>
+		isQueueTicketLive(ticket.status),
 	)
 	const history = queueTickets.filter(
-		ticket => ticket.status === 'served' || ticket.status === 'cancelled',
+		ticket => !isQueueTicketLive(ticket.status),
 	)
 
 	const filtered = useMemo(() => {

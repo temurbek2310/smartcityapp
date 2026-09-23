@@ -111,7 +111,15 @@ export type BookingKind =
   | "clinic"
   | "event";
 
-export type QueueTicketStatus = "waiting" | "called" | "served" | "cancelled";
+// waiting → called → arrived → served, or cancelled from any live status.
+// «Men keldim» is called → arrived: the customer checked in, the service has
+// not happened yet. Meanings in full live with the rules in booking-lifecycle.
+export type QueueTicketStatus =
+  | "waiting"
+  | "called"
+  | "arrived"
+  | "served"
+  | "cancelled";
 
 export type QueueTicket = {
   id: string;
@@ -137,11 +145,13 @@ export type QueueTicket = {
 
 export type ServiceBookingKind = Exclude<BookingKind, "parking" | "queue">;
 
+// active → completed once the booking's time is over (booking-lifecycle's
+// reconciliation writes it), or active → cancelled by the customer.
 export type ServiceBookingStatus = "active" | "completed" | "cancelled";
 
-// Tables, cinema seats, clinic slots and event tickets. These have no
-// lifecycle beyond existing and being cancelled, so one shape covers all
-// four and the kind only decides the icon and the copy.
+// Tables, cinema seats, clinic slots and event tickets. Their lifecycle is
+// only live, then over or cancelled, so one shape covers all four and the
+// kind only decides the icon and the copy.
 export type ServiceBooking = {
   id: string;
   kind: ServiceBookingKind;
@@ -157,6 +167,12 @@ export type ServiceBooking = {
   // Optional because a blob persisted before this field existed has none —
   // those keep falling back to their stored label.
   startAt?: string;
+  // When the booking ends, and how long it lasts. No flow writes either yet —
+  // no catalog knows a film's running time or an appointment's length — but
+  // expectedEndAt() prefers them over its fallback durations the moment one
+  // does, in that order.
+  endAt?: string;
+  durationMinutes?: number;
   status: ServiceBookingStatus;
   createdAt: string;
 };

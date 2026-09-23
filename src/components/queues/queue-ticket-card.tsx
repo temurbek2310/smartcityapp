@@ -28,7 +28,7 @@ export function QueueTicketCard({
 	onTake: () => void
 	onNotify: (message: string) => void
 }) {
-	const { advanceQueueTicket, completeQueueTicket, cancelQueueTicket } = useApp()
+	const { advanceQueueTicket, arriveQueueTicket, cancelQueueTicket } = useApp()
 	const [sheet, setSheet] = useState<'qr' | 'cancel' | null>(null)
 
 	if (!ticket) {
@@ -52,6 +52,9 @@ export function QueueTicketCard({
 	}
 
 	const called = ticket.status === 'called'
+	// «Men keldim» pressed: at the window, waiting to be served. Still live.
+	const arrived = ticket.status === 'arrived'
+	const atWindow = called || arrived
 	// How far through the queue: 0 people left reads as complete.
 	const progress = ticket.initialPosition
 		? ((ticket.initialPosition - ticket.position) / ticket.initialPosition) * 100
@@ -60,10 +63,14 @@ export function QueueTicketCard({
 
 	return (
 		<>
-			<Card className={cn('border-[1.5px]', called ? 'border-ok' : 'border-brand')}>
+			<Card className={cn('border-[1.5px]', atWindow ? 'border-ok' : 'border-brand')}>
 				<div className='flex items-center justify-between gap-3'>
-					<Badge tone={called ? 'ok' : 'brand'}>
-						{called ? 'Sizni chaqirishmoqda' : 'Siz navbatdasiz'}
+					<Badge tone={atWindow ? 'ok' : 'brand'}>
+						{arrived
+							? 'Keldingiz'
+							: called
+								? 'Sizni chaqirishmoqda'
+								: 'Siz navbatdasiz'}
 					</Badge>
 					<span className='truncate text-[11.5px] text-ink-3'>
 						{service?.title}
@@ -74,13 +81,13 @@ export function QueueTicketCard({
 					<div
 						className={cn(
 							'w-24 shrink-0 rounded-2xl px-2 py-3 text-center',
-							called ? 'bg-ok-bg' : 'bg-brand-50',
+							atWindow ? 'bg-ok-bg' : 'bg-brand-50',
 						)}
 					>
 						<p
 							className={cn(
 								'font-mono text-2xl font-black',
-								called ? 'text-ok' : 'text-brand',
+								atWindow ? 'text-ok' : 'text-brand',
 							)}
 						>
 							{ticket.number}
@@ -88,7 +95,17 @@ export function QueueTicketCard({
 					</div>
 
 					<div className='min-w-0 flex-1'>
-						{called ? (
+						{arrived ? (
+							<>
+								<p className='text-[15px] font-extrabold text-ink'>
+									{ticket.windowNumber}-oynada xizmat kutilmoqda
+								</p>
+								<p className='mt-1 text-[11.5px] leading-4 text-ink-3'>
+									Kelganingiz qayd etildi. Xizmat tugagach talon tarixga
+									o‘tadi.
+								</p>
+							</>
+						) : called ? (
 							<>
 								<p className='text-[15px] font-extrabold text-ink'>
 									{ticket.windowNumber}-oynaga o‘ting
@@ -121,8 +138,14 @@ export function QueueTicketCard({
 					<Button
 						size='sm'
 						variant='outline'
+						// Demo stand-in for the live feed. While called it waits on
+						// the customer; once they have checked in, the next move is
+						// the window finishing their service.
 						disabled={called}
-						onClick={() => advanceQueueTicket(ticket.id)}
+						onClick={() => {
+							advanceQueueTicket(ticket.id)
+							if (arrived) onNotify('Xizmat ko‘rsatildi')
+						}}
 					>
 						<RefreshCw className='size-3.5' /> Yangilash
 					</Button>
@@ -145,8 +168,8 @@ export function QueueTicketCard({
 						block
 						className='mt-2'
 						onClick={() => {
-							completeQueueTicket(ticket.id)
-							onNotify('Rahmat! Navbat yakunlandi')
+							arriveQueueTicket(ticket.id)
+							onNotify('Kelganingiz qayd etildi')
 						}}
 					>
 						<Check className='size-4' /> Men keldim
