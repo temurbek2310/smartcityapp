@@ -17,6 +17,10 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 
+import {
+	BookingQrPanel,
+	QR_INSTRUCTIONS,
+} from '@/components/booking/booking-qr-panel'
 import { AppBar } from '@/components/ui/app-bar'
 import { Badge, type BadgeTone } from '@/components/ui/badge'
 import { BottomSheet } from '@/components/ui/bottom-sheet'
@@ -25,7 +29,6 @@ import { Card } from '@/components/ui/card'
 import { EmptyState } from '@/components/ui/empty-state'
 import { KeyValue, KeyValueList } from '@/components/ui/key-value'
 import { Meter } from '@/components/ui/meter'
-import { QrImage } from '@/components/ui/qr-image'
 import { Toast } from '@/components/ui/toast'
 import { useApp } from '@/context/app-context'
 import { getPlace } from '@/data/places'
@@ -134,6 +137,8 @@ export function BookingDetail({
 	const service = org?.services.find(item => item.id === ticket?.serviceId)
 	const place = booking ? getPlace(booking.refId) : undefined
 	const Icon = KIND_ICON[row.kind === 'parking' ? 'table' : row.kind]
+	const reference = { label: row.codeLabel, value: row.code }
+	const instruction = ticket ? QR_INSTRUCTIONS.queue : QR_INSTRUCTIONS.booking
 
 	async function share() {
 		const text = `${row!.title} · ${row!.code}`
@@ -256,22 +261,16 @@ export function BookingDetail({
 
 	return frame(
 		<>
-			<Card className='text-center'>
-				<div className='flex items-center justify-center gap-2'>
-					<Badge tone={STATUS_TONE[row.status]}>{row.statusLabel}</Badge>
-				</div>
-				{row.qrValue && (
-					<div className='mx-auto mt-4 w-fit rounded-3xl border border-line bg-white p-3'>
-						<QrImage value={row.qrValue} size={170} />
+			<BookingQrPanel
+				header={
+					<div className='flex items-center justify-center gap-2'>
+						<Badge tone={STATUS_TONE[row.status]}>{row.statusLabel}</Badge>
 					</div>
-				)}
-				<p className='mt-4 font-mono text-3xl font-black text-ink'>{row.code}</p>
-				<p className='mt-2 text-[12.5px] text-ink-2'>
-					{ticket
-						? 'Talonni oynada ko‘rsating. Internetsiz ham ishlaydi.'
-						: 'Kodni joyida ko‘rsating. Internetsiz ham ishlaydi.'}
-				</p>
-			</Card>
+				}
+				payload={row.qrValue ?? null}
+				reference={reference}
+				instruction={instruction}
+			/>
 
 			{/* How far through the line this number is — the one thing a queue
 			    has that the other bookings do not. */}
@@ -360,17 +359,12 @@ export function BookingDetail({
 					title={presentActionLabel(booking.kind)}
 					onClose={() => setPresentOpen(false)}
 				>
-					<Card className='text-center'>
-						<div className='mx-auto w-fit rounded-3xl border border-line bg-white p-3'>
-							<QrImage value={row.qrValue} size={220} />
-						</div>
-						<p className='mt-4 font-mono text-3xl font-black text-ink'>
-							{row.code}
-						</p>
-						<p className='mt-2 text-[12.5px] text-ink-2'>
-							Kodni joyida ko‘rsating. Internetsiz ham ishlaydi.
-						</p>
-					</Card>
+					<BookingQrPanel
+						size='large'
+						payload={row.qrValue}
+						reference={reference}
+						instruction={instruction}
+					/>
 				</BottomSheet>
 			)}
 

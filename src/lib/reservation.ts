@@ -31,10 +31,6 @@ export function supersededReservationHref(reservation: ReservationRef) {
   return href === `/reservation/${reservation.id}` ? null : href;
 }
 
-export function reservationCode(id: string) {
-  return `BSPACE:${id}`;
-}
-
 export function reservationRemainingMs(reservation: Reservation) {
   return new Date(reservation.endAt).getTime() - Date.now();
 }

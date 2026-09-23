@@ -5,6 +5,13 @@ import {
 	isQueueTicketLive,
 	isServiceBookingLive,
 } from '@/lib/booking-lifecycle'
+import {
+	queueTicketQrPayload,
+	queueTicketReference,
+	reservationReference,
+	serviceBookingQrPayload,
+	serviceBookingReference,
+} from '@/lib/booking-qr'
 import { destinationIdFrom } from '@/lib/navigation'
 import { reservationHref } from '@/lib/reservation'
 import { serviceWhenLabel } from '@/lib/service-slots'
@@ -29,14 +36,18 @@ export type BookingRow = {
 	kind: BookingKind
 	title: string
 	subtitle: string
+	// The human reference — what a person reads out or types — and what to
+	// call it. Never the QR's contents; see lib/booking-qr.
 	code: string
+	codeLabel: string
 	whenLabel: string
 	status: BookingRowStatus
 	statusLabel: string
 	// The detail screen this row summarises — where tapping the card goes.
-	// Absent for the kinds that have no screen of their own; those open their
-	// QR sheet instead.
 	href?: string
+	// The booking's machine QR, from the one shared generator. Parking draws
+	// its own on /reservation/[id] from the same generator, so its row has
+	// none.
 	qrValue?: string
 	amountLabel?: string
 	// What a "Takrorlash" from history should reopen.
@@ -75,6 +86,10 @@ export function queueTicketHref(id: string) {
 	return `/queue-ticket/${id}`
 }
 
+function codeOf(reference: { label: string; value: string }) {
+	return { code: reference.value, codeLabel: reference.label }
+}
+
 function row(partial: Omit<BookingRow, 'statusLabel'>): BookingRow {
 	return { ...partial, statusLabel: STATUS_LABELS[partial.status] }
 }
@@ -106,7 +121,7 @@ function fromReservation(reservation: Reservation): BookingRow {
 		subtitle: `${reservation.durationHours} soat · ${formatTime(reservation.startAt)}–${formatTime(reservation.endAt)}`,
 		// The full uuid is unreadable on a card; the tail is what a gate
 		// operator would actually be read out.
-		code: reservation.id.slice(-8).toUpperCase(),
+		...codeOf(reservationReference(reservation)),
 		whenLabel: formatDateTime(reservation.startAt),
 		status,
 		// The same rule the reservation screen redirects by, so a card and a
@@ -157,7 +172,7 @@ function fromQueueTicket(ticket: QueueTicket): BookingRow {
 		subtitle: atWindow
 			? `${service?.title ?? 'Xizmat'} · ${ticket.windowNumber}-oyna`
 			: `${service?.title ?? 'Xizmat'} · oldingizda ${ticket.position}`,
-		code: ticket.number,
+		...codeOf(queueTicketReference(ticket)),
 		whenLabel:
 			ticket.status === 'called'
 				? 'Sizni chaqirishmoqda'
@@ -172,7 +187,8 @@ function fromQueueTicket(ticket: QueueTicket): BookingRow {
 		// than this booking's — and the ticket's only real detail view was a
 		// QR modal in the list.
 		href: queueTicketHref(ticket.id),
-		qrValue: `BSPACE:QUEUE:${ticket.id}`,
+		// The ticket itself, not its printed number — numbers repeat daily.
+		qrValue: queueTicketQrPayload(ticket) ?? undefined,
 		repeat: { kind: 'queue', refId: ticket.orgId },
 		// The venue the number was taken at, not the car park beside it.
 		destinationId:
@@ -196,7 +212,8 @@ function fromServiceBooking(booking: ServiceBooking): BookingRow {
 		kind: booking.kind,
 		title: booking.title,
 		subtitle: booking.subtitle,
-		code: booking.code,
+		// Shown as stored; the random code is never rewritten.
+		...codeOf(serviceBookingReference(booking)),
 		// The stored instant wins over the stored label: a booking made for
 		// tomorrow has to read as tomorrow here, and as "Bugun" once tomorrow
 		// comes. Bookings persisted before startAt existed keep their label.
@@ -207,7 +224,9 @@ function fromServiceBooking(booking: ServiceBooking): BookingRow {
 		// A table, a film, a clinic slot and an event ticket each get the same
 		// full detail page every other booking has.
 		href: serviceBookingHref(booking.id),
-		qrValue: `BSPACE:${booking.kind.toUpperCase()}:${booking.code}`,
+		// The stable id, not the random display code: the QR must find this
+		// exact booking whatever its code says.
+		qrValue: serviceBookingQrPayload(booking) ?? undefined,
 		repeat: { kind: booking.kind, refId: booking.refId },
 		// The restaurant, cinema or clinic the booking was made at, read back
 		// from the refId the sheet stored. A booking whose venue has since

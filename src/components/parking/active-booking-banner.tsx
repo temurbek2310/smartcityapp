@@ -4,17 +4,17 @@ import { LogOut, Plus, QrCode, X } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 
+import { BookingQrPanel } from '@/components/booking/booking-qr-panel'
 import { BottomSheet } from '@/components/ui/bottom-sheet'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { KeyValue, KeyValueList } from '@/components/ui/key-value'
-import { QrImage } from '@/components/ui/qr-image'
 import { useApp } from '@/context/app-context'
 import { getParking } from '@/data/parkings'
 import { useBookingMeta } from '@/hooks/use-booking-meta'
 import { formatTime, formatUZS } from '@/lib/format'
-import { reservationCode } from '@/lib/reservation'
+import { reservationQrPayload, reservationReference } from '@/lib/booking-qr'
 import type { Reservation } from '@/lib/types'
 
 // City Goo pins the live booking to the top of the parking screen so the
@@ -35,6 +35,7 @@ export function ActiveBookingBanner({
 
 	const parking = getParking(reservation.parkingId)
 	if (!parking) return null
+	const reference = reservationReference(reservation)
 
 	return (
 		<>
@@ -42,7 +43,7 @@ export function ActiveBookingBanner({
 				<div className='flex items-center justify-between gap-3'>
 					<Badge tone='brand'>Faol bron</Badge>
 					<span className='font-mono text-[11px] font-bold text-ink-3'>
-						{reservation.id.slice(-8).toUpperCase()}
+						{reference.value}
 					</span>
 				</div>
 
@@ -116,16 +117,15 @@ export function ActiveBookingBanner({
 
 			{sheet === 'qr' && (
 				<BottomSheet title='Bron QR kodi' onClose={() => setSheet(null)}>
-					<Card className='text-center'>
-						<div className='mx-auto w-fit rounded-3xl border border-line bg-white p-3'>
-							<QrImage value={reservationCode(reservation.id)} size={180} />
-						</div>
-						<p className='mt-3 text-[12.5px] text-ink-2'>
-							{parking.plateRecognition
+					<BookingQrPanel
+						payload={reservationQrPayload(reservation)}
+						reference={reference}
+						instruction={
+							parking.plateRecognition
 								? 'Shlagbaum avtomobil raqami orqali ochiladi. QR — zaxira variant.'
-								: 'Shlagbaumda shu QR kodni ko‘rsating.'}
-						</p>
-					</Card>
+								: 'Shlagbaumda shu QR kodni ko‘rsating.'
+						}
+					/>
 
 					<Card className='mt-3'>
 						<KeyValueList>

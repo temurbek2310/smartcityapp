@@ -4,14 +4,15 @@ import { Clock3, LogOut, Plus } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 
+import { BookingQrPanel } from '@/components/booking/booking-qr-panel'
 import { Badge } from '@/components/ui/badge'
 import { BottomSheet } from '@/components/ui/bottom-sheet'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { KeyValue } from '@/components/ui/key-value'
-import { QrImage } from '@/components/ui/qr-image'
 import { useApp } from '@/context/app-context'
 import { ACTION_LABELS } from '@/lib/booking-journey'
+import { reservationQrPayload, reservationReference } from '@/lib/booking-qr'
 import { cn } from '@/lib/cn'
 import { formatDuration, formatTime, formatUZS } from '@/lib/format'
 import type { ParkingBookingMeta } from '@/lib/booking-meta'
@@ -89,7 +90,7 @@ export function ActiveSessionPanel({
 						{overstayed ? 'VAQT TUGADI' : 'FAOL'}
 					</Badge>
 					<span className='font-mono text-[11px] font-bold text-ink-3'>
-						{reservation.id.slice(-8).toUpperCase()}
+						{reservationReference(reservation).value}
 					</span>
 				</div>
 
@@ -174,14 +175,13 @@ export function ActiveSessionPanel({
 
 			{showExitQr && (
 				<BottomSheet title='Chiqish QR kodi' onClose={() => setShowExitQr(false)}>
-					<Card className='text-center'>
-						<div className='mx-auto w-fit rounded-3xl border border-line bg-white p-3'>
-							<QrImage value={`BSPACE:EXIT:${reservation.id}`} size={190} />
-						</div>
-						<p className='mt-3 text-[11.5px] text-ink-3'>
-							Shlagbaum skaneri o‘rniga demo simulyator ishlaydi.
-						</p>
-					</Card>
+					{/* The same reservation QR as at the entrance: the gate resolves
+					    the booking and its status says the car is leaving. */}
+					<BookingQrPanel
+						payload={reservationQrPayload(reservation)}
+						reference={reservationReference(reservation)}
+						instruction='Shlagbaum skaneri o‘rniga demo simulyator ishlaydi.'
+					/>
 					<Button
 						variant='primary'
 						danger

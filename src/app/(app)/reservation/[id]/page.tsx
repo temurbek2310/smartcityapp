@@ -13,6 +13,10 @@ import Link from 'next/link'
 import { notFound, useParams, useRouter } from 'next/navigation'
 import { useEffect } from 'react'
 
+import {
+	BookingQrPanel,
+	QR_INSTRUCTIONS,
+} from '@/components/booking/booking-qr-panel'
 import { ActiveSessionPanel } from '@/components/parking/active-session-panel'
 import { AppBar } from '@/components/ui/app-bar'
 import { Badge } from '@/components/ui/badge'
@@ -21,7 +25,6 @@ import { Card } from '@/components/ui/card'
 import { EmptyState } from '@/components/ui/empty-state'
 import { IconTile } from '@/components/ui/icon-tile'
 import { KeyValue } from '@/components/ui/key-value'
-import { QrImage } from '@/components/ui/qr-image'
 import { Toast } from '@/components/ui/toast'
 import { useApp } from '@/context/app-context'
 import { getParking } from '@/data/parkings'
@@ -34,9 +37,10 @@ import {
 	reservationJourney,
 	type BookingActionId,
 } from '@/lib/booking-journey'
+import { reservationQrPayload, reservationReference } from '@/lib/booking-qr'
 import { formatDateTime, formatDuration, formatUZS } from '@/lib/format'
 import { destinationIdFrom } from '@/lib/navigation'
-import { reservationCode, supersededReservationHref } from '@/lib/reservation'
+import { supersededReservationHref } from '@/lib/reservation'
 
 export default function ReservationPage() {
 	const params = useParams<{ id: string }>()
@@ -116,11 +120,15 @@ export default function ReservationPage() {
 	// The booking is the same thing before and after entry; what changes is
 	// which of its actions are still ahead of the customer.
 	const entered = reservation.status === 'active'
+	// The QR names the reservation itself — not the lot, the bay or anything
+	// on screen around it; the code under it is for a person to read out.
+	const reference = reservationReference(reservation)
 
 	// Shared by both stages. The clipboard needs a secure context and
 	// permission, so a refusal falls back to putting the code in the toast.
+	// The human code, never the QR's machine payload.
 	async function share() {
-		const text = `${parking!.name} · ${reservationCode(reservation!.id)}`
+		const text = `${parking!.name} · ${reference.value}`
 		try {
 			await navigator.clipboard.writeText(text)
 			toast.show('Bron nusxalandi')
@@ -219,7 +227,7 @@ export default function ReservationPage() {
 						label='Davomiylik'
 						value={`${reservation.durationHours} soat`}
 					/>
-					<KeyValue label='Bron raqami' value={reservation.id.slice(-8).toUpperCase()} />
+					<KeyValue label={reference.label} value={reference.value} />
 				</Card>
 
 				<div className='grid grid-cols-2 gap-2'>
@@ -231,25 +239,17 @@ export default function ReservationPage() {
 
 	return frame(
 		<>
-			<Card className='text-center'>
-				<Badge tone='ok' className='mx-auto'>
-					<CheckCircle2 className='size-3' /> Bron tasdiqlandi
-				</Badge>
-
-				<div className='mx-auto mt-4 w-fit rounded-card-lg border border-line bg-white p-3'>
-					<QrImage value={reservationCode(reservation.id)} />
-				</div>
-
-				<p className='mt-3 text-[11px] font-bold uppercase tracking-[.16em] text-ink-3'>
-					Bron raqami
-				</p>
-				<p className='mt-1 break-all font-mono text-[12px] font-bold text-ink-2'>
-					{reservation.id}
-				</p>
-				<p className='mt-2 text-[11.5px] text-ink-3'>
-					Kodni kirishda ko‘rsating. Internetsiz ham ishlaydi.
-				</p>
-			</Card>
+			<BookingQrPanel
+				size='large'
+				header={
+					<Badge tone='ok' className='mx-auto'>
+						<CheckCircle2 className='size-3' /> Bron tasdiqlandi
+					</Badge>
+				}
+				payload={reservationQrPayload(reservation)}
+				reference={reference}
+				instruction={QR_INSTRUCTIONS.reservation}
+			/>
 
 			<Card>
 				<div className='flex items-start gap-3'>

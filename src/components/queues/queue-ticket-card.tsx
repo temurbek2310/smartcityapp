@@ -1,16 +1,16 @@
 'use client'
 
 import { Check, QrCode, RefreshCw, X } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 
 import { Badge } from '@/components/ui/badge'
 import { BottomSheet } from '@/components/ui/bottom-sheet'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { KeyValue, KeyValueList } from '@/components/ui/key-value'
 import { Meter } from '@/components/ui/meter'
-import { QrImage } from '@/components/ui/qr-image'
 import { useApp } from '@/context/app-context'
+import { queueTicketHref } from '@/lib/bookings'
 import { cn } from '@/lib/cn'
 import type { QueueOrg, QueueTicket } from '@/lib/types'
 
@@ -29,7 +29,8 @@ export function QueueTicketCard({
 	onNotify: (message: string) => void
 }) {
 	const { advanceQueueTicket, arriveQueueTicket, cancelQueueTicket } = useApp()
-	const [sheet, setSheet] = useState<'qr' | 'cancel' | null>(null)
+	const router = useRouter()
+	const [sheet, setSheet] = useState<'cancel' | null>(null)
 
 	if (!ticket) {
 		return (
@@ -149,7 +150,13 @@ export function QueueTicketCard({
 					>
 						<RefreshCw className='size-3.5' /> Yangilash
 					</Button>
-					<Button size='sm' variant='outline' onClick={() => setSheet('qr')}>
+					{/* The ticket's own page draws its QR, number, position and
+					    window — this card used to keep a second copy in a sheet. */}
+					<Button
+						size='sm'
+						variant='outline'
+						onClick={() => router.push(queueTicketHref(ticket.id))}
+					>
 						<QrCode className='size-3.5' /> Talon
 					</Button>
 					<Button
@@ -176,38 +183,6 @@ export function QueueTicketCard({
 					</Button>
 				)}
 			</Card>
-
-			{sheet === 'qr' && (
-				<BottomSheet title='Talon' onClose={() => setSheet(null)}>
-					<Card className='text-center'>
-						<div className='mx-auto w-fit rounded-3xl border border-line bg-white p-3'>
-							<QrImage value={`BSPACE:QUEUE:${ticket.id}`} size={170} />
-						</div>
-						<p className='mt-4 font-mono text-3xl font-black text-ink'>
-							{ticket.number}
-						</p>
-						<p className='mt-2 text-[12.5px] text-ink-2'>
-							Talonni oynada ko‘rsating. Internetsiz ham ishlaydi.
-						</p>
-					</Card>
-
-					<Card className='mt-3'>
-						<KeyValueList>
-							<KeyValue label='Joy' value={org.title} />
-							<KeyValue label='Xizmat' value={service?.title ?? '—'} />
-							<KeyValue
-								label='Oldingizda'
-								value={`${ticket.position} kishi`}
-							/>
-							<KeyValue
-								label='Taxminan'
-								value={`${ticket.etaMinutes} daqiqa`}
-							/>
-							<KeyValue label='Oyna' value={`${ticket.windowNumber}-oyna`} />
-						</KeyValueList>
-					</Card>
-				</BottomSheet>
-			)}
 
 			{sheet === 'cancel' && (
 				<BottomSheet title='Navbatni bekor qilish?' onClose={() => setSheet(null)}>

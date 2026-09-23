@@ -131,8 +131,8 @@ describe('bookingRows', () => {
 		expect(row.href).toBe(href)
 	})
 
-	// Parking opens a screen; the kinds without one carry a QR instead, which
-	// is what their card opens.
+	// Every row opens its own screen; the non-parking ones also carry their
+	// QR, and parking draws its own on /reservation/[id].
 	it('gives every row something to open', () => {
 		const rows = bookingRows({
 			reservations: [reservation()],

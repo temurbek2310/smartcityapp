@@ -5,7 +5,6 @@ import {
 	findOverlappingReservation,
 	intervalsOverlap,
 	isLiveReservation,
-	reservationCode,
 	reservationHref,
 	supersededReservationHref,
 } from './reservation'
@@ -69,12 +68,6 @@ describe('calculateFinalTotal', () => {
 		})
 		const exit = new Date('2026-09-11T06:00:00.000Z')
 		expect(calculateFinalTotal(reservation, exit)).toBeGreaterThan(0)
-	})
-})
-
-describe('reservationCode', () => {
-	it('namespaces the QR payload so a scanner can tell what it is', () => {
-		expect(reservationCode('booking-1')).toBe('BSPACE:booking-1')
 	})
 })
 
