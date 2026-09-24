@@ -12,10 +12,17 @@ import type { Parking } from '@/lib/types'
 
 type RouteSummaryProps = {
 	mode: TransportMode
-	minutes: number
-	distanceKm: number
-	costUZS: number
+	// null while the selected mode has no figures to show honestly — a car
+	// route still loading, unavailable or waiting for a location fix. The
+	// rows then read "—" instead of falling back to the estimate.
+	minutes: number | null
+	distanceKm: number | null
+	costUZS: number | null
 	costLabel: string
+	// Where time and distance come from: 2GIS for a real car route, the
+	// haversine estimate otherwise. The cost is B SPACE's own estimate either
+	// way — fed with the 2GIS road distance when there is one.
+	source: '2gis' | 'estimate'
 	facts: RouteFactRow[]
 	// The car park this route suggests, and what to call it. Absent whenever
 	// there is nothing to suggest — arriving by metro, on a scooter or on
@@ -91,6 +98,7 @@ export function RouteSummary({
 	distanceKm,
 	costUZS,
 	costLabel,
+	source,
 	facts,
 	parkingSuggestion,
 }: RouteSummaryProps) {
@@ -110,11 +118,11 @@ export function RouteSummary({
 			</div>
 
 			<div className='mt-2.5 overflow-hidden rounded-[20px] bg-white shadow-card'>
-				<SummaryRow icon={Clock3} label='Vaqt yo‘lda' value={`${minutes} daq`} />
+				<SummaryRow icon={Clock3} label='Vaqt yo‘lda' value={minutes !== null ? `${minutes} daq` : '—'} />
 				<SummaryRow
 					icon={RouteIcon}
 					label='Masofa'
-					value={`${distanceKm.toFixed(1)} km`}
+					value={distanceKm !== null ? `${distanceKm.toFixed(1)} km` : '—'}
 				/>
 				{facts.map(fact => (
 					<SummaryRow
@@ -149,12 +157,13 @@ export function RouteSummary({
 					Narx {costLabel && `· ${costLabel}`}
 				</span>
 				<span className='text-[15px] font-extrabold text-ink'>
-					{costUZS > 0 ? `≈ ${formatUZS(costUZS)}` : 'Bepul'}
+					{costUZS === null ? '—' : costUZS > 0 ? `≈ ${formatUZS(costUZS)}` : 'Bepul'}
 				</span>
 			</div>
 			<p className='mt-1.5 px-1 text-[10.5px] text-ink-3'>
-				Yo‘l holati bo‘yicha qatorlar — namunaviy ma’lumot. Narx va vaqt real
-				masofaga asoslangan taxminiy hisob.
+				{source === '2gis'
+					? 'Vaqt va masofa — 2GIS marshruti. Yoqilg‘i narxi shu masofaga asoslangan B SPACE taxminiy hisobi. Yo‘l holati bo‘yicha qatorlar — namunaviy ma’lumot.'
+					: 'Yo‘l holati bo‘yicha qatorlar — namunaviy ma’lumot. Narx va vaqt real masofaga asoslangan taxminiy hisob.'}
 			</p>
 		</section>
 	)

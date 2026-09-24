@@ -17,6 +17,7 @@ export function TurnByTurn({
 	navigateHref,
 	onClose,
 	onComplete,
+	stepsNote,
 }: {
 	steps: TimelineStep[]
 	minutes: number
@@ -27,6 +28,9 @@ export function TurnByTurn({
 	navigateHref: string | null
 	onClose: () => void
 	onComplete?: () => void
+	// Said under «Keyingi» when the minutes are a real route's but the steps
+	// are still the demo list — 2GIS manoeuvres are not connected yet.
+	stepsNote?: string
 }) {
 	const [index, setIndex] = useState(0)
 
@@ -137,6 +141,9 @@ export function TurnByTurn({
 				<p className='py-2 text-[11px] font-bold uppercase tracking-[.14em] text-white/45'>
 					Keyingi
 				</p>
+				{stepsNote && (
+					<p className='-mt-1 pb-2 text-[11px] leading-4 text-white/55'>{stepsNote}</p>
+				)}
 				{steps.map((step, stepIndex) => (
 					<div
 						key={`${step.title}-${stepIndex}`}

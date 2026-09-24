@@ -18,6 +18,7 @@ import type { MapLine } from '@/lib/home-map'
 import { routeFrame } from '@/lib/map-geometry'
 import type { RouteEndpoint } from '@/lib/route-endpoints'
 import type { RealRoute } from '@/lib/routing'
+import { routeMapLayers } from '@/lib/transport-route'
 
 // What City Goo pins on the route: the things that will slow you down, each
 // tappable for the reason. They sit on the card rather than on the map itself
@@ -89,12 +90,17 @@ type RouteMapProps = {
 	showRoute: boolean
 	onToggleRoute: () => void
 	onOpenProblem: (problem: RouteProblem) => void
-	// A route 2GIS actually computed. Not passed by any screen yet: without it
-	// the map draws the demo route exactly as before. With it, the map draws
-	// that geometry as one neutral line, with no illustrative traffic colours,
-	// problem pins or legend — those describe the demo line, not this one.
-	// Typed as RealRoute so only a 2GIS answer can ever be drawn this way.
+	// A route 2GIS actually computed. Without it the map draws the demo route
+	// exactly as before. With it, the map draws that geometry as one neutral
+	// line, with no illustrative traffic colours, problem pins or legend —
+	// those describe the demo line, not this one. Typed as RealRoute so only
+	// a 2GIS answer can ever be drawn this way.
 	realRoute?: Pick<RealRoute, 'source' | 'geometry'>
+	// Set while the selected mode is routed for real but has no route to
+	// draw: still being fetched, or unavailable (including waiting for a
+	// location fix). The map then draws no line at all — the demo line never
+	// stands in for a real one.
+	realRoutePending?: 'loading' | 'unavailable'
 }
 
 // Reproduces City Goo's map card for the Transport screen using B SPACE's
@@ -111,11 +117,15 @@ export function RouteMap({
 	onToggleRoute,
 	onOpenProblem,
 	realRoute,
+	realRoutePending,
 }: RouteMapProps) {
 	const isGpsOrigin = origin.kind === 'me' && !origin.approximate
 	const realGeometry = realRoute?.source === '2gis' && realRoute.geometry.length >= 2
 		? realRoute.geometry : null
-	const isReal = realGeometry !== null
+	const layers = routeMapLayers({
+		showRoute,
+		lineKind: realGeometry ? 'real' : realRoutePending ? 'none' : 'demo',
+	})
 	const { objects, lines, frame } = useMemo(() => {
 		const pointAt = (fraction: number) => ({
 			lat: origin.lat + (destination.lat - origin.lat) * fraction,
@@ -126,7 +136,7 @@ export function RouteMap({
 			tag: destination.title, distanceKm: 0, icon: RouteIcon,
 			color: '#6c47e0', href: '',
 		}
-		const problems: MapObject[] = showRoute && !isReal ? ROUTE_PROBLEMS.map((problem, index) => ({
+		const problems: MapObject[] = layers.problemPins ? ROUTE_PROBLEMS.map((problem, index) => ({
 			...pointAt((index + 1) / 4), id: problem.id, kind: 'traffic',
 			title: problem.title, subtitle: 'Namunaviy yo‘l holati', address: '',
 			meta: problem.detail, tag: problem.label, distanceKm: 0,
@@ -134,8 +144,9 @@ export function RouteMap({
 			color: { warn: '#f79009', bad: '#f04438', info: '#2e90fa' }[problem.tone],
 			href: '', parkingId: null,
 		})) : []
-		const routeLines: MapLine[] = !showRoute ? []
-			: realGeometry ? [{ id: 'route-real', color: REAL_ROUTE_COLOR, coordinates: realGeometry }]
+		const routeLines: MapLine[] = layers.line === 'none' ? []
+			: layers.line === 'real' && realGeometry
+				? [{ id: 'route-real', color: REAL_ROUTE_COLOR, coordinates: realGeometry }]
 			: ['#12b76a', '#f79009', '#f04438', '#12b76a'].map((color, index) => {
 				const from = pointAt(index / 4), to = pointAt((index + 1) / 4)
 				return { id: `route-${index}`, color,
@@ -159,7 +170,7 @@ export function RouteMap({
 			lines: realGeometry ? [{ coordinates: realGeometry }] : routeLines,
 		})
 		return { objects: [...problems, ...originPin, destinationPin], lines: routeLines, frame }
-	}, [origin, destination, showRoute, isGpsOrigin, isReal, realGeometry])
+	}, [origin, destination, isGpsOrigin, layers.line, layers.problemPins, realGeometry])
 
 	return (
 		<div className='overflow-hidden rounded-[2rem] bg-card shadow-card'>
@@ -200,7 +211,17 @@ export function RouteMap({
 					</button>
 				</div>
 
-				{showRoute && !isReal && (
+				{realRoutePending === 'loading' && (
+					<div
+						role='status'
+						className='pointer-events-none absolute bottom-3 left-3 z-20 flex items-center gap-2 rounded-[9px] bg-white/95 px-2.5 py-1.5 text-[11px] font-semibold text-ink-2 shadow-card'
+					>
+						<span className='size-3 animate-spin rounded-full border-2 border-brand/30 border-t-brand' />
+						Marshrut hisoblanmoqda…
+					</div>
+				)}
+
+				{layers.trafficLegend && (
 					<div className='pointer-events-none absolute bottom-3 left-3 z-20 flex gap-2.5 rounded-[9px] bg-white/95 px-2.5 py-1.5 shadow-card'>
 						{LEGEND.map(item => (
 							<span
@@ -236,7 +257,9 @@ export function RouteMap({
 				))}
 			</div>
 			<p className='px-3 pb-3 text-[10.5px] leading-4 text-ink-3'>
-				Namunaviy yo‘nalish va yo‘l holati. Yo‘l bo‘ylab navigatsiya uchun 2GISni oching.
+				{realGeometry
+					? 'Marshrut chizig‘i va vaqti — 2GIS. Yo‘l holati — namunaviy. Yo‘l bo‘ylab navigatsiya uchun 2GISni oching.'
+					: 'Namunaviy yo‘nalish va yo‘l holati. Yo‘l bo‘ylab navigatsiya uchun 2GISni oching.'}
 			</p>
 		</div>
 	)

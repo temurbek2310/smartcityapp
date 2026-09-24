@@ -15,28 +15,36 @@ export type TimelineStep = {
 type RouteTimelineProps = {
 	steps: TimelineStep[]
 	// City Goo's «Поехали»: the header action starts the in-app navigator
-	// rather than handing the whole journey to an external map.
-	onStartNavigation: () => void
+	// rather than handing the whole journey to an external map. Absent while
+	// there is no route to navigate (a car route still loading or unavailable).
+	onStartNavigation?: () => void
+	// A line under the heading saying which parts of the list are demo.
+	note?: string
 }
 
 // Reusable vertical route timeline — used once by /transport, kept as its
 // own component instead of inline JSX per-step as requested.
-export function RouteTimeline({ steps, onStartNavigation }: RouteTimelineProps) {
+export function RouteTimeline({ steps, onStartNavigation, note }: RouteTimelineProps) {
 	return (
 		<section>
 			<div className='flex items-baseline justify-between px-1'>
 				<h2 className='text-[18px] font-extrabold tracking-[-0.01em] text-ink'>
 					Marshrut tafsilotlari
 				</h2>
-				<button
-					type='button'
-					onClick={onStartNavigation}
-					className='inline-flex items-center gap-1 text-[12.5px] font-bold text-brand'
-				>
-					<Navigation className='size-3.5' />
-					Yo‘lga chiqish
-				</button>
+				{onStartNavigation && (
+					<button
+						type='button'
+						onClick={onStartNavigation}
+						className='inline-flex items-center gap-1 text-[12.5px] font-bold text-brand'
+					>
+						<Navigation className='size-3.5' />
+						Yo‘lga chiqish
+					</button>
+				)}
 			</div>
+			{note && (
+				<p className='mt-1 px-1 text-[11.5px] text-ink-3'>{note}</p>
+			)}
 
 			<div className='mt-2.5 rounded-[20px] bg-white p-3.5 shadow-card'>
 				{steps.map((step, index) => {

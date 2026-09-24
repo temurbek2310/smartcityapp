@@ -20,26 +20,36 @@ type AlternativeRoutesProps = {
 	routes: AlternativeRoute[]
 	selectedIndex: number
 	onSelect: (index: number) => void
+	// Demo cards shown next to a real route: said to be demo under the
+	// heading, and not pickable, since picking one cannot change the route
+	// that is actually drawn.
+	demoNote?: string
 }
 
 export function AlternativeRoutes({
 	routes,
 	selectedIndex,
 	onSelect,
+	demoNote,
 }: AlternativeRoutesProps) {
+	const selectable = !demoNote
 	return (
 		<section>
 			<h2 className='px-1 text-[18px] font-extrabold tracking-[-0.01em] text-ink'>
 				Muqobil marshrutlar
 			</h2>
+			{demoNote && (
+				<p className='mt-1 px-1 text-[11.5px] text-ink-3'>{demoNote}</p>
+			)}
 
 			<div className='mt-2.5 space-y-2.5'>
 				{routes.map((route, index) => {
-					const selected = index === selectedIndex
+					const selected = selectable && index === selectedIndex
 					return (
 						<button
 							key={route.title}
 							type='button'
+							disabled={!selectable}
 							onClick={() => onSelect(index)}
 							className={`flex w-full items-start gap-3 rounded-[18px] bg-white p-3.5 text-left shadow-card ring-2 ${
 								selected ? 'ring-brand' : 'ring-transparent'

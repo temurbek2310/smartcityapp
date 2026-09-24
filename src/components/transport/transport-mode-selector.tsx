@@ -6,14 +6,16 @@ import { TRANSPORT_MODES, type TransportMode } from '@/lib/transport'
 type TransportModeSelectorProps = {
 	selected: TransportMode
 	// Absent until there is somewhere to go: a duration belongs to a route,
-	// so with no destination the row is four modes and no numbers.
-	minutesByMode?: Record<TransportMode, number>
+	// so with no destination the row is four modes and no numbers. Each label
+	// is already formatted — "18 daq" for a real route, "≈13 daq" for an
+	// estimate (see modeDurationLabels) — and null leaves that pill bare.
+	durationByMode?: Record<TransportMode, string | null>
 	onSelect: (mode: TransportMode) => void
 }
 
 export function TransportModeSelector({
 	selected,
-	minutesByMode,
+	durationByMode,
 	onSelect,
 }: TransportModeSelectorProps) {
 	return (
@@ -33,7 +35,7 @@ export function TransportModeSelector({
 						}`}
 					>
 						<Icon className='size-4.5' />
-						{minutesByMode ? `${mode.label} · ${minutesByMode[mode.id]} daq` : mode.label}
+						{durationByMode?.[mode.id] ? `${mode.label} · ${durationByMode[mode.id]}` : mode.label}
 					</button>
 				)
 			})}

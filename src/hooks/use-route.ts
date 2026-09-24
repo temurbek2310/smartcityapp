@@ -11,7 +11,8 @@ import {
 } from '@/lib/route-client'
 import { routeRequestKey, type RouteRequest } from '@/lib/routing'
 
-// Foundation for real routes on /transport — not wired to any screen yet.
+// Real routes on /transport — used there for the car only (Phase 1; see
+// transportRouteRequest in lib/transport-route.ts).
 //
 // Pass a RouteRequest to fetch it, or null to stay idle (build it with
 // realRouteRequest(), which already returns null for the approximate centre).
@@ -56,7 +57,13 @@ export function useRoute(request: RouteRequest | null): RouteState & { retry: ()
 				}
 			},
 		)
-		return () => controller.abort()
+		// Leave a microtask later rather than at once. When the same effect is
+		// set up again straight away — React's development StrictMode does
+		// exactly that on mount — the new subscription joins the request that
+		// is already open (the loader shares it by key) instead of the first
+		// one being cancelled after it has already left for the server. A real
+		// change of key, or leaving the screen, still aborts: one microtask on.
+		return () => queueMicrotask(() => controller.abort())
 	}, [key, revision])
 
 	const retry = useCallback(() => setRevision(current => current + 1), [])
