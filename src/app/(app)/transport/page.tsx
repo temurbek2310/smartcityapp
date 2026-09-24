@@ -69,6 +69,11 @@ import {
 	type TransportMode,
 } from '@/lib/transport'
 import { readRouteParams, routeHref } from '@/lib/navigation'
+import {
+	openTransportSession,
+	recordTransportSync,
+	transportSessionFor,
+} from '@/lib/transport-session'
 import { useLocation } from '@/context/location-context'
 import { APPROXIMATE_ORIGIN_LABEL, currentLocationLabel } from '@/lib/location'
 import {
@@ -107,12 +112,24 @@ export default function TransportPage() {
 	)
 }
 
+// Remounts the view only when somebody else changes the query — a link, a
+// saved route, back/forward — never for the URL sync the view does itself
+// (see lib/transport-session.ts).
 function TransportRoute() {
-	const params = useSearchParams()
-	return <TransportView key={params.toString()} />
+	const query = useSearchParams().toString()
+	const [session, setSession] = useState(() => openTransportSession(query))
+	const current = transportSessionFor(session, query)
+	// Adjusting state while rendering, React's pattern for state derived from
+	// a changed input: the new key applies in this same render pass.
+	if (current !== session) setSession(current)
+	const recordSync = useCallback(
+		(next: string) => setSession(value => recordTransportSync(value, next)),
+		[],
+	)
+	return <TransportView key={current.key} onUrlSync={recordSync} />
 }
 
-function TransportView() {
+function TransportView({ onUrlSync }: { onUrlSync: (query: string) => void }) {
 	const router = useRouter()
 	const { saveRoute, reservations } = useApp()
 	const searchParams = useSearchParams()
@@ -302,9 +319,10 @@ function TransportView() {
 		: [destinationPoint.title, destinationPoint.address].filter(Boolean).join(', ')
 
 	// Keep the address bar on the trip actually being shown, so refreshing or
-	// sharing the link reproduces it. replaceState rather than router.replace:
-	// this view is keyed on the query string, and a router navigation would
-	// remount it and discard the filters and tabs the customer has set.
+	// sharing the link reproduces it. replaceState rather than router.replace,
+	// and announced to TransportRoute first, so the query it writes reads back
+	// as this view's own and the view stays mounted with its filters, tabs
+	// and map intact.
 	useEffect(() => {
 		if (!selectedDestinationId) return
 		const href = routeHref({
@@ -312,9 +330,10 @@ function TransportView() {
 			destinationId: selectedDestinationId,
 			originId: selectedOriginId,
 		})
-		if (window.location.pathname + window.location.search !== href)
-			window.history.replaceState(null, '', href)
-	}, [mode, selectedDestinationId, selectedOriginId])
+		if (window.location.pathname + window.location.search === href) return
+		onUrlSync(new URL(href, window.location.origin).searchParams.toString())
+		window.history.replaceState(null, '', href)
+	}, [mode, selectedDestinationId, selectedOriginId, onUrlSync])
 
 	const filterCount = Object.values(filters).filter(Boolean).length
 

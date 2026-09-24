@@ -7,6 +7,7 @@ import type { Coordinate } from '@/lib/geo'
 import { TASHKENT_CENTER, UZBEKISTAN_BOUNDS } from '@/lib/geo'
 import { mapObjectKey, type MapObject, type MapSymbol } from '@/lib/map-objects'
 import type { MapLine } from '@/lib/home-map'
+import { cameraFrameKey, diffMapLines, mapLineSignature, type CameraFrame } from '@/lib/map-geometry'
 
 type MapglModule = Awaited<ReturnType<typeof import('@2gis/mapgl').load>>
 type MapInstance = InstanceType<MapglModule['Map']>
@@ -40,6 +41,7 @@ export function CityMap({
 	userLocation,
 	handleRef,
 	lines = EMPTY_LINES,
+	frame,
 	viewportKey = '',
 	locateRevision = 0,
 	bottomPadding = 56,
@@ -53,6 +55,11 @@ export function CityMap({
 	userLocation?: Coordinate
 	handleRef?: Ref<CityMapHandle>
 	lines?: MapLine[]
+	// What the camera must show, when the screen knows better than "all the
+	// pins" — a route view passes its line and both ends (see routeFrame()).
+	// Given, it replaces the object-based first fit, and the map refits
+	// whenever the frame itself changes. Left undefined, nothing changes.
+	frame?: CameraFrame | null
 	viewportKey?: string
 	locateRevision?: number
 	bottomPadding?: number
@@ -64,7 +71,7 @@ export function CityMap({
 	const markersRef = useRef<MarkerInstance[]>([])
 	const userMarkerRef = useRef<MarkerInstance | null>(null)
 	const userDotElRef = useRef<HTMLDivElement | null>(null)
-	const linesRef = useRef<Map<string, PolylineInstance>>(new Map())
+	const linesRef = useRef<Map<string, { polyline: PolylineInstance; signature: string }>>(new Map())
 	const onSelectRef = useRef(onSelect)
 	const objectsRef = useRef(objects)
 	const [ready, setReady] = useState(false)
@@ -130,7 +137,7 @@ export function CityMap({
 			userMarkerRef.current?.destroy()
 			userMarkerRef.current = null
 			userDotElRef.current = null
-			lines.forEach(line => line.destroy())
+			lines.forEach(line => line.polyline.destroy())
 			lines.clear()
 			mapRef.current?.destroy()
 			mapRef.current = null
@@ -223,18 +230,42 @@ export function CityMap({
 		}
 	}, [objects, selectedKey, ready])
 
-	// Frame the first set of objects. Without this the camera opens at a fixed
-	// zoom on Tashkent's centre and the pins sit clumped against one edge.
+	const fitted = useRef<string | null>(null)
+
+	// An explicit frame (a route view). Fitted whatever its spread — a route
+	// between two cities is still one route — and refitted only when what it
+	// has to show changes, so a re-render never moves the camera.
+	const frameKey = frame === undefined ? null : `${viewportKey}|${cameraFrameKey(frame)}`
+	useEffect(() => {
+		const map = mapRef.current
+		if (!map || !ready || frame === undefined || frameKey === null) return
+		if (!frame || fitted.current === frameKey) return
+
+		fitted.current = frameKey
+		map.invalidateSize()
+		const padding = { top: 56, left: 56, right: 56, bottom: bottomPadding }
+		if (frame.kind === 'point') {
+			map.setPadding(padding)
+			map.setCenter([frame.center.lng, frame.center.lat])
+			map.setZoom(14.5)
+			return
+		}
+		map.fitBounds(frame.bounds, { padding, maxZoom: 14.5, animation: { duration: 0 } })
+	}, [frame, frameKey, ready, bottomPadding])
+
+	// Otherwise, frame the first set of objects. Without this the camera opens
+	// at a fixed zoom on Tashkent's centre and the pins sit clumped against
+	// one edge.
 	//
 	// Only the first set: re-fitting on every filter change would yank the
 	// camera out from under someone who had panned. And only when the set is
 	// geographically compact — the parking catalog spans four cities, so
 	// fitting all of it renders the Tashkent cluster as one unreadable dot.
-	// Same guard ParkingMap makes for the same reason.
-	const fitted = useRef<string | null>(null)
+	// Same guard ParkingMap makes for the same reason. (A route is not a
+	// catalog, which is why a route view passes `frame` instead.)
 	useEffect(() => {
 		const map = mapRef.current
-		if (!map || !ready || fitted.current === viewportKey) return
+		if (!map || !ready || frame !== undefined || fitted.current === viewportKey) return
 		if (objects.length === 0) return
 
 		fitted.current = viewportKey
@@ -267,7 +298,7 @@ export function CityMap({
 			maxZoom: 14.5,
 			animation: { duration: 0 },
 		})
-	}, [objects, ready, userLocation, viewportKey, bottomPadding])
+	}, [objects, ready, userLocation, viewportKey, bottomPadding, frame])
 
 	// Selection also arrives from list mode, before the map has mounted.
 	useEffect(() => {
@@ -300,26 +331,26 @@ export function CityMap({
 		const mapgl = mapglRef.current
 		if (!map || !mapgl || !ready) return
 
+		// Same id with new coordinates or colour is a new line on screen: 2GIS
+		// Polylines cannot be edited, so a changed line is replaced in place.
 		const existing = linesRef.current
-		const nextIds = new Set(lines.map(line => line.id))
+		const drawn = new Map([...existing].map(([id, line]) => [id, line.signature]))
+		const { remove, add } = diffMapLines(drawn, lines)
 
-		for (const [id, polyline] of existing) {
-			if (!nextIds.has(id)) {
-				polyline.destroy()
-				existing.delete(id)
-			}
+		for (const id of remove) {
+			existing.get(id)?.polyline.destroy()
+			existing.delete(id)
 		}
 
-		for (const line of lines) {
-			if (existing.has(line.id)) continue
-			existing.set(
-				line.id,
-				new mapgl.Polyline(map, {
+		for (const line of add) {
+			existing.set(line.id, {
+				signature: mapLineSignature(line),
+				polyline: new mapgl.Polyline(map, {
 					coordinates: line.coordinates,
 					color: line.color,
 					width: 5,
 				}),
-			)
+			})
 		}
 	}, [lines, ready])
 
