@@ -38,6 +38,8 @@ import { getParking } from '@/data/parkings'
 import { PAYMENT_METHODS, PREMIUM_PERKS, PREMIUM_PRICE_UZS } from '@/data/profile'
 import { useToast } from '@/hooks/use-toast'
 import { cn } from '@/lib/cn'
+import { resetDemoData } from '@/lib/account-exit'
+import { liveBookingCount } from '@/lib/booking-lifecycle'
 import { formatDate, formatUZS } from '@/lib/format'
 import { displayUzbekPlate, formatUzbekPlate, normalizeUzbekPlate } from '@/lib/plate'
 import { tashkentHour } from '@/lib/tashkent-time'
@@ -64,6 +66,8 @@ type SheetKind =
 	| 'edit'
 	| 'delete'
 	| 'logout'
+	// Only ever the blocked sheet: an allowed demo reset runs straight away.
+	| 'reset'
 
 export default function ProfilePage() {
 	const router = useRouter()
@@ -74,14 +78,19 @@ export default function ProfilePage() {
 		reservations,
 		favorites,
 		queueTickets,
+		serviceBookings,
 		updateProfile,
 		setNotificationPref,
 		notificationPrefs,
 		logout,
+		deleteAccount,
 		resetDemo,
 	} = app
 
 	const [sheet, setSheet] = useState<SheetKind | null>(null)
+	// Logout and account deletion are both refused while any of these is live
+	// — see lib/account-exit.
+	const liveBookings = liveBookingCount({ reservations, queueTickets, serviceBookings })
 	const [payments, setPayments] = useState(PAYMENT_METHODS)
 	// Seeded from the customer's own plate, never from a sample one.
 	const [plateDraft, setPlateDraft] = useState('')
@@ -311,6 +320,10 @@ export default function ProfilePage() {
 			<button
 				type='button'
 				onClick={() => {
+					if (!resetDemoData(app).ok) {
+						setSheet('reset')
+						return
+					}
 					resetDemo()
 					router.replace('/welcome')
 				}}
@@ -658,7 +671,7 @@ export default function ProfilePage() {
 				</BottomSheet>
 			)}
 
-			{sheet === 'delete' && (
+			{sheet === 'delete' && liveBookings === 0 && (
 				<BottomSheet
 					title='Hisobni o‘chirasizmi?'
 					onClose={() => setSheet(null)}
@@ -681,8 +694,9 @@ export default function ProfilePage() {
 							danger
 							onClick={() => {
 								try {
-									resetDemo()
-									router.replace('/welcome')
+									// The store re-checks: a booking made since this sheet
+									// rendered still blocks the deletion.
+									if (deleteAccount()) router.replace('/welcome')
 								} catch {
 									toast.show('Ma’lumotlar to‘liq o‘chirilmadi. Brauzer saqlash sozlamalarini tekshiring.')
 								}
@@ -694,12 +708,18 @@ export default function ProfilePage() {
 				</BottomSheet>
 			)}
 
-			{sheet === 'logout' && (
-				<BottomSheet title='Hisobdan chiqasizmi?' onClose={() => setSheet(null)}>
+			{(sheet === 'logout' || sheet === 'delete' || sheet === 'reset') && liveBookings > 0 && (
+				<BottomSheet title='Faol bron mavjud' onClose={() => setSheet(null)}>
 					<Card>
 						<p className='text-[13px] leading-5 text-ink-2'>
-							Faol bronlaringiz saqlanadi — qayta kirganingizda ularni
-							ko‘rasiz.
+							{sheet === 'delete'
+								? 'Hisobni o‘chirishdan oldin faol bron yoki navbatni yakunlang yoki bekor qiling.'
+								: sheet === 'reset'
+									? 'Demo ma’lumotlarini tozalashdan oldin faol bron yoki navbatni yakunlang yoki bekor qiling.'
+									: 'Hisobdan chiqishdan oldin faol bron yoki navbatni yakunlang yoki bekor qiling.'}
+						</p>
+						<p className='mt-2 text-[12px] font-semibold text-ink-3'>
+							Faol: {liveBookings} ta
 						</p>
 					</Card>
 					<div className='mt-4 grid grid-cols-2 gap-2'>
@@ -709,11 +729,37 @@ export default function ProfilePage() {
 						<Button
 							variant='primary'
 							onClick={() => {
-								logout()
-								router.replace('/welcome')
+								setSheet(null)
+								router.push('/bookings')
 							}}
 						>
-							Chiqish
+							Bronlarni ko‘rish
+						</Button>
+					</div>
+				</BottomSheet>
+			)}
+
+			{sheet === 'logout' && liveBookings === 0 && (
+				<BottomSheet title='Hisobdan chiqish' onClose={() => setSheet(null)}>
+					<Card>
+						<p className='text-[13px] leading-5 text-ink-2'>
+							Hisobdan chiqsangiz, ushbu qurilmadagi bronlar tarixi,
+							sevimlilar, bildirishnomalar va saqlangan marshrutlar tozalanadi.
+						</p>
+					</Card>
+					<div className='mt-4 grid grid-cols-2 gap-2'>
+						<Button variant='outline' onClick={() => setSheet(null)}>
+							Bekor qilish
+						</Button>
+						<Button
+							variant='primary'
+							onClick={() => {
+								// The store has the last word: a booking made since this
+								// sheet rendered still keeps the customer signed in.
+								if (logout()) router.replace('/welcome')
+							}}
+						>
+							Hisobdan chiqish
 						</Button>
 					</div>
 				</BottomSheet>

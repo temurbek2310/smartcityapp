@@ -43,6 +43,7 @@ import { isBaySelectable, type BayState } from '@/lib/bay-map'
 import { cn } from '@/lib/cn'
 import { formatUZS } from '@/lib/format'
 import { occupancyForecast, peakForecastSlot } from '@/lib/occupancy-forecast'
+import { findLiveReservationForParking } from '@/lib/reservation'
 import type { ParkingAmenity } from '@/lib/types'
 
 const AMENITY_ICONS: Record<ParkingAmenity, LucideIcon> = {
@@ -107,11 +108,7 @@ export default function ParkingDetailPage() {
 		[parking],
 	)
 
-	const heldReservation = reservations.find(
-		item =>
-			item.parkingId === params.id &&
-			(item.status === 'active' || item.status === 'reserved'),
-	)
+	const heldReservation = findLiveReservationForParking(reservations, params.id)
 	const heldMeta = useBookingMeta(heldReservation?.id)
 
 	if (!parking) notFound()

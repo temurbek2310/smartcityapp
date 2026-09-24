@@ -48,6 +48,7 @@ import { useRefreshSignal } from '@/components/ui/pull-to-refresh'
 import { LocationNotice } from '@/components/location/location-notice'
 import { useLocation } from '@/context/location-context'
 import { FALLBACK_CENTRE } from '@/lib/location'
+import { isLiveReservation } from '@/lib/reservation'
 
 export default function ParkingListPage() {
 	const router = useRouter()
@@ -78,7 +79,7 @@ export default function ParkingListPage() {
 	const activeReservation = useMemo(
 		() =>
 			reservations
-				.filter(item => item.status === 'active' || item.status === 'reserved')
+				.filter(isLiveReservation)
 				.sort((a, b) => (a.status === 'active' ? -1 : b.status === 'active' ? 1 : 0))[0],
 		[reservations],
 	)

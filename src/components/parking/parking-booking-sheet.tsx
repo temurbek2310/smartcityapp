@@ -24,7 +24,11 @@ import {
 	parkingBookingWindow,
 } from '@/lib/parking-time'
 import type { BookingDay } from '@/lib/service-slots'
-import { findOverlappingReservation, reservationHref } from '@/lib/reservation'
+import {
+	findLiveReservationForParking,
+	findOverlappingReservation,
+	reservationHref,
+} from '@/lib/reservation'
 
 // The one parking booking UI in the app. It used to live inline in Home
 // and duplicated an older standalone /reserve/[id] form; both are gone and
@@ -124,8 +128,7 @@ function ParkingBookingSheetBody({
 	// already updated by the time the second handler runs.
 	const submittingRef = useRef(false)
 	const [submitting, setSubmitting] = useState(false)
-	const heldReservation = reservations.find(item => item.parkingId === parkingId &&
-		(item.status === 'active' || item.status === 'reserved'))
+	const heldReservation = findLiveReservationForParking(reservations, parkingId)
 	const heldMeta = useBookingMeta(heldReservation?.id)
 	const heldBay = heldMeta?.level === booking.level ? heldMeta.bay : null
 

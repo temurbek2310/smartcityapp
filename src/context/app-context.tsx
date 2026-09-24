@@ -24,11 +24,17 @@ import type { ServiceBookingDraft } from "@/lib/bookings";
 import { hydrateUserProfile } from "@/lib/persisted-profile";
 import { formatUzbekPlate } from "@/lib/plate";
 import { calculateFinalTotal, findOverlappingReservation } from "@/lib/reservation";
-import { clearAccountStorage } from "@/lib/account-storage";
+import {
+  clearAccountStorage,
+  clearUserOwnedStorage,
+  MAIN_STATE_KEY,
+} from "@/lib/account-storage";
 import { initialState } from "@/lib/initial-state";
+import * as accountExit from "@/lib/account-exit";
 import {
   arriveQueueTicket as arriveTicket,
   cancelQueueTicket as cancelTicket,
+  liveBookingCount,
   reconcileBookingLifecycles,
   serveQueueTicket as serveTicket,
 } from "@/lib/booking-lifecycle";
@@ -38,7 +44,7 @@ import {
   type BookingAttempt,
 } from "@/lib/booking-conflicts";
 
-const STORAGE_KEY = "b-space-mvp-v1";
+const STORAGE_KEY = MAIN_STATE_KEY;
 
 // How often bookings that end on the clock are re-checked while the app is
 // open. Minute precision is all a table or a film needs.
@@ -71,7 +77,12 @@ type AppContextValue = BSpaceState & {
   login: (profile: UserProfile) => void;
   updateProfile: (patch: Partial<UserProfile>) => void;
   setNotificationPref: (id: NotificationPrefId, enabled: boolean) => void;
-  logout: () => void;
+  // false, and nothing changes, while any booking is still live.
+  logout: () => boolean;
+  // Same rule as logout: false, and nothing is deleted, while any booking is
+  // live. Otherwise a full reset, and throws if storage cannot be cleared.
+  deleteAccount: () => boolean;
+  // Demo control: a fresh install, unconditionally.
   resetDemo: () => void;
   toggleFavorite: (parkingId: string) => void;
   createReservation: (
@@ -309,9 +320,46 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  // Signs out and clears everything this person did on the device, unless
+  // a booking is still live — then it refuses and changes nothing. The refs
+  // are checked rather than rendered state so a booking made in the same
+  // tick still counts. Timers need no special handling: with no bookings
+  // left there is nothing for them to act on.
+  const hasLiveBooking = useCallback(
+    () =>
+      liveBookingCount({
+        reservations: reservationsRef.current,
+        queueTickets: queueTicketsRef.current,
+        serviceBookings: serviceBookingsRef.current,
+      }) > 0,
+    [],
+  );
+
   const logout = useCallback(() => {
-    setState((current) => ({ ...current, user: null }));
-  }, []);
+    if (hasLiveBooking()) return false;
+    try {
+      clearUserOwnedStorage(localStorage);
+    } catch {
+      // Storage unavailable: nothing was persisted there to leak either.
+    }
+    setState((current) => {
+      const exit = accountExit.logOut(current);
+      return exit.ok ? exit.state : current;
+    });
+    return true;
+  }, [hasLiveBooking]);
+
+  // resetDemo()'s storage clearing and state, behind logout's live-booking
+  // guard. Checked before anything is removed from storage.
+  const deleteAccount = useCallback(() => {
+    if (hasLiveBooking()) return false;
+    clearAccountStorage(localStorage);
+    setState((current) => {
+      const exit = accountExit.deleteAccount(current);
+      return exit.ok ? exit.state : current;
+    });
+    return true;
+  }, [hasLiveBooking]);
 
   const resetDemo = useCallback(() => {
     clearAccountStorage(localStorage);
@@ -689,6 +737,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       updateProfile,
       setNotificationPref,
       logout,
+      deleteAccount,
       resetDemo,
       toggleFavorite,
       createReservation,
@@ -718,6 +767,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       updateProfile,
       setNotificationPref,
       logout,
+      deleteAccount,
       resetDemo,
       toggleFavorite,
       createReservation,

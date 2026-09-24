@@ -1,3 +1,4 @@
+import { isReservationLive } from "@/lib/booking-lifecycle";
 import type { Reservation, ReservationStatus } from "@/lib/types";
 
 // --- Where a booking lives right now ------------------------------------
@@ -49,9 +50,10 @@ export function calculateFinalTotal(reservation: Reservation, exitedAt: Date) {
 // two spaces booked for the same afternoon in different lots.
 
 // A booking the customer still holds. Completed and cancelled ones are
-// history and never stand in the way of a new booking.
+// history and never stand in the way of a new booking. Which statuses are
+// live is booking-lifecycle's rule; this only takes the whole record.
 export function isLiveReservation(reservation: Reservation) {
-  return reservation.status === "reserved" || reservation.status === "active";
+  return isReservationLive(reservation.status);
 }
 
 // The booking the customer already holds for one exact car park, if any.

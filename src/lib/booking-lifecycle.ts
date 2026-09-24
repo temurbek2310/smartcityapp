@@ -52,6 +52,19 @@ export function isServiceBookingLive(status: ServiceBookingStatus) {
 	return SERVICE_LIVE.has(status)
 }
 
+// How many bookings, across all three stores, the customer still holds.
+// Logout reads this: with no backend to restore them, a live booking signed
+// out of would be a parking QR, a queue ticket or a table gone for good.
+export function liveBookingCount(
+	state: Pick<BSpaceState, 'reservations' | 'queueTickets' | 'serviceBookings'>,
+) {
+	return (
+		state.reservations.filter(item => isReservationLive(item.status)).length +
+		state.queueTickets.filter(item => isQueueTicketLive(item.status)).length +
+		state.serviceBookings.filter(item => isServiceBookingLive(item.status)).length
+	)
+}
+
 // --- Queue transitions -----------------------------------------------------
 // Pure, so the store and the tests run the same rule. Each returns the ticket
 // untouched when the move does not apply, which is what lets the store skip a

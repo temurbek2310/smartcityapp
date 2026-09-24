@@ -48,3 +48,24 @@ export const USER_ACTIVITY_KEYS = [
   "serviceBookings",
   "notifications",
 ] as const satisfies readonly (keyof BSpaceState)[];
+
+// What signing out leaves behind. There is no account id to keep anything
+// under, so everything the signed-out person did — bookings and their
+// history included — goes, or the next person to sign in on this device
+// would see it. The profile goes, and notification preferences return to
+// their defaults: they were this person's choices.
+//
+// Built from initialState rather than by blanking a list, so a store added
+// later is cleared by default. Only device facts carry over: whether this
+// device has seen onboarding, and whether the running app has hydrated.
+//
+// Logout is only allowed with no live booking (liveBookingCount), so this
+// never discards a booking someone still needs.
+export function loggedOutState(current: BSpaceState): BSpaceState {
+  return {
+    ...initialState,
+    notificationPrefs: { ...initialState.notificationPrefs },
+    hydrated: current.hydrated,
+    onboardingDone: current.onboardingDone,
+  };
+}
