@@ -8,6 +8,7 @@ import { Card } from '@/components/ui/card'
 import { IconTile } from '@/components/ui/icon-tile'
 import { Meter } from '@/components/ui/meter'
 import { useApp } from '@/context/app-context'
+import { useDistanceFromUser } from '@/context/location-context'
 import { queueLoadPercent } from '@/data/queue-orgs'
 import { occupancyTone } from '@/lib/availability'
 import { cn } from '@/lib/cn'
@@ -25,6 +26,7 @@ export function QueueOrgCard({
 	onSwitch: () => void
 	onDirections: () => void
 }) {
+	const km = useDistanceFromUser()(org)
 	const { favoriteQueueOrgs, toggleQueueOrgFavorite } = useApp()
 	const load = queueLoadPercent(org)
 	const saved = favoriteQueueOrgs.includes(org.id)
@@ -51,7 +53,8 @@ export function QueueOrgCard({
 					</div>
 
 					<p className='mt-1 truncate text-[11.5px] text-ink-3'>
-						{org.address} · {formatDistance(org.distanceKm)}
+						{org.address}
+						{km !== null && ` · ${formatDistance(km)}`}
 					</p>
 
 					<p className='mt-1 flex items-center gap-2 text-[11.5px] text-ink-3'>

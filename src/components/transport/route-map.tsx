@@ -2,6 +2,7 @@
 
 import {
 	Camera,
+	CircleDot,
 	Construction,
 	LocateFixed,
 	Route as RouteIcon,
@@ -12,7 +13,6 @@ import {
 import { useMemo } from 'react'
 import { CityMap } from '@/components/map/city-map'
 import { cn } from '@/lib/cn'
-import type { Coordinate } from '@/lib/geo'
 import type { MapObject } from '@/lib/map-objects'
 import type { MapLine } from '@/lib/home-map'
 import type { RouteEndpoint } from '@/lib/route-endpoints'
@@ -74,7 +74,7 @@ const LEGEND: { label: string; tone: string }[] = [
 ]
 
 type RouteMapProps = {
-	origin: Coordinate
+	origin: RouteEndpoint
 	locating: boolean
 	locateRevision: number
 	onLocate: () => void
@@ -98,6 +98,7 @@ export function RouteMap({
 	onToggleRoute,
 	onOpenProblem,
 }: RouteMapProps) {
+	const isGpsOrigin = origin.kind === 'me' && !origin.approximate
 	const { objects, lines } = useMemo(() => {
 		const pointAt = (fraction: number) => ({
 			lat: origin.lat + (destination.lat - origin.lat) * fraction,
@@ -122,15 +123,23 @@ export function RouteMap({
 				return { id: `route-${index}`, color,
 					coordinates: [[from.lng, from.lat], [to.lng, to.lat]] }
 			}) : []
-		return { objects: [...problems, destinationPin], lines: routeLines }
-	}, [origin, destination, showRoute])
+		// The blue dot is the customer, so it is drawn for a GPS fix only. Any
+		// other start — a picked place, or the approximate city centre the
+		// demo route begins at without a fix — is a plain pin saying what it is.
+		const originPin: MapObject[] = isGpsOrigin ? [] : [{
+			...origin, kind: 'place', subtitle: 'Boshlanish', meta: origin.address,
+			tag: origin.approximate ? 'Toshkent markazi — taxminiy' : origin.title,
+			distanceKm: 0, icon: CircleDot, color: '#667085', href: '',
+		}]
+		return { objects: [...problems, ...originPin, destinationPin], lines: routeLines }
+	}, [origin, destination, showRoute, isGpsOrigin])
 
 	return (
 		<div className='overflow-hidden rounded-[2rem] bg-card shadow-card'>
 			<div className='relative'>
 				<CityMap
 					objects={objects}
-					userLocation={origin}
+					userLocation={isGpsOrigin ? origin : undefined}
 					lines={lines}
 					viewportKey={`${origin.lat},${origin.lng}:${destination.lat},${destination.lng}`}
 					locateRevision={locateRevision}

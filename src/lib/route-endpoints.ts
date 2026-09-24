@@ -3,6 +3,7 @@ import type { LucideIcon } from 'lucide-react'
 import { DEMO_DESTINATIONS } from '@/data/demo-transport'
 import { getParking, PARKINGS } from '@/data/parkings'
 import { distanceKm, type Coordinate } from '@/lib/geo'
+import { FALLBACK_CENTRE } from '@/lib/location'
 import { buildMapObjects, mapObjectKey, type MapCatalogKind } from '@/lib/map-objects'
 import { searchMatches } from '@/lib/search'
 import type { TransportMode } from '@/lib/transport'
@@ -23,6 +24,10 @@ export type RouteEndpoint = Coordinate & {
 	// is known. Both stay null rather than being guessed.
 	parkingId: string | null
 	placeId: string | null
+	// True only for 'me' without a GPS fix: the point is the city centre,
+	// kept so the in-app demo route has somewhere to start. It is never the
+	// customer's position and never leaves the app as one.
+	approximate: boolean
 }
 
 export function nearestParking(point: Coordinate) {
@@ -31,20 +36,61 @@ export function nearestParking(point: Coordinate) {
 
 // Keep the endpoint independent of its nearby parking. In particular, GPS
 // can be either end of a route, and swapping must preserve both coordinates.
-export function resolveRouteEndpoint(id: string, location: Coordinate, gpsLabel = 'Mening joylashuvim'): RouteEndpoint | null {
-	if (id === 'me') return { ...location, id, kind: 'me', title: gpsLabel, address: '', parkingId: null, placeId: null }
+// `position` is the real fix or null; without one, 'me' resolves to the city
+// centre flagged `approximate`.
+export function resolveRouteEndpoint(id: string, position: Coordinate | null, gpsLabel = 'Mening joylashuvim'): RouteEndpoint | null {
+	if (id === 'me') return { ...(position ?? FALLBACK_CENTRE), id, kind: 'me', title: gpsLabel,
+		address: '', parkingId: null, placeId: null, approximate: !position }
 	const saved = DEMO_DESTINATIONS.find(item => item.id === id)
 	if (saved) {
 		const parking = getParking(saved.parkingId ?? '')
 		const point = saved.point ?? parking
 		if (!point) return null
 		return { lat: point.lat, lng: point.lng, id, kind: 'saved', title: saved.title,
-			address: saved.address ?? '', parkingId: parking?.id ?? null, placeId: null }
+			address: saved.address ?? '', parkingId: parking?.id ?? null, placeId: null, approximate: false }
 	}
 	const object = buildMapObjects({ parkings: PARKINGS }).find(item => mapObjectKey(item) === id)
 	return object ? { lat: object.lat, lng: object.lng, id, kind: object.kind as MapCatalogKind,
 		title: object.title, address: object.address, parkingId: object.parkingId,
-		placeId: object.kind === 'place' ? object.id : null } : null
+		placeId: object.kind === 'place' ? object.id : null, approximate: false } : null
+}
+
+// --- Saved routes ---------------------------------------------------------
+// A saved route keeps its endpoint ids; its labels are worked out again each
+// time it is shown. 'me' is always «Mening joylashuvim» — what it means at the
+// moment of saving («aniqlanmoqda…», the demo centre) is not part of the route.
+export const MY_LOCATION_TITLE = 'Mening joylashuvim'
+
+// Labels older saves froze from the location state of the moment.
+const TRANSIENT_ME_LABELS = new Set([
+	'Joriy joylashuvingiz (GPS)',
+	'Joylashuv aniqlanmoqda…',
+	'Toshkent markazi (demo joylashuv)',
+	'Joylashuv aniqlanmagan',
+	'Toshkent markazi — taxminiy ko‘rinish',
+])
+
+export function routeEndpointLabel(id: string): string | null {
+	if (id === 'me') return MY_LOCATION_TITLE
+	const point = resolveRouteEndpoint(id, null)
+	return point ? [point.title, point.address].filter(Boolean).join(', ') : null
+}
+
+// What a saved route reads as in Favorites. Ids win; a record from before
+// ids were stored — or one whose place has left the catalog — keeps the text
+// it was saved with, except a frozen location status, which becomes the
+// stable «Mening joylashuvim».
+export function savedRouteLabels(route: {
+	from: string
+	to: string
+	originId?: string
+	destinationId?: string
+}) {
+	const stored = (text: string) => (TRANSIENT_ME_LABELS.has(text) ? MY_LOCATION_TITLE : text)
+	return {
+		from: (route.originId && routeEndpointLabel(route.originId)) || stored(route.from),
+		to: (route.destinationId && routeEndpointLabel(route.destinationId)) || stored(route.to),
+	}
 }
 
 export type DestinationOption = {
@@ -79,8 +125,8 @@ export function destinationOptions({
 	excludeId,
 }: {
 	query: string
-	// The live location status /transport already derives from
-	// useUserLocation, so the picker never invents a second location system.
+	// currentLocationLabel() of the shared location state, so the picker
+	// never invents a second location system.
 	currentLocationLabel: string
 	excludeId?: string
 }): DestinationOption[] {
@@ -140,20 +186,21 @@ export function supportsExternalNavigation(mode: TransportMode) {
 }
 
 // `origin` is null unless it is a real position: a picked place, or a GPS
-// fix. The stand-in centre useUserLocation() reports without one is not where
-// the customer is, so it is never sent — 2GIS, given no departure point,
-// starts the route from the device's own location instead.
+// fix. The approximate centre 'me' resolves to without one is not where the
+// customer is, so it is never sent — 2GIS, given no departure point, starts
+// the route from the device's own location instead. A destination has no
+// such fallback: with no real point there is no link at all.
 export function externalNavigationHref({
 	origin,
 	destination,
 	mode,
 }: {
 	origin: Coordinate | null
-	destination: Coordinate
+	destination: Coordinate | null
 	mode: TransportMode
 }): string | null {
 	const type = TWO_GIS_ROUTE_TYPE[mode]
-	if (!type) return null
+	if (!type || !destination) return null
 	const point = ({ lat, lng }: Coordinate) => `${lng},${lat}`
 	const from = origin ? `/from/${point(origin)}` : ''
 	return `${TWO_GIS_ROUTE_BASE}/${type}${from}/to/${point(destination)}`
@@ -165,5 +212,19 @@ export function externalNavigationOrigin(
 	origin: RouteEndpoint,
 	gpsReady: boolean,
 ): Coordinate | null {
-	return origin.kind !== 'me' || gpsReady ? origin : null
+	return isRealEndpoint(origin, gpsReady) ? origin : null
+}
+
+// «Mening joylashuvim» as the destination — after a swap, say. Only a real
+// fix may be sent as `to/`; the city centre would route the customer to a
+// place they never asked for.
+export function externalNavigationDestination(
+	destination: RouteEndpoint,
+	gpsReady: boolean,
+): Coordinate | null {
+	return isRealEndpoint(destination, gpsReady) ? destination : null
+}
+
+function isRealEndpoint(endpoint: RouteEndpoint, gpsReady: boolean) {
+	return endpoint.kind !== 'me' || (gpsReady && !endpoint.approximate)
 }

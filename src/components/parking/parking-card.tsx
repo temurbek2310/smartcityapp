@@ -30,7 +30,8 @@ export function ParkingCard({
 	selected = false,
 }: {
 	parking: Parking
-	distance: number
+	// From the customer's GPS fix; null without one, and then not shown.
+	distance: number | null
 	onOpen: () => void
 	onDirections: () => void
 	onBook: () => void
@@ -70,9 +71,11 @@ export function ParkingCard({
 								{parking.address}
 							</span>
 						</span>
-						<span className='shrink-0 text-[10px] text-ink-3'>
-							{formatDistance(distance)}
-						</span>
+						{distance !== null && (
+							<span className='shrink-0 text-[10px] text-ink-3'>
+								{formatDistance(distance)}
+							</span>
+						)}
 					</span>
 
 					<span className='mt-2 flex items-baseline justify-between gap-2'>

@@ -35,7 +35,7 @@ import {
 	type MapObject,
 	type MapCatalogKind,
 } from '@/lib/map-objects'
-import { useUserLocation } from '@/lib/use-user-location'
+import { useLocation } from '@/context/location-context'
 
 // City Goo's ninth screen. Everything the app knows how to put on a map —
 // places, parkings, queue organisations and events — on one surface, with the
@@ -53,15 +53,16 @@ export default function MapPage() {
 	const [locateRevision, setLocateRevision] = useState(0)
 	const carouselRef = useRef<HTMLDivElement>(null)
 
-	const { location, status, locate } = useUserLocation()
-	useEffect(() => {
-		locate()
-	}, [locate])
+	// Shared with every other screen. Opening the map asks for nothing: a fix
+	// is either already here or waits for «Joylashuvim».
+	const { position, status, requestLocation } = useLocation()
 
 	const { tick } = useRefreshSignal()
 	const parkings = useMemo(() => liveAvailabilityAll(PARKINGS, tick), [tick])
 
-	const origin = status === 'ready' || status === 'fallback' ? location : undefined
+	// Distances and the blue dot need a real fix; without one the catalog
+	// keeps its own order and no distance is printed.
+	const origin = position ?? undefined
 
 	const objects = useMemo(
 		() => buildMapObjects({ parkings, category, query, origin }),
@@ -166,9 +167,11 @@ export default function MapPage() {
 											<span className='truncate text-[14px] font-semibold text-ink'>
 												{object.title}
 											</span>
-											<span className='shrink-0 text-[11px] text-ink-3'>
-												{formatDistance(object.distanceKm)}
-											</span>
+											{origin && (
+												<span className='shrink-0 text-[11px] text-ink-3'>
+													{formatDistance(object.distanceKm)}
+												</span>
+											)}
 										</span>
 										<span className='mt-0.5 block truncate text-[11.5px] text-ink-3'>
 											{object.meta}
@@ -219,7 +222,7 @@ export default function MapPage() {
 						<IconButton
 							label='Joylashuvim'
 							onClick={() => {
-								locate()
+								requestLocation()
 								setLocateRevision(value => value + 1)
 							}}
 							className='pointer-events-auto'
@@ -276,7 +279,7 @@ export default function MapPage() {
 															{object.title}
 														</p>
 														<p className='text-[11px] text-ink-3'>
-															{formatDistance(object.distanceKm)}
+															{origin ? formatDistance(object.distanceKm) : object.subtitle}
 														</p>
 													</div>
 												</div>

@@ -122,6 +122,18 @@ function makeNotification(
   return { id, title, message, type, createdAt: new Date().toISOString(), read: false };
 }
 
+// Endpoint ids when both records have them; older records only have the
+// labels they were saved with.
+function isSameSavedRoute(
+  a: Omit<SavedRoute, "id" | "createdAt">,
+  b: Omit<SavedRoute, "id" | "createdAt">,
+) {
+  if (a.mode !== b.mode) return false;
+  if (a.destinationId && b.destinationId)
+    return a.destinationId === b.destinationId && (a.originId ?? "me") === (b.originId ?? "me");
+  return a.from === b.from && a.to === b.to;
+}
+
 export function AppProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<BSpaceState>(initialState);
 
@@ -495,9 +507,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // the tab two rows that replay identically.
       savedRoutes: [
         saved,
-        ...current.savedRoutes.filter(
-          (item) => !(item.from === route.from && item.to === route.to && item.mode === route.mode),
-        ),
+        ...current.savedRoutes.filter((item) => !isSameSavedRoute(item, route)),
       ],
     }));
     return saved;

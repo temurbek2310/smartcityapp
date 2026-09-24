@@ -7,6 +7,7 @@ import { ServiceBookingSheet } from '@/components/booking/service-booking-sheet'
 import { BottomSheet } from '@/components/ui/bottom-sheet'
 import { Card } from '@/components/ui/card'
 import { IconTile } from '@/components/ui/icon-tile'
+import { useDistanceFromUser } from '@/context/location-context'
 import { tableBookablePlaces } from '@/data/places'
 import { cn } from '@/lib/cn'
 import { formatDistance } from '@/lib/format'
@@ -30,6 +31,7 @@ export function RestaurantPickerSheet({
 	onSelect: (placeId: string) => void
 	onClose: () => void
 }) {
+	const fromUser = useDistanceFromUser()
 	const restaurants = tableBookablePlaces()
 
 	return (
@@ -57,7 +59,8 @@ export function RestaurantPickerSheet({
 								{place.subtitle}
 							</span>
 							<span className='mt-0.5 block truncate text-[11px] text-ink-3'>
-								{place.address} · {formatDistance(place.distanceKm)}
+								{place.address}
+								{fromUser(place) !== null && ` · ${formatDistance(fromUser(place)!)}`}
 							</span>
 						</span>
 						<span className='flex shrink-0 items-center gap-1 text-[11.5px] font-bold text-ink-2'>

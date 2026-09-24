@@ -12,7 +12,12 @@ import { buildHomeMapObjects } from '@/lib/home-map'
 import { DEFAULT_LAYERS, type MapLayerState } from '@/lib/map-layers'
 import { buildMapObjects, mapObjectKey } from '@/lib/map-objects'
 import { estimateMinutesForMode } from '@/lib/eta'
-import { externalNavigationHref, resolveRouteEndpoint } from '@/lib/route-endpoints'
+import {
+	externalNavigationDestination,
+	externalNavigationHref,
+	externalNavigationOrigin,
+	resolveRouteEndpoint,
+} from '@/lib/route-endpoints'
 
 describe('parity catalogs and map results', () => {
 	it('includes the missing catalogs and Andijon', () => {
@@ -117,12 +122,29 @@ describe('route endpoints', () => {
 		expect(point.lat).toBe(parking.lat)
 		expect(resolveRouteEndpoint('parking:missing', TASHKENT_CENTER)).toBeNull()
 	})
-	it('sends both picked endpoints and transport mode to 2GIS', () => {
-		const from = resolveRouteEndpoint('magic-city', TASHKENT_CENTER)!
-		const to = resolveRouteEndpoint('me', TASHKENT_CENTER)!
-		expect(externalNavigationHref({ origin: from, destination: to, mode: 'walk' })).toBe(
-			`https://2gis.ru/routeSearch/rsType/pedestrian/from/${from.lng},${from.lat}/to/${to.lng},${to.lat}`,
+	it('sends both picked endpoints and transport mode to 2GIS when GPS is real', () => {
+		const gps = { lat: 41.29, lng: 69.24 }
+		const from = resolveRouteEndpoint('magic-city', gps)!
+		const to = resolveRouteEndpoint('me', gps)!
+		expect(externalNavigationHref({
+			origin: externalNavigationOrigin(from, true),
+			destination: externalNavigationDestination(to, true),
+			mode: 'walk',
+		})).toBe(
+			`https://2gis.ru/routeSearch/rsType/pedestrian/from/${from.lng},${from.lat}/to/${gps.lng},${gps.lat}`,
 		)
+	})
+	it('never sends the city centre to 2GIS as «Mening joylashuvim» after a swap', () => {
+		// Swapped: Magic City → me, with no fix. 'me' falls back to the centre
+		// for the in-app demo only, flagged approximate.
+		const from = resolveRouteEndpoint('magic-city', null)!
+		const to = resolveRouteEndpoint('me', null)!
+		expect(to.approximate).toBe(true)
+		expect([to.lat, to.lng]).toEqual([TASHKENT_CENTER.lat, TASHKENT_CENTER.lng])
+		const destination = externalNavigationDestination(to, false)
+		expect(destination).toBeNull()
+		const url = externalNavigationHref({ origin: externalNavigationOrigin(from, false), destination, mode: 'walk' })
+		expect(url).toBeNull()
 	})
 })
 

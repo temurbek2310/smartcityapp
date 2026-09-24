@@ -5,6 +5,7 @@ import './globals.css'
 import { InstallAppPrompt } from '@/components/pwa/install-app-prompt'
 import { StructuredData } from '@/components/seo/structured-data'
 import { AppProvider } from '@/context/app-context'
+import { LocationProvider } from '@/context/location-context'
 
 // City Goo's typeface. next/font self-hosts the files, so there is no
 // request to Google at runtime and nothing for the service worker to miss.
@@ -168,9 +169,11 @@ export default function RootLayout({
 			<body>
 				<StructuredData />
 				<AppProvider>
-					{children}
+					<LocationProvider>
+						{children}
 
-					<InstallAppPrompt />
+						<InstallAppPrompt />
+					</LocationProvider>
 				</AppProvider>
 			</body>
 		</html>

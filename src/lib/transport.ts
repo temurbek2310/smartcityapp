@@ -1,8 +1,6 @@
 import type { LucideIcon } from 'lucide-react'
 import { Bike, Car, Footprints, TrainFront } from 'lucide-react'
 
-import type { LocationStatus } from '@/lib/use-user-location'
-
 // Shared between the Home mode strip and the /transport page so both read
 // the same four modes instead of keeping two copies in sync by hand.
 export type TransportMode = 'car' | 'metro' | 'scooter' | 'walk'
@@ -29,13 +27,4 @@ export const DEFAULT_TRANSPORT_MODE: TransportMode = 'car'
 
 export function isTransportMode(value: string | null): value is TransportMode {
 	return value === 'car' || value === 'metro' || value === 'scooter' || value === 'walk'
-}
-
-// What both screens print as the start of a route. Every branch that is not a
-// real fix names itself as one: nothing may quietly pass the city centre off
-// as the customer's own position.
-export function originLabel(status: LocationStatus) {
-	if (status === 'ready') return 'Joriy joylashuvingiz (GPS)'
-	if (status === 'loading') return 'Joylashuv aniqlanmoqda…'
-	return 'Toshkent markazi (demo joylashuv)'
 }

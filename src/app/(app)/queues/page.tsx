@@ -29,6 +29,7 @@ import { SearchField } from '@/components/ui/search-field'
 import { SectionHeader } from '@/components/ui/section-header'
 import { Toast } from '@/components/ui/toast'
 import { useApp } from '@/context/app-context'
+import { useDistanceFromUser } from '@/context/location-context'
 import { getParking } from '@/data/parkings'
 import { QUEUE_HOURS, QUEUE_ORGS, getQueueOrg } from '@/data/queue-orgs'
 import { useDirections } from '@/hooks/use-directions'
@@ -70,6 +71,7 @@ function QueuesView() {
 	const toast = useToast<string>()
 	const directions = useDirections()
 	const { queueTickets, notificationPrefs, setNotificationPref } = useApp()
+	const fromUser = useDistanceFromUser()
 
 	// /map's "Ochish" lands here on a specific organisation.
 	const requestedOrg = useSearchParams().get('org')
@@ -371,7 +373,8 @@ function QueuesView() {
 										{item.title}
 									</span>
 									<span className='mt-0.5 block text-[11px] text-ink-3'>
-										{formatDistance(item.distanceKm)} · kutish ~
+										{fromUser(item) !== null && `${formatDistance(fromUser(item)!)} · `}
+										kutish ~
 										{item.waitMinutes} daq
 									</span>
 								</span>

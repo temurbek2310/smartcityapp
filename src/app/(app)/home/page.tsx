@@ -63,7 +63,6 @@ import {
 import {
 	findAddresses,
 	highlightParts,
-	locationMessage,
 	searchMatches,
 } from '@/lib/search'
 import { buildHomeMapObjects, HOME_BIKE_LINES } from '@/lib/home-map'
@@ -71,8 +70,9 @@ import { useRefreshSignal } from '@/components/ui/pull-to-refresh'
 import { liveAvailabilityAll } from '@/lib/live-availability'
 import { MAP_LAYERS, activeLayerCount } from '@/lib/map-layers'
 import { destinationIdFrom, type DestinationSource } from '@/lib/navigation'
-import { originLabel } from '@/lib/transport'
-import { useUserLocation } from '@/lib/use-user-location'
+import { LocationNotice } from '@/components/location/location-notice'
+import { useLocation } from '@/context/location-context'
+import { currentLocationLabel, distanceFromUser, FALLBACK_CENTRE } from '@/lib/location'
 
 type SortMode = 'distance' | 'rating' | 'free'
 type SheetState =
@@ -115,7 +115,10 @@ function HomeView() {
 		toggleEventFavorite,
 		unreadCount,
 	} = useApp()
-	const { location, status, error: locationError, locate } = useUserLocation()
+	// The session's one location state. Home never requests on open; the
+	// «Joylashuvim» button and the notice under the map do, on a tap.
+	const location = useLocation()
+	const { position, status, requestLocation } = location
 
 	const [selectedCity, setSelectedCity] = useState('Toshkent')
 	const [selectedParkingId, setSelectedParkingId] = useState<string | null>(
@@ -184,7 +187,13 @@ function HomeView() {
 	const parkingResults = useMemo(() => {
 		let list = liveParkings.filter(parking => parking.city === selectedCity)
 			.filter(parking => !favoriteOnly || favorites.includes(parking.id))
-			.map(parking => ({ parking, distance: distanceKm(location, parking) }))
+			// Ordered from the city centre until there is a fix, but the
+			// distance itself is only shown when it is from the customer.
+			.map(parking => ({
+				parking,
+				rank: distanceKm(position ?? FALLBACK_CENTRE, parking),
+				distance: distanceFromUser(position, parking),
+			}))
 
 		if (sortMode === 'free') {
 			list = [...list].sort(
@@ -195,11 +204,11 @@ function HomeView() {
 				(a, b) => b.parking.rating - a.parking.rating,
 			)
 		} else {
-			list = [...list].sort((a, b) => a.distance - b.distance)
+			list = [...list].sort((a, b) => a.rank - b.rank)
 		}
 
 		return list
-	}, [favorites, favoriteOnly, location, selectedCity, sortMode, liveParkings])
+	}, [favorites, favoriteOnly, position, selectedCity, sortMode, liveParkings])
 
 	const mapParkings = useMemo(
 		() => parkingResults.map(({ parking }) => parking),
@@ -209,9 +218,9 @@ function HomeView() {
 	// What the map is allowed to draw, per City Goo's layer switches. Places
 	// always show (they are the category the user picked); the rest are opt-in.
 	const mapObjects = useMemo(() => buildHomeMapObjects({
-		parkings: mapParkings, origin: location, layers, city: selectedCity,
+		parkings: mapParkings, origin: position ?? FALLBACK_CENTRE, layers, city: selectedCity,
 		category: activeCategory, favoritePlaceIds: favoriteOnly ? favoritePlaceIds : undefined,
-	}), [mapParkings, location, layers, selectedCity, activeCategory, favoriteOnly, favoritePlaceIds])
+	}), [mapParkings, position, layers, selectedCity, activeCategory, favoriteOnly, favoritePlaceIds])
 
 	const selectedParking = useMemo(
 		() => layers.parking ? mapParkings.find(parking => parking.id === selectedParkingId) : undefined,
@@ -220,7 +229,11 @@ function HomeView() {
 
 	// How the destination picker names the customer's own position. The same
 	// wording /transport uses, and never a claim of GPS there is no fix for.
-	const originValue = originLabel(status)
+	const originValue = currentLocationLabel(location)
+
+	// A place's catalog `distanceKm` is a fixed demo number, measured from no
+	// one. What the customer sees is the distance from their own fix, or none.
+	const placeKm = (place: Place) => distanceFromUser(position, place)
 
 	const visiblePlaces = useMemo(() => {
 		let list = PLACES.filter(
@@ -232,9 +245,13 @@ function HomeView() {
 			list = [...list].sort((a, b) => b.rating - a.rating)
 		else if (sortMode === 'free')
 			list = [...list].sort((a, b) => (b.free ?? 0) - (a.free ?? 0))
-		else list = [...list].sort((a, b) => a.distanceKm - b.distanceKm)
+		else {
+			// From the fix when there is one; the catalog's own order otherwise.
+			const rank = (place: Place) => distanceFromUser(position, place) ?? place.distanceKm
+			list = [...list].sort((a, b) => rank(a) - rank(b))
+		}
 		return list
-	}, [activeCategory, favoriteOnly, favoritePlaceIds, sortMode])
+	}, [activeCategory, favoriteOnly, favoritePlaceIds, sortMode, position])
 
 	const activeReservation = reservations.find(
 		reservation => reservation.status === 'active',
@@ -463,7 +480,8 @@ function HomeView() {
 	function refreshHome() {
 		setUpdatedLabel('hozirgina')
 		showToast('Ma’lumotlar yangilandi')
-		locate()
+		// A refresh renews an allowed fix; it never raises a permission prompt.
+		if (location.permission === 'granted') requestLocation()
 	}
 
 	const searchLower = searchQuery.trim().toLowerCase()
@@ -517,13 +535,14 @@ function HomeView() {
 		searchEvents.length +
 		searchAddresses.length
 
+	// «Yaqin» is a claim about the customer's position, so it needs a fix.
 	const nearbyTitle =
 		activeCategory === 'parking'
-			? 'Yaqin parkinglar'
+			? position ? 'Yaqin parkinglar' : 'Parkinglar'
 			: activeCategory === 'all'
-				? 'Yaqin joylar'
+				? position ? 'Yaqin joylar' : 'Joylar'
 				: (CATEGORIES.find(category => category.id === activeCategory)?.label ??
-					'Yaqin joylar')
+					(position ? 'Yaqin joylar' : 'Joylar'))
 
 	const nearbyCount =
 		activeCategory === 'parking' ? parkingResults.length : visiblePlaces.length
@@ -638,9 +657,7 @@ function HomeView() {
 						lines={layers.bike && selectedCity === 'Toshkent' ? HOME_BIKE_LINES : undefined}
 						viewportKey={`${selectedCity}:${activeCategory}:${favoriteOnly}`}
 						locateRevision={locateRevision}
-						userLocation={
-							status === 'ready' || status === 'fallback' ? location : undefined
-						}
+						userLocation={position ?? undefined}
 						className='h-61.25'
 					/>
 
@@ -648,9 +665,8 @@ function HomeView() {
 						<button
 							type='button'
 							onClick={() => {
-								locate()
+								requestLocation()
 								setLocateRevision(value => value + 1)
-								showToast('Joylashuvingiz yangilanmoqda')
 							}}
 							className='citygo-pressable grid size-9 place-items-center rounded-xl bg-white text-brand shadow-card'
 							aria-label='Joylashuvim'
@@ -716,11 +732,7 @@ function HomeView() {
 				</div>
 			</section>
 
-			{status === 'fallback' && (
-				<p className='rounded-2xl bg-warn-bg p-3 text-xs leading-5 text-warn'>
-					{locationMessage(locationError)}
-				</p>
-			)}
+			<LocationNotice />
 
 			{/* Existing B SPACE active-session capability preserved */}
 			{activeReservation && (
@@ -850,7 +862,7 @@ function HomeView() {
 											</button>
 											<div className='mt-3 flex items-center justify-between gap-2 text-[10px] font-bold'>
 												<span className='text-ink-3'>
-													{distance.toFixed(1)} km
+													{distance === null ? parking.district : `${distance.toFixed(1)} km`}
 												</span>
 												<span
 													className={
@@ -965,9 +977,11 @@ function HomeView() {
 											{place.subtitle}
 										</p>
 										<div className='mt-3 flex items-center gap-3 text-[10px] font-bold'>
-											<span className='text-ink-3'>
-												{place.distanceKm.toFixed(1)} km
-											</span>
+											{placeKm(place) !== null && (
+												<span className='text-ink-3'>
+													{placeKm(place)!.toFixed(1)} km
+												</span>
+											)}
 											{place.free !== undefined && (
 												<span className='text-ok'>
 													{place.free} joy
@@ -1815,7 +1829,7 @@ function HomeView() {
 												{parking.name}
 											</p>
 											<p className='mt-1 text-[11px] text-ink-3'>
-												{distance.toFixed(1)} km ·{' '}
+												{distance !== null && `${distance.toFixed(1)} km · `}
 												{formatUZS(parking.pricePerHour)}/soat
 											</p>
 											<p
@@ -1854,7 +1868,8 @@ function HomeView() {
 												{place.title}
 											</span>
 											<span className='mt-1 block truncate text-[11px] text-ink-3'>
-												{place.subtitle} · {place.distanceKm.toFixed(1)} km
+												{place.subtitle}
+												{placeKm(place) !== null && ` · ${placeKm(place)!.toFixed(1)} km`}
 											</span>
 										</span>
 										<ChevronRight className='size-4 text-ink-3' />
@@ -1925,10 +1940,10 @@ function HomeView() {
 								<div className='rounded-2xl bg-white p-3 text-center shadow-card'>
 									<Navigation className='mx-auto size-4 text-brand' />
 									<p className='mt-2 text-lg font-black text-ink'>
-										{Math.max(3, Math.round(place.distanceKm * 5))} daq
+										{placeKm(place) === null ? '—' : `${Math.max(3, Math.round(placeKm(place)! * 5))} daq`}
 									</p>
 									<p className='text-[10px] text-ink-3'>
-										{place.distanceKm.toFixed(1)} km
+										{placeKm(place) === null ? 'Joylashuv aniqlanmagan' : `${placeKm(place)!.toFixed(1)} km`}
 									</p>
 								</div>
 								<div className='rounded-2xl bg-white p-3 text-center shadow-card'>

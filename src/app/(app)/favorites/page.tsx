@@ -25,6 +25,7 @@ import {
 import { ParkingBookingSheet } from '@/components/parking/parking-booking-sheet'
 import { Toast } from '@/components/ui/toast'
 import { useApp } from '@/context/app-context'
+import { useDistanceFromUser } from '@/context/location-context'
 import { EmptyState } from '@/components/ui/empty-state'
 import { PARKINGS } from '@/data/parkings'
 import { PLACES } from '@/data/places'
@@ -35,6 +36,7 @@ import { useToast } from '@/hooks/use-toast'
 import { parkingAvailability } from '@/lib/availability'
 import { formatDistance, formatUZS } from '@/lib/format'
 import { savedRouteHref } from '@/lib/navigation'
+import { savedRouteLabels } from '@/lib/route-endpoints'
 import { useDirections } from '@/hooks/use-directions'
 import type { Place } from '@/lib/types'
 
@@ -373,7 +375,7 @@ export default function FavoritesPage() {
 													{route.title}
 												</h2>
 												<p className='mt-1 truncate text-[11px] text-ink-3'>
-													{route.from} → {route.to}
+													{(({ from, to }) => `${from} → ${to}`)(savedRouteLabels(route))}
 												</p>
 											</div>
 											<button
@@ -578,6 +580,7 @@ function PlaceFavoriteCard({
 	onRemove: () => void
 	onDirections: () => void
 }) {
+	const km = useDistanceFromUser()(place)
 	return (
 		<article className='overflow-hidden rounded-[20px] bg-white shadow-[0_4px_14px_rgba(16,24,40,0.07)] ring-1 ring-line'>
 			<Link
@@ -600,9 +603,11 @@ function PlaceFavoriteCard({
 								{place.subtitle}
 							</p>
 						</div>
-						<span className='shrink-0 text-[10px] text-ink-3'>
-							{formatDistance(place.distanceKm)}
-						</span>
+						{km !== null && (
+							<span className='shrink-0 text-[10px] text-ink-3'>
+								{formatDistance(km)}
+							</span>
+						)}
 					</div>
 
 					<div className='mt-2.5 flex items-center gap-2'>

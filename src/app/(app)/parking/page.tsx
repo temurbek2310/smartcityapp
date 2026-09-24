@@ -11,7 +11,7 @@ import {
 } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 
 import { ParkingMap } from '@/components/map/parking-map'
 import { SelectedParkingCard } from '@/components/map/selected-parking-card'
@@ -45,14 +45,17 @@ import {
 import { cn } from '@/lib/cn'
 import { liveAvailabilityAll } from '@/lib/live-availability'
 import { useRefreshSignal } from '@/components/ui/pull-to-refresh'
-import { useUserLocation } from '@/lib/use-user-location'
+import { LocationNotice } from '@/components/location/location-notice'
+import { useLocation } from '@/context/location-context'
+import { FALLBACK_CENTRE } from '@/lib/location'
 
 export default function ParkingListPage() {
 	const router = useRouter()
 	const toast = useToast<string>()
 	const directions = useDirections()
 	const { reservations } = useApp()
-	const { location, status, locate } = useUserLocation()
+	// Shared with every screen; opening this one requests nothing.
+	const { position, status, requestLocation } = useLocation()
 
 	const [sortOpen, setSortOpen] = useState(false)
 	const [filtersOpen, setFiltersOpen] = useState(false)
@@ -61,16 +64,14 @@ export default function ParkingListPage() {
 	const [selectedId, setSelectedId] = useState<string | null>(null)
 	const [locateRevision, setLocateRevision] = useState(0)
 
-	useEffect(() => {
-		locate()
-	}, [locate])
-
 	// Pull-to-refresh moves these numbers. The jitter is a pure function of
 	// (id, tick), so a re-render never changes them — only an actual pull does.
 	const { tick } = useRefreshSignal()
 	const parkings = useMemo(() => liveAvailabilityAll(PARKINGS, tick), [tick])
 
-	const filters = useParkingFilters(parkings, location)
+	// Without a fix the list is still ordered, from the city centre, but no
+	// distance is printed and nothing claims to be near the customer.
+	const filters = useParkingFilters(parkings, position ?? FALLBACK_CENTRE)
 	const { results } = filters
 
 	// The one booking worth pinning: whichever is live, or next to start.
@@ -153,7 +154,7 @@ export default function ParkingListPage() {
 					<div className='relative overflow-hidden rounded-card-lg shadow-card'>
 						<ParkingMap
 							parkings={results.map(item => item.parking)}
-							userLocation={location}
+							userLocation={position ?? undefined}
 							locateRevision={locateRevision}
 							selectedParkingId={selectedParking?.id}
 							onSelect={selectFromMap}
@@ -166,7 +167,7 @@ export default function ParkingListPage() {
 								label='Joylashuvimni topish'
 								onClick={() => {
 									setLocateRevision(current => current + 1)
-									locate()
+									requestLocation()
 								}}
 								className='pointer-events-auto'
 							>
@@ -221,6 +222,8 @@ export default function ParkingListPage() {
 						)}
 					</div>
 				</div>
+
+				<LocationNotice className='mx-4' />
 
 				<HorizontalRail className='gap-2 px-4'>
 					{PARKING_CHIPS.map(chip => (
@@ -283,7 +286,7 @@ export default function ParkingListPage() {
 
 				<div className='px-4'>
 					<SectionHeader
-						title='Yaqin parkinglar'
+						title={position ? 'Yaqin parkinglar' : 'Parkinglar'}
 						count={results.length}
 						action={
 							<span className='flex items-center gap-1'>
@@ -303,7 +306,7 @@ export default function ParkingListPage() {
 							<div key={parking.id} id={`parking-row-${parking.id}`} className='scroll-mt-4'>
 								<ParkingCard
 									parking={parking}
-									distance={km}
+									distance={position ? km : null}
 									selected={parking.id === selectedParking?.id}
 									onOpen={() => router.push(`/parking/${parking.id}`)}
 									onDirections={() =>

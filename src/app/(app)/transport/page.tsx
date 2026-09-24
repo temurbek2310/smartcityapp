@@ -10,6 +10,7 @@ import {
 	Construction,
 	LocateFixed,
 	MapPin,
+	MapPinOff,
 	Navigation,
 	Sun,
 } from 'lucide-react'
@@ -64,17 +65,19 @@ import {
 import { distanceKm } from '@/lib/geo'
 import {
 	DEFAULT_TRANSPORT_MODE,
-	originLabel,
 	TRANSPORT_MODES,
 	type TransportMode,
 } from '@/lib/transport'
 import { readRouteParams, routeHref } from '@/lib/navigation'
-import { useUserLocation } from '@/lib/use-user-location'
+import { useLocation } from '@/context/location-context'
+import { APPROXIMATE_ORIGIN_LABEL, currentLocationLabel } from '@/lib/location'
 import {
+	externalNavigationDestination,
 	externalNavigationHref,
 	externalNavigationOrigin,
 	nearestParking,
 	resolveRouteEndpoint,
+	routeEndpointLabel,
 } from '@/lib/route-endpoints'
 
 const MODE_COST_LABEL: Record<TransportMode, string> = {
@@ -153,22 +156,27 @@ function TransportView() {
 	const [openBus, setOpenBus] = useState<DemoBus | null>(null)
 	const [navigating, setNavigating] = useState(false)
 
-	const { location, status, locate } = useUserLocation()
-	useEffect(() => {
-		locate()
-	}, [locate])
+	// The session's shared location. Opening this screen requests nothing: a
+	// fix is either already here or waits for the customer to ask for one.
+	const location = useLocation()
+	const { position, status, requestLocation } = location
+	const gpsReady = position !== null
 
 	// An origin that cannot be resolved — a stale ?from= naming a place that
 	// has since left the catalog — falls back to the live position, which is
 	// this screen's default anyway and is never presented as anything else.
 	const originPoint = useMemo(() =>
-		resolveRouteEndpoint(selectedOriginId, location) ??
-		resolveRouteEndpoint('me', location)!, [selectedOriginId, location])
+		resolveRouteEndpoint(selectedOriginId, position) ??
+		resolveRouteEndpoint('me', position)!, [selectedOriginId, position])
 	// No substitute here. A destination that will not resolve leaves the
 	// screen in its "choose somewhere" state rather than routing elsewhere.
 	const destinationPoint = useMemo(() => selectedDestinationId
-		? resolveRouteEndpoint(selectedDestinationId, location) : null,
-		[selectedDestinationId, location])
+		? resolveRouteEndpoint(selectedDestinationId, position) : null,
+		[selectedDestinationId, position])
+	// «Mening joylashuvim» as the destination with no fix: there is nowhere
+	// real to route to, so the screen asks for location instead of routing to
+	// the city centre.
+	const destinationNeedsFix = destinationPoint?.kind === 'me' && destinationPoint.approximate
 	// The lot this route ends at or beside — used for the destination's city,
 	// which is not a claim about parking. What the screen actually offers the customer is `suggestion`.
 	const arrivalParking = useMemo(() => destinationPoint
@@ -235,9 +243,11 @@ function TransportView() {
 		(id: string) => {
 			setSelectedDestinationId(id)
 			setDestinationSheetOpen(false)
+			// Choosing «Mening joylashuvim» is asking for location.
+			if (id === 'me' && !gpsReady) requestLocation()
 			announceRecalc()
 		},
-		[announceRecalc],
+		[announceRecalc, gpsReady, requestLocation],
 	)
 
 	const changeMode = useCallback(
@@ -250,17 +260,18 @@ function TransportView() {
 
 	const refreshOrigin = useCallback(() => {
 		setLocateRevision(current => current + 1)
-		locate()
+		requestLocation()
 		announceRecalc()
-	}, [locate, announceRecalc])
+	}, [requestLocation, announceRecalc])
 
 	const pickOrigin = useCallback(
 		(id: string) => {
 			setSelectedOriginId(id)
 			setOriginSheetOpen(false)
+			if (id === 'me' && !gpsReady) requestLocation()
 			announceRecalc()
 		},
-		[announceRecalc],
+		[announceRecalc, gpsReady, requestLocation],
 	)
 
 	// City Goo's tSwap. 'me' is how the address book spells the GPS fix, so a
@@ -273,12 +284,17 @@ function TransportView() {
 		announceRecalc()
 	}, [originPoint.id, destinationPoint, announceRecalc])
 
-	// Shared with Home's transport strip so both screens name the start of a
-	// route, and each of its fallbacks, with exactly the same words.
-	const gpsLabel = originLabel(status)
+	// Shared with Home's destination picker so both screens name the
+	// customer's own position, and each of its fallbacks, with the same words.
+	const gpsLabel = currentLocationLabel(location)
 
-	const originStatusLabel = originPoint.id === 'me' ? gpsLabel
-		: [originPoint.title, originPoint.address].filter(Boolean).join(', ')
+	// Without a fix the demo route still starts somewhere — the city centre —
+	// and says so, rather than calling it the customer's position.
+	const originStatusLabel = originPoint.id !== 'me'
+		? [originPoint.title, originPoint.address].filter(Boolean).join(', ')
+		: originPoint.approximate && status !== 'loading'
+			? APPROXIMATE_ORIGIN_LABEL
+			: gpsLabel
 
 	// The picked place itself, exactly as the picker named it.
 	const destinationValue = !destinationPoint ? '' :
@@ -329,7 +345,7 @@ function TransportView() {
 	// Nowhere to go yet — either nothing was passed in, or the id that was
 	// names something the catalogs no longer contain. Both are states the
 	// screen shows and asks about; neither is a reason to route elsewhere.
-	if (!destinationPoint || !arrivalParking) {
+	if (!destinationPoint || !arrivalParking || destinationNeedsFix) {
 		return (
 			<div className='-mx-1 space-y-5 pb-4'>
 				<TransportHeader
@@ -344,6 +360,36 @@ function TransportView() {
 
 				<TransportModeSelector selected={mode} onSelect={setMode} />
 
+				{destinationNeedsFix ? (
+					<Card className='text-center'>
+						<span className='mx-auto grid size-12 place-items-center rounded-2xl bg-warn-bg text-warn'>
+							<MapPinOff className='size-6' />
+						</span>
+						<p className='mt-3 text-[15px] font-extrabold text-ink'>
+							{status === 'loading' ? 'Joylashuv aniqlanmoqda…' : 'Joylashuvingiz aniqlanmagan'}
+						</p>
+						<p className='mt-1.5 text-[12.5px] leading-5 text-ink-3'>
+							Marshrutni joylashuvingizgacha qurish uchun joylashuvga ruxsat
+							bering yoki boshqa manzilni tanlang.
+						</p>
+						<Button
+							variant='primary'
+							block
+							className='mt-4'
+							disabled={status === 'loading'}
+							onClick={refreshOrigin}
+						>
+							<LocateFixed className='size-4' /> Joylashuvni aniqlash
+						</Button>
+						<Button
+							block
+							className='mt-2'
+							onClick={() => setDestinationSheetOpen(true)}
+						>
+							<MapPin className='size-4' /> Boshqa manzil
+						</Button>
+					</Card>
+				) : (
 				<Card className='text-center'>
 					<span className='mx-auto grid size-12 place-items-center rounded-2xl bg-brand-50 text-brand'>
 						<MapPin className='size-6' />
@@ -365,6 +411,7 @@ function TransportView() {
 						<MapPin className='size-4' /> Manzilni tanlash
 					</Button>
 				</Card>
+				)}
 
 				<RouteFiltersSheet
 					open={filtersOpen}
@@ -454,8 +501,8 @@ function TransportView() {
 
 	// null for scooter, which 2GIS has no route type for.
 	const navigateHref = externalNavigationHref({
-		origin: externalNavigationOrigin(originPoint, status === 'ready'),
-		destination: destinationPoint,
+		origin: externalNavigationOrigin(originPoint, gpsReady),
+		destination: externalNavigationDestination(destinationPoint, gpsReady),
 		mode,
 	})
 
@@ -525,7 +572,7 @@ function TransportView() {
 				locateRevision={locateRevision}
 				onLocate={() => {
 					setLocateRevision(current => current + 1)
-					locate()
+					requestLocation()
 				}}
 				destination={destinationPoint}
 				showRoute={showRoute}
@@ -555,10 +602,12 @@ function TransportView() {
 			<button
 				type='button'
 				onClick={() => {
+					// Stable identity, not what the location looked like just
+					// now: Favorites re-derives the labels from these ids.
 					saveRoute({
 						title: destinationPoint.title,
-						from: originStatusLabel,
-						to: destinationValue,
+						from: routeEndpointLabel(originPoint.id) ?? originStatusLabel,
+						to: routeEndpointLabel(destinationPoint.id) ?? destinationValue,
 						mode,
 						// The place itself, not the lot beside it: replaying the route
 						// from Favorites has to end where this one does.
@@ -604,7 +653,10 @@ function TransportView() {
 				weatherIcon={WeatherIcon}
 				weatherLabel={`+${cityMeta.temp}° ${cityMeta.sky}`}
 				weatherDetail={`${arrivalParking.city} uchun B SPACE’ning statik ob-havo ma’lumoti.`}
-				onRefresh={() => locate()}
+				// Renews an allowed fix; never raises a permission prompt.
+				onRefresh={() => {
+					if (location.permission === 'granted') requestLocation()
+				}}
 				refreshing={status === 'loading'}
 			/>
 

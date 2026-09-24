@@ -16,6 +16,8 @@ type ParkingMapProps = {
 	parkings: Parking[]
 	onSelect?: (parkingId: string) => void
 	selectedParkingId?: string | null
+	// A real GPS fix, or nothing. The blue dot and every follow-the-user
+	// recentre hang off this, so the city-centre fallback must never be passed.
 	userLocation?: Coordinate
 	locateRevision?: number
 	routeTo?: Coordinate

@@ -1,25 +1,3 @@
-import type { LocationError } from '@/lib/use-user-location'
-
-// Why the distance shown might not be measured from where the user actually
-// is. Every branch names the fallback out loud, which is the whole point:
-// nothing may quietly present the city centre as the customer's position.
-export function locationMessage(error: LocationError) {
-	switch (error) {
-		case 'denied':
-			return 'Joylashuvga ruxsat berilmadi. Masofa Toshkent markazidan hisoblanmoqda.'
-		case 'timeout':
-			return 'GPS javob bermadi. Masofa Toshkent markazidan hisoblanmoqda.'
-		case 'unavailable':
-			return 'Qurilma joylashuvni aniqlay olmadi. Masofa Toshkent markazidan hisoblanmoqda.'
-		case 'outside-uzbekistan':
-			return 'Joylashuv O‘zbekiston hududidan tashqarida. Masofa Toshkent markazidan hisoblanmoqda.'
-		case 'unsupported':
-			return 'Bu brauzer geolokatsiyani qo‘llamaydi. Masofa Toshkent markazidan hisoblanmoqda.'
-		default:
-			return 'GPS hozir mavjud emas. Masofa Toshkent markazidan hisoblanmoqda.'
-	}
-}
-
 // Loose contains-match used by Home's search overlay: whole-string first,
 // then any token over two characters, so "plov center" still finds "Plov
 // Center" when only one word is typed.

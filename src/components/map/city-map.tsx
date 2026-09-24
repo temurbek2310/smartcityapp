@@ -48,6 +48,8 @@ export function CityMap({
 	objects: MapObject[]
 	selectedKey?: string | null
 	onSelect?: (object: MapObject) => void
+	// A real GPS fix, or nothing. The blue dot and every follow-the-user
+	// recentre hang off this, so the city-centre fallback must never be passed.
 	userLocation?: Coordinate
 	handleRef?: Ref<CityMapHandle>
 	lines?: MapLine[]
