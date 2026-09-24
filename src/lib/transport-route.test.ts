@@ -27,8 +27,8 @@ import {
 } from '@/lib/transport-route'
 import type { TransportMode } from '@/lib/transport'
 
-// Real routing on /transport: the car (Phase 1) and walking (Phase 2) from
-// 2GIS, metro and scooter estimated. Every fetch here is a mock — nothing reaches /api/directions,
+// Real routing on /transport: the car (Phase 1), walking (Phase 2) and the
+// scooter (Phase 3) from 2GIS, metro estimated. Every fetch here is a mock — nothing reaches /api/directions,
 // let alone 2GIS.
 
 const ORIGIN: RoutableEndpoint = { lat: 41.31108, lng: 69.27968, kind: 'saved', approximate: false }
@@ -77,7 +77,7 @@ describe('which modes request a real route', () => {
 		})
 	})
 
-	it.each(['metro', 'scooter'] as const)('never requests %s', mode => {
+	it.each(['metro'] as const)('never requests %s', mode => {
 		expect(transportRouteRequest({ mode, origin: ORIGIN, destination: DESTINATION })).toBeNull()
 	})
 
@@ -107,12 +107,12 @@ describe('which modes request a real route', () => {
 })
 
 describe('request count against a mocked /api/directions', () => {
-	it('one route identity is one request; metro and scooter are none; retry is exactly one more', async () => {
+	it('one route identity is one request; metro is none; retry is exactly one more', async () => {
 		const fetchImpl = vi.fn<typeof fetch>(async () => json(REAL))
 		const loader = createRouteLoader({ fetch: fetchImpl })
 
-		// Metro and scooter produce no request at all.
-		for (const mode of ['metro', 'scooter'] as const) {
+		// Metro produces no request at all.
+		for (const mode of ['metro'] as const) {
 			expect(transportRouteRequest({ mode, origin: ORIGIN, destination: DESTINATION })).toBeNull()
 		}
 		expect(fetchImpl).not.toHaveBeenCalled()
@@ -293,7 +293,7 @@ describe('a car route that failed', () => {
 })
 
 describe('estimated modes', () => {
-	it.each(['metro', 'scooter'] as const)('%s keeps the estimate and the demo line', mode => {
+	it.each(['metro'] as const)('%s keeps the estimate and the demo line', mode => {
 		const active = activeTransportRoute({
 			mode,
 			estimate: estimateFor(mode),

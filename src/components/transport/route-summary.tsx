@@ -19,9 +19,9 @@ type RouteSummaryProps = {
 	distanceKm: number | null
 	costUZS: number | null
 	costLabel: string
-	// Where time and distance come from: 2GIS for a real car or walking
-	// route, the haversine estimate otherwise. The cost is B SPACE's own
-	// estimate either way — fed with the 2GIS road distance when there is one.
+	// Where time and distance come from: 2GIS for a real car, walking or
+	// scooter route, the haversine estimate otherwise. The cost is B SPACE's
+	// own estimate either way — fed with the 2GIS figures when there are some.
 	// null while a real route is still pending: nothing above is an estimate
 	// then, and the footer does not say it is.
 	source: '2gis' | 'estimate' | null
@@ -169,6 +169,9 @@ export function RouteSummary({
 					? [
 							'Vaqt va masofa — 2GIS marshruti.',
 							mode === 'car' && 'Yoqilg‘i narxi shu masofaga asoslangan B SPACE taxminiy hisobi.',
+							// Unlock + per-minute from lib/eta.ts: not a fare 2GIS or
+							// any operator quoted.
+							mode === 'scooter' && 'Ijara narxi shu vaqtga asoslangan B SPACE taxminiy hisobi, operator tarifi emas.',
 							facts.length > 0 && 'Yo‘l holati bo‘yicha qatorlar — namunaviy ma’lumot.',
 						].filter(Boolean).join(' ')
 					: 'Yo‘l holati bo‘yicha qatorlar — namunaviy ma’lumot. Narx va vaqt real masofaga asoslangan taxminiy hisob.'}

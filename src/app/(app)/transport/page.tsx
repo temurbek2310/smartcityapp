@@ -217,12 +217,12 @@ function TransportView({ onUrlSync }: { onUrlSync: (query: string) => void }) {
 		? destinationParkingFor({ destination: destinationPoint, mode, reservations })
 		: null, [destinationPoint, mode, reservations])
 
-	// The real route — car or walking, the selected one only, and only
-	// between two real points: 'me' without a GPS fix is the approximate city
-	// centre and is never sent. useRoute keys on the request's identity (mode
-	// + rounded ends), so a re-render, a sheet opening or a toast is not a new
-	// request; a changed end, switching to car or walk, or retry() is. Metro
-	// and scooter pass null and stay idle — nothing is fetched to fill a pill.
+	// The real route — car, walking or scooter, the selected one only, and
+	// only between two real points: 'me' without a GPS fix is the approximate
+	// city centre and is never sent. useRoute keys on the request's identity
+	// (mode + rounded ends), so a re-render, a sheet opening or a toast is not
+	// a new request; a changed end, switching to a routed mode, or retry() is.
+	// Metro passes null and stays idle — nothing is fetched to fill a pill.
 	const routeRequest = transportRouteRequest({
 		mode,
 		origin: originPoint,
@@ -478,10 +478,10 @@ function TransportView({ onUrlSync }: { onUrlSync: (query: string) => void }) {
 		)
 	}
 
-	// The straight-line estimate (lib/eta.ts). Still what metro and scooter
-	// show, what the unselected pills show, and what the demo sections are
-	// scaled from — never a car or walking route's distance or time: those
-	// are 2GIS's or nothing.
+	// The straight-line estimate (lib/eta.ts). Still what metro shows, what
+	// the unselected pills show, and what the demo sections are scaled from —
+	// never a car, walking or scooter route's distance or time: those are
+	// 2GIS's or nothing.
 	const distanceValue = distanceKm(originPoint, destinationPoint)
 	const estimatedMinutes = estimateMinutesForMode(distanceValue, mode)
 	const modesOnly = TRANSPORT_MODES.map(item => item.id)
@@ -490,9 +490,9 @@ function TransportView({ onUrlSync }: { onUrlSync: (query: string) => void }) {
 		modesOnly.map(id => [id, estimateMinutesForMode(distanceValue, id)]),
 	) as Record<TransportMode, number>
 
-	// What the selected mode actually shows: the estimate for metro and
-	// scooter; for car and walking, 2GIS's distance and duration or nothing
-	// at all while there is no real answer (see lib/transport-route.ts).
+	// What the selected mode actually shows: the estimate for metro; for car,
+	// walking and scooter, 2GIS's distance and duration or nothing at all
+	// while there is no real answer (see lib/transport-route.ts).
 	const activeRoute = activeTransportRoute({
 		mode,
 		estimate: { minutes: estimatedMinutes, distanceKm: distanceValue },
@@ -504,7 +504,8 @@ function TransportView({ onUrlSync }: { onUrlSync: (query: string) => void }) {
 	const routeDistance = figures?.distanceKm ?? null
 
 	// B SPACE's own formulas, fed with the figures above — for a real car
-	// route that is the 2GIS road distance. Still an estimate, never 2GIS's.
+	// route that is the 2GIS road distance, for a real scooter the 2GIS
+	// duration. Still an estimate, never 2GIS's or an operator's fare.
 	const cost = figures ? estimateFareUZS(figures.distanceKm, figures.minutes, mode) : null
 	const costLabel = MODE_COST_LABEL[mode]
 
@@ -515,8 +516,10 @@ function TransportView({ onUrlSync }: { onUrlSync: (query: string) => void }) {
 	const tipValue = mode === 'car' ? `${speedRange.low}–${speedRange.high}` : drivingTip.demoValue
 	const tipUnit = mode === 'car' ? 'km/soat' : drivingTip.demoUnit
 	const isReal = activeRoute.status === 'real'
-	// Which demo sections this mode keeps — walking drops all of them around
-	// its real 2GIS route; the car keeps them as Phase 1 left them.
+	// Which demo sections this mode keeps — walking and the scooter drop all
+	// of them around their real 2GIS route (the scooter's battery, bike-lane
+	// share, crossings, timeline, navigator and alternatives); the car keeps
+	// them as Phase 1 left them.
 	const sections = modeCapabilities(mode)
 
 	const timelineSteps: TimelineStep[] = [
@@ -558,7 +561,8 @@ function TransportView({ onUrlSync }: { onUrlSync: (query: string) => void }) {
 
 	// Demo alternatives, scaled from the estimate as before. Next to the car
 	// — which is routed for real — they are marked as demo, cannot be picked
-	// and claim nothing is "Tezroq" than the real route. Walking has none.
+	// and claim nothing is "Tezroq" than the real route. Walking and the
+	// scooter have none.
 	const altTemplates = DEMO_ALTERNATIVE_ROUTES[mode]
 	const alternativesAreDemo = sections.alternatives === 'demo-labelled'
 	const alternatives = altTemplates.map(template => ({
@@ -668,13 +672,15 @@ function TransportView({ onUrlSync }: { onUrlSync: (query: string) => void }) {
 					: activeRoute.status === 'loading' ? 'loading' : 'unavailable'
 				}
 				showRoadProblems={sections.roadProblems}
+				canOpenIn2Gis={navigateHref !== null}
 			/>
 
 			{(activeRoute.status === 'loading' ||
 				activeRoute.status === 'unavailable' ||
 				activeRoute.status === 'needs-location' ||
-				// A real route's way out to 2GIS, for a mode with no in-app
-				// navigator to carry it (walking).
+				// A real route named as 2GIS's, for a mode with no in-app
+				// navigator (walking, scooter) — with the hand-off when the
+				// mode has one; the scooter has none.
 				(activeRoute.status === 'real' && !sections.demoTimeline)) && (
 				<RouteStatus
 					mode={mode}

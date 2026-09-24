@@ -26,14 +26,25 @@ export const ROUTING_TIMEOUT_MS = 8000
 
 // --- B SPACE mode → 2GIS transport ---------------------------------------
 // The one place a B SPACE mode name meets a 2GIS one. Components, the hook
-// and the wire format all speak B SPACE ('car', 'walk'); only the body sent
-// upstream says 'driving' or 'walking'. Unrelated to the consumer-app
-// deep link in lib/route-endpoints.ts, whose walking type is 'pedestrian' —
-// a different product with its own vocabulary.
+// and the wire format all speak B SPACE ('car', 'walk', 'scooter'); only the
+// body sent upstream says 'driving', 'walking' or 'scooter'. Unrelated to
+// the consumer-app deep link in lib/route-endpoints.ts, whose walking type
+// is 'pedestrian' and which has no scooter type at all — a different
+// product with its own vocabulary.
 const TWO_GIS_TRANSPORT = {
 	car: 'driving',
 	walk: 'walking',
+	scooter: 'scooter',
 } as const satisfies Record<RealRoutingMode, string>
+
+// Road types a scooter route should keep off where 2GIS can find a way
+// around them. Avoidance preferences, not guarantees: the feasibility check
+// saw a restricted route still end on a short stairway when that was the
+// only way in. Nothing in the app may present a scooter route as stair-free
+// or car-road-free because of these.
+const TWO_GIS_FILTERS: Partial<Record<RealRoutingMode, readonly string[]>> = {
+	scooter: ['ban_car_road', 'ban_stairway'],
+}
 
 export type TwoGisTransport = (typeof TWO_GIS_TRANSPORT)[RealRoutingMode]
 
@@ -43,7 +54,7 @@ export function twoGisTransport(mode: RealRoutingMode): TwoGisTransport {
 
 // --- What a caller may ask for ---------------------------------------------
 // Only points inside Uzbekistan, and only the modes that have a real route
-// (car and walking). Anything else is refused before a paid request is
+// (car, walking and scooter). Anything else is refused before a paid request is
 // made, so the endpoint is not a general-purpose routing proxy for the rest
 // of the world — and a mode that is not routed is never quietly answered
 // with another mode's route.
@@ -57,8 +68,8 @@ const coordinateSchema = z
 const requestSchema = z.strictObject({
 	origin: coordinateSchema,
 	destination: coordinateSchema,
-	// Metro and scooter are refused until each gets its own phase. Omitting
-	// the mode means car, which is what the endpoint has always routed.
+	// Metro is refused until it gets its own phase. Omitting the mode means
+	// car, which is what the endpoint has always routed.
 	mode: z.enum(REAL_ROUTING_MODES).default('car'),
 })
 
@@ -73,8 +84,11 @@ export function parseDirectionsRequest(body: unknown): DirectionsRequest | null 
 // --- What is sent ------------------------------------------------------------
 // `output: 'detailed'` is what makes 2GIS return the per-maneuver geometry;
 // the summary output has distance and duration only.
-// `route_mode: 'fastest'` is the same for both transports.
+// `route_mode: 'fastest'` is the same for every transport. Filters are sent
+// only for the modes that have them — the car and walking bodies are
+// exactly what they were before the scooter.
 export function twoGisRoutingBody({ origin, destination, mode }: DirectionsRequest) {
+	const filters = TWO_GIS_FILTERS[mode]
 	return {
 		points: [
 			{ type: 'stop', lon: origin.lng, lat: origin.lat },
@@ -83,6 +97,7 @@ export function twoGisRoutingBody({ origin, destination, mode }: DirectionsReque
 		transport: twoGisTransport(mode),
 		route_mode: 'fastest',
 		output: 'detailed',
+		...(filters ? { filters: [...filters] } : {}),
 	}
 }
 
@@ -158,6 +173,10 @@ export function normalizeTwoGisResponse(data: unknown, request: RouteRequest): R
 	if (!Array.isArray(body.result)) return routeUnavailable('upstream')
 	if (body.result.length === 0) return routeUnavailable('no_route')
 
+	// The provider's primary route only. 2GIS may answer with more than one
+	// (a scooter request comes back with two); the others are ignored, and
+	// nothing here reads the provider's per-route labels to pick between
+	// them. Real alternatives are a later phase.
 	const route = body.result[0] as TwoGisRoute | null
 	if (!route || typeof route !== 'object') return routeUnavailable('upstream')
 	if (!isNonNegativeNumber(route.total_distance) || !isNonNegativeNumber(route.total_duration)) {

@@ -518,35 +518,32 @@ export const DEMO_METRO_LINES: DemoMetroLine[] = [
 	},
 ]
 
+// Micromobility is browsed here, not booked: B SPACE has no scooter or
+// bike-share operator connected, so nothing may read as a live vehicle —
+// no charge level, no distance to the nearest scooter, no free docks — and
+// no source for bike-lane share, shade or path condition either. Those
+// fields are optional and left out until something real supplies them.
 export type DemoMicroOption = {
 	icon: LucideIcon
 	title: string
-	subtitle: string
-	badge: string
-	note: string
+	subtitle?: string
+	badge?: string
+	note?: string
 }
 
 export const DEMO_MICRO_OPTIONS: DemoMicroOption[] = [
 	{
 		icon: Bike,
 		title: 'Elektro skuter',
-		subtitle: 'Eng yaqin punkt — 60 metr',
-		badge: 'Zaryad 75%',
-		note: 'Manzilda 12 ta bo‘sh joy',
 	},
 	{
 		icon: Bike,
 		title: 'Velosiped',
-		subtitle: 'Ijara punkti — 140 metr',
-		badge: '70% velo-yo‘lakda',
-		note: 'Manzilda 8 ta bo‘sh joy',
 	},
 	{
 		icon: Footprints,
 		title: 'Piyoda',
 		subtitle: 'Qo‘shimcha ijaraga hojat yo‘q',
-		badge: 'Yo‘lak yaxshi holatda',
-		note: 'Yo‘lning 40% qismi soyada',
 	},
 ]
 

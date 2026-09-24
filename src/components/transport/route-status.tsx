@@ -24,16 +24,17 @@ function OpenIn2Gis({ href }: { href: string }) {
 	)
 }
 
-// What /transport says about a real-routed mode (car, walking) whose route
-// is not simply "there": loading, unavailable, or waiting for a real origin.
-// Sits where the route's numbers would be read from, so the "—" in the
-// summary is explained right above it. There is deliberately no estimate in
-// here: the old straight-line figures are not offered in place of a real
-// route.
+// What /transport says about a real-routed mode (car, walking, scooter)
+// whose route is not simply "there": loading, unavailable, or waiting for a
+// real origin. Sits where the route's numbers would be read from, so the "—"
+// in the summary is explained right above it. There is deliberately no
+// estimate in here: the old straight-line figures are not offered in place
+// of a real route.
 //
-// For a route that *is* there, it renders only when the screen has no other
-// way out to 2GIS — walking has no demo timeline or in-app navigator, so
-// this row is where «2GIS’da ochish» lives for it.
+// For a route that *is* there, it renders only for the modes with no demo
+// timeline or in-app navigator (walking, the scooter), so this row is where
+// the route is named as 2GIS's — and where «2GIS’da ochish» lives when
+// there is a hand-off. The scooter has none, so it gets no button.
 export function RouteStatus({
 	mode,
 	route,

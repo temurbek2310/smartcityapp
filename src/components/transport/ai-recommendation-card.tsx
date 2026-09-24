@@ -17,7 +17,7 @@ type AiRecommendationCardProps = {
 // NOT real is a live traffic percentage, so the explanation stays generic
 // about how the estimate is made instead of inventing one.
 //
-// Once the car or walking is routed by 2GIS its time is a different kind of
+// Once the car, walking or the scooter is routed by 2GIS its time is a different kind of
 // number from the other modes' estimates, and the two are not ranked against
 // each other: the card then only states the selected mode's time (see
 // transportRecommendation in lib/transport-route.ts).

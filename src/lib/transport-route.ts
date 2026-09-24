@@ -11,14 +11,14 @@ import {
 } from '@/lib/routing'
 import { TRANSPORT_MODES, type TransportMode } from '@/lib/transport'
 
-// Real routing on /transport (Phase 2): the car and walking are routed by
-// 2GIS, metro and scooter are still the haversine estimate from lib/eta.ts.
+// Real routing on /transport (Phase 3): the car, walking and the scooter
+// are routed by 2GIS, metro is still the haversine estimate from lib/eta.ts.
 // The two are kept apart here — this module decides which one the screen is
 // showing for the selected mode and never blends them into one number.
 
-// Metro and scooter never reach /api/directions, and neither does an
-// unselected car or walk — not even to fill in its own pill — so the
-// selected mode is the only thing ever fetched.
+// Metro never reaches /api/directions, and neither does an unselected car,
+// walk or scooter — not even to fill in its own pill — so the selected mode
+// is the only thing ever fetched.
 export const REAL_ROUTED_MODES: readonly TransportMode[] = REAL_ROUTING_MODES
 
 export function isRealRoutedMode(mode: TransportMode) {
@@ -32,9 +32,12 @@ export function isRealRoutedMode(mode: TransportMode) {
 // Phase 1 left them (labelled as demo, alternatives not pickable). Walking
 // drops them: steps, kcal, shade, crossings, the best time to leave and a
 // "Skver" waypoint would sit around a real 2GIS footpath as if they came
-// from it. The road-problem chips under the map (roadworks, a crash, a speed
-// camera) are demo road conditions and go with them. Metro and scooter are
-// estimates throughout, so nothing changes.
+// from it. The scooter drops them for the same reason: a battery charge, a
+// bike-lane share, "dangerous crossings", a street-by-street timeline and
+// alternatives that pretend to re-route are not what 2GIS returned. The
+// road-problem chips under the map (roadworks, a crash, a speed camera) are
+// demo road conditions and go with them. Metro is an estimate throughout,
+// so nothing changes.
 export type ModeCapabilities = {
 	realRoute: boolean
 	roadProblems: boolean
@@ -45,7 +48,7 @@ export type ModeCapabilities = {
 }
 
 export function modeCapabilities(mode: TransportMode): ModeCapabilities {
-	if (mode === 'walk') {
+	if (mode === 'walk' || mode === 'scooter') {
 		return { realRoute: true, roadProblems: false, demoFacts: false, demoTimeline: false, demoTip: false, alternatives: 'hidden' }
 	}
 	if (mode === 'car') {

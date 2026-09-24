@@ -87,7 +87,7 @@ describe('walking request', () => {
 
 	it('the client and the endpoint agree on which modes are real', () => {
 		expect([...REAL_ROUTED_MODES].sort()).toEqual([...REAL_ROUTING_MODES].sort())
-		expect([...REAL_ROUTED_MODES].sort()).toEqual(['car', 'walk'])
+		expect([...REAL_ROUTED_MODES].sort()).toEqual(['car', 'scooter', 'walk'])
 	})
 
 	it('never sends the approximate city centre — no request at all', () => {
@@ -114,7 +114,7 @@ describe('walking request', () => {
 })
 
 describe('request count per selected mode against a mocked /api/directions', () => {
-	it('car and walk request, scooter and metro do not; one walk identity is one request', async () => {
+	it('car, walk and scooter request, metro does not; one walk identity is one request', async () => {
 		const fetchImpl = vi.fn<typeof fetch>(async () => json(REAL_WALK))
 		const loader = createRouteLoader({ fetch: fetchImpl })
 
@@ -123,7 +123,7 @@ describe('request count per selected mode against a mocked /api/directions', () 
 			MODES.map(mode => [mode, transportRouteRequest({ mode, origin: ORIGIN, destination: DESTINATION })]),
 		) as Record<TransportMode, ReturnType<typeof transportRouteRequest>>
 		expect(requests.metro).toBeNull()
-		expect(requests.scooter).toBeNull()
+		expect(requests.scooter?.mode).toBe('scooter')
 		expect(requests.car?.mode).toBe('car')
 		expect(requests.walk?.mode).toBe('walk')
 		// Car and walk between the same ends are different identities.
@@ -204,7 +204,7 @@ describe('walking demo sections', () => {
 		})
 	})
 
-	it('the car keeps its Phase 1 sections; metro and scooter are unchanged', () => {
+	it('the car keeps its Phase 1 sections; metro is unchanged', () => {
 		expect(modeCapabilities('car')).toEqual({
 			realRoute: true,
 			roadProblems: true,
@@ -213,7 +213,7 @@ describe('walking demo sections', () => {
 			demoTip: true,
 			alternatives: 'demo-labelled',
 		})
-		for (const mode of ['metro', 'scooter'] as const) {
+		for (const mode of ['metro'] as const) {
 			expect(modeCapabilities(mode)).toEqual({
 				realRoute: false,
 				roadProblems: true,

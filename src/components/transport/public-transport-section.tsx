@@ -164,12 +164,14 @@ function MicroCard({ option }: { option: DemoMicroOption }) {
 			</span>
 			<div className='min-w-0 flex-1'>
 				<p className='text-[14px] font-extrabold text-ink'>{option.title}</p>
-				<p className='mt-0.5 text-[11.5px] text-ink-3'>{option.subtitle}</p>
-				<p className='mt-1 text-[11px] font-bold text-ok'>{option.badge}</p>
+				{option.subtitle && <p className='mt-0.5 text-[11.5px] text-ink-3'>{option.subtitle}</p>}
+				{option.badge && <p className='mt-1 text-[11px] font-bold text-ok'>{option.badge}</p>}
 			</div>
-			<span className='shrink-0 text-right text-[11px] text-ink-3'>
-				{option.note}
-			</span>
+			{option.note && (
+				<span className='shrink-0 text-right text-[11px] text-ink-3'>
+					{option.note}
+				</span>
+			)}
 		</div>
 	)
 }
