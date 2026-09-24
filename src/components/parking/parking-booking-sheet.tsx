@@ -15,7 +15,15 @@ import { Chip } from '@/components/ui/chip'
 import { bayMap, firstFreeBay, isBaySelectable } from '@/lib/bay-map'
 import { saveBookingMeta } from '@/lib/booking-meta'
 import { useBookingMeta } from '@/hooks/use-booking-meta'
-import { formatDayMonth, formatTime, formatUZS } from '@/lib/format'
+import { formatTime, formatUZS } from '@/lib/format'
+import {
+	isParkingStartPast,
+	PARKING_ARRIVAL_SLOTS,
+	PARKING_NOW_SLOT,
+	parkingBookingDays,
+	parkingBookingWindow,
+} from '@/lib/parking-time'
+import type { BookingDay } from '@/lib/service-slots'
 import { findOverlappingReservation, reservationHref } from '@/lib/reservation'
 
 // The one parking booking UI in the app. It used to live inline in Home
@@ -27,35 +35,16 @@ import { findOverlappingReservation, reservationHref } from '@/lib/reservation'
 
 export type ParkingBookingDraft = {
 	parkingId: string
-	dayIndex: number
-	dayLabels: string[]
+	// A Tashkent calendar day key, one of `days`.
+	dayKey: string
+	days: BookingDay[]
 	slot: string
 	hours: number
 	bay: string
 	level: number
-	nowLabel: string
-}
-
-const ARRIVAL_SLOTS = [
-	'Hozir',
-	'11:30',
-	'12:00',
-	'12:30',
-	'13:00',
-	'14:00',
-	'18:00',
-	'19:00',
-]
-
-function makeBookingDayLabels() {
-	const labels = ['Bugun', 'Ertaga']
-	const now = new Date()
-	for (let offset = 2; offset <= 3; offset += 1) {
-		const date = new Date(now)
-		date.setDate(now.getDate() + offset)
-		labels.push(formatDayMonth(date))
-	}
-	return labels
+	// When the sheet opened. The day chips and «Hozir» are read against it so
+	// they hold still while the sheet is open; confirm re-reads the clock.
+	now: number
 }
 
 function makeDraft(
@@ -63,10 +52,8 @@ function makeDraft(
 	initialBay?: string | null,
 	initialLevel?: number,
 ): ParkingBookingDraft {
-	const now = new Date()
-	now.setMinutes(now.getMinutes() + 15)
-	now.setMinutes(Math.ceil(now.getMinutes() / 15) * 15, 0, 0)
-	const nowLabel = formatTime(now)
+	const now = Date.now()
+	const days = parkingBookingDays(now)
 	const parking = PARKINGS.find(item => item.id === parkingId)!
 	const level = initialLevel && Number.isInteger(initialLevel) && initialLevel > 0 && initialLevel <= parking.levels
 		? initialLevel : 1
@@ -74,42 +61,26 @@ function makeDraft(
 
 	return {
 		parkingId,
-		dayIndex: 0,
-		dayLabels: makeBookingDayLabels(),
-		slot: 'Hozir',
+		dayKey: days[0].key,
+		days,
+		slot: PARKING_NOW_SLOT,
 		hours: 2,
 		// The detail screen's floor plan is the same plan this sheet shows, so
 		// a bay picked there carries straight through instead of being reset.
 		level,
 		bay: candidate && isBaySelectable(candidate.state) ? candidate.id : firstFreeBay(parking, level) ?? '',
-		nowLabel,
+		now,
 	}
 }
 
-function bookingStartDate(draft: ParkingBookingDraft) {
-	const start = new Date()
-	start.setSeconds(0, 0)
-	start.setDate(start.getDate() + draft.dayIndex)
-
-	if (draft.slot === 'Hozir') {
-		start.setMinutes(start.getMinutes() + 15)
-		start.setMinutes(Math.ceil(start.getMinutes() / 15) * 15, 0, 0)
-		return start
-	}
-
-	const [hour, minute] = draft.slot.split(':').map(Number)
-	start.setHours(hour, minute, 0, 0)
-	return start
-}
-
-// The window this draft would occupy, in the same arithmetic
-// createReservation() uses to derive endAt.
-function bookingWindow(draft: ParkingBookingDraft) {
-	const startAt = bookingStartDate(draft)
-	return {
-		startAt,
-		endAt: new Date(startAt.getTime() + draft.hours * 3_600_000),
-	}
+// The window this draft occupies, on Tashkent's clock — never the device's.
+function bookingWindow(draft: ParkingBookingDraft, now: number = draft.now) {
+	return parkingBookingWindow({
+		dayKey: draft.dayKey,
+		time: draft.slot,
+		hours: draft.hours,
+		now,
+	})
 }
 
 type ParkingBookingSheetProps = {
@@ -197,9 +168,12 @@ function ParkingBookingSheetBody({
 			return
 		}
 
-		const start = bookingStartDate(booking)
+		// Against the real clock, not the one the sheet opened with: «Hozir»
+		// keeps moving, and a fixed time can go by while the sheet is open.
 		const currentTime = new Date().getTime()
-		if (start.getTime() < currentTime - 60_000) {
+		const span = bookingWindow(booking, currentTime)
+		const start = span.startAt
+		if (isParkingStartPast(start, currentTime)) {
 			onNotify('Tanlangan kelish vaqti o‘tib ketgan')
 			return
 		}
@@ -207,10 +181,7 @@ function ParkingBookingSheetBody({
 		// Before anything about bays: if the customer is already parked
 		// somewhere during this window, no choice of bay makes the booking
 		// valid, and telling them to pick another one sends them the wrong way.
-		const clash = findOverlappingReservation(reservations, {
-			startAt: start,
-			endAt: new Date(start.getTime() + booking.hours * 3_600_000),
-		})
+		const clash = findOverlappingReservation(reservations, span)
 		if (clash) {
 			onNotify('Bu vaqtda sizda boshqa parking broni mavjud')
 			return
@@ -333,7 +304,9 @@ function ParkingBookingSheetBody({
 	}
 
 	const total = parking.pricePerHour * booking.hours
-	const arrival = booking.slot === 'Hozir' ? booking.nowLabel : booking.slot
+	// Read off the instant that will be stored, so the sheet cannot say one
+	// time while the confirmation and Bron say another.
+	const arrival = formatTime(bookingWindow(booking).startAt)
 	const hasAnpr = parking.plateRecognition
 
 	return (
@@ -357,23 +330,23 @@ function ParkingBookingSheetBody({
 			<div className='mt-3 rounded-2xl bg-white p-4 shadow-card'>
 				<p className='text-sm font-black text-ink'>Sana</p>
 				<HorizontalRail className='mt-3 gap-2'>
-					{booking.dayLabels.map((label, index) => (
+					{booking.days.map(day => (
 						<button
-							key={`${label}-${index}`}
+							key={day.key}
 							type='button'
 							onClick={() =>
 								setBooking(current => ({
 									...current,
-									dayIndex: index,
+									dayKey: day.key,
 								}))
 							}
 							className={`h-11 shrink-0 rounded-xl px-4 text-xs font-black transition duration-200 ${
-								booking.dayIndex === index
+								booking.dayKey === day.key
 									? 'bg-brand text-white shadow-lg shadow-[0_8px_24px_rgb(108_71_224/.22)]'
 									: 'bg-white text-ink-2 ring-1 ring-line'
 							}`}
 						>
-							{label}
+							{day.label}
 						</button>
 					))}
 				</HorizontalRail>
@@ -382,7 +355,7 @@ function ParkingBookingSheetBody({
 			<div className='mt-3 rounded-2xl bg-white p-4 shadow-card'>
 				<p className='text-sm font-black text-ink'>Kelish vaqti</p>
 				<div className='mt-3 grid grid-cols-4 gap-2'>
-					{ARRIVAL_SLOTS.map(slot => (
+					{PARKING_ARRIVAL_SLOTS.map(slot => (
 						<button
 							key={slot}
 							type='button'

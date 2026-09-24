@@ -8,6 +8,8 @@ import {
 	defaultBookingSelection,
 	firstOpenSlot,
 	resolveSlotTime,
+	SAME_DAY_DEFAULT_SLOT,
+	SAME_DAY_SLOTS,
 	serviceWhenLabel,
 	slotInstant,
 	slotTimes,
@@ -145,5 +147,61 @@ describe('serviceWhenLabel', () => {
 		expect(serviceWhenLabel(booked, at('2026-09-19T09:00:00+05:00'))).toBe(
 			'Bugun, 19:30',
 		)
+	})
+})
+
+describe('cinema and clinic same-day slots', () => {
+	const NINE_PM = at('2026-09-24T21:00:00+05:00')
+	const today = '2026-09-24'
+
+	it('at 21:00 Tashkent, 12:30 today is past and cannot be picked', () => {
+		const slots = daySlots(today, NINE_PM, SAME_DAY_SLOTS)
+		expect(slots.map(slot => slot.time)).toEqual([...SAME_DAY_SLOTS])
+		expect(slots.find(slot => slot.time === '12:30')?.past).toBe(true)
+		expect(slots.every(slot => slot.past)).toBe(true)
+	})
+
+	it('no time is left at 21:00, so nothing is selected rather than a past slot', () => {
+		expect(resolveSlotTime(today, SAME_DAY_DEFAULT_SLOT, NINE_PM, SAME_DAY_SLOTS)).toBeNull()
+	})
+
+	it('mid-afternoon: earlier times close, later ones stay selectable', () => {
+		const now = at('2026-09-24T15:10:00+05:00')
+		const open = daySlots(today, now, SAME_DAY_SLOTS)
+			.filter(slot => !slot.past)
+			.map(slot => slot.time)
+		expect(open).toEqual(['18:00', '19:00', '20:00'])
+		// The default moves to the next valid time instead of staying on 12:30.
+		expect(resolveSlotTime(today, SAME_DAY_DEFAULT_SLOT, now, SAME_DAY_SLOTS)).toBe('18:00')
+	})
+
+	it('in the morning the default is unchanged', () => {
+		const now = at('2026-09-24T09:00:00+05:00')
+		expect(resolveSlotTime(today, SAME_DAY_DEFAULT_SLOT, now, SAME_DAY_SLOTS)).toBe('12:30')
+		expect(slotInstant(today, '12:30').toISOString()).toBe('2026-09-24T07:30:00.000Z')
+	})
+
+	it('the default never lands on a past slot, at any minute of the day', () => {
+		for (let minutes = 0; minutes < 24 * 60; minutes += 5) {
+			const now = slotInstant(today, '00:00').getTime() + minutes * 60_000
+			const time = resolveSlotTime(today, SAME_DAY_DEFAULT_SLOT, now, SAME_DAY_SLOTS)
+			if (time) expect(slotInstant(today, time).getTime()).toBeGreaterThan(now)
+		}
+	})
+})
+
+describe('service construction is unchanged', () => {
+	it('24 Sep 2026 14:00 is 09:00Z', () => {
+		expect(slotInstant('2026-09-24', '14:00').toISOString()).toBe('2026-09-24T09:00:00.000Z')
+	})
+
+	it('addDays still shifts by Tashkent calendar days', () => {
+		expect(addDays('2026-09-24', 1)).toBe('2026-09-25')
+	})
+
+	it('Bugun / Ertaga follow the Tashkent date', () => {
+		const booked = slotInstant('2026-09-25', '14:00')
+		expect(serviceWhenLabel(booked, at('2026-09-24T23:59:00+05:00'))).toBe('Ertaga, 14:00')
+		expect(serviceWhenLabel(booked, at('2026-09-25T00:00:00+05:00'))).toBe('Bugun, 14:00')
 	})
 })

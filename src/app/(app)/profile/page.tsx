@@ -40,6 +40,7 @@ import { useToast } from '@/hooks/use-toast'
 import { cn } from '@/lib/cn'
 import { formatDate, formatUZS } from '@/lib/format'
 import { displayUzbekPlate, formatUzbekPlate, normalizeUzbekPlate } from '@/lib/plate'
+import { tashkentHour } from '@/lib/tashkent-time'
 import type { NotificationPrefId } from '@/lib/types'
 
 const NOTIFICATION_ROWS: { id: NotificationPrefId; label: string }[] = [
@@ -135,7 +136,8 @@ export default function ProfilePage() {
 		if (!reservations.length) return null
 		const hours = new Map<number, number>()
 		for (const reservation of reservations) {
-			const hour = new Date(reservation.startAt).getHours()
+			// On Tashkent's clock, like every booking time — not the device's.
+			const hour = tashkentHour(reservation.startAt)
 			hours.set(hour, (hours.get(hour) ?? 0) + 1)
 		}
 		const [hour] = [...hours.entries()].sort((a, b) => b[1] - a[1])[0]

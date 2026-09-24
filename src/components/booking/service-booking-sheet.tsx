@@ -24,6 +24,8 @@ import {
 	daySlots,
 	defaultBookingSelection,
 	resolveSlotTime,
+	SAME_DAY_DEFAULT_SLOT,
+	SAME_DAY_SLOTS,
 	serviceWhenLabel,
 	slotInstant,
 } from '@/lib/service-slots'
@@ -43,9 +45,9 @@ import type { ServiceBookingKind } from '@/lib/types'
 // clinic and event keep the same-day list they have always had: their slots
 // come from a schedule this sheet does not know about, and inventing a week
 // of them would promise showings that do not exist. The date/time model in
-// lib/service-slots is ready for them the day that schedule arrives.
-
-const SLOTS = ['11:30', '12:00', '12:30', '13:00', '14:00', '18:00', '19:00', '20:00']
+// lib/service-slots is ready for them the day that schedule arrives. Their
+// same-day list is still read against Tashkent's clock, though: a showing at
+// 12:30 cannot be booked at 21:00.
 
 const COPY: Record<
 	ServiceBookingKind,
@@ -104,7 +106,10 @@ export function ServiceBookingSheet({
 	// chosen slot has gone by in the meantime.
 	const [now, setNow] = useState(() => Date.now())
 	const [selection, setSelection] = useState(() => defaultBookingSelection(now))
-	const [slot, setSlot] = useState(SLOTS[2])
+	// null once every one of today's times has gone by.
+	const [slot, setSlot] = useState(() =>
+		resolveSlotTime(tashkentDayKey(now), SAME_DAY_DEFAULT_SLOT, now, SAME_DAY_SLOTS),
+	)
 	const [count, setCount] = useState(2)
 
 	const days = useMemo(() => bookingDays(now), [now])
@@ -112,6 +117,8 @@ export function ServiceBookingSheet({
 		() => daySlots(selection.dayKey, now),
 		[selection.dayKey, now],
 	)
+	const todayKey = tashkentDayKey(now)
+	const todaySlots = useMemo(() => daySlots(todayKey, now, SAME_DAY_SLOTS), [todayKey, now])
 
 	const copy = COPY[kind]
 	const place = getPlace(refId)
@@ -126,7 +133,9 @@ export function ServiceBookingSheet({
 		? selection.time
 			? slotInstant(selection.dayKey, selection.time)
 			: null
-		: slotInstant(tashkentDayKey(now), slot)
+		: slot
+			? slotInstant(todayKey, slot)
+			: null
 
 	const whenLabel = startAt ? serviceWhenLabel(startAt, now) : '—'
 
@@ -160,10 +169,14 @@ export function ServiceBookingSheet({
 		// real time and let the customer see the new choice before it is
 		// stored, rather than booking a table for a time that has passed.
 		const currentTime = Date.now()
-		if (dated && startAt.getTime() <= currentTime) {
-			const time = resolveSlotTime(selection.dayKey, selection.time, currentTime)
+		if (startAt.getTime() <= currentTime) {
 			setNow(currentTime)
-			setSelection(current => ({ ...current, time }))
+			if (dated) {
+				const time = resolveSlotTime(selection.dayKey, selection.time, currentTime)
+				setSelection(current => ({ ...current, time }))
+			} else {
+				setSlot(resolveSlotTime(tashkentDayKey(currentTime), slot, currentTime, SAME_DAY_SLOTS))
+			}
 			return onNotify('Bu vaqt o‘tib ketdi — boshqasini tanlang')
 		}
 
@@ -244,20 +257,26 @@ export function ServiceBookingSheet({
 									{option.time}
 								</Chip>
 							))
-						: SLOTS.map(option => (
+						: todaySlots.map(option => (
 								<Chip
-									key={option}
-									active={slot === option}
-									onClick={() => setSlot(option)}
-									className='justify-center'
+									key={option.time}
+									active={slot === option.time}
+									disabled={option.past}
+									onClick={() => setSlot(option.time)}
+									className='justify-center disabled:cursor-not-allowed disabled:opacity-40'
 								>
-									{option}
+									{option.time}
 								</Chip>
 							))}
 				</div>
 				{dated && !selection.time && (
 					<p className='mt-3 text-[11.5px] text-ink-3'>
 						Bugungi vaqtlar tugadi. Boshqa kunni tanlang.
+					</p>
+				)}
+				{!dated && !slot && (
+					<p className='mt-3 text-[11.5px] text-ink-3'>
+						Bugungi vaqtlar tugadi.
 					</p>
 				)}
 			</Card>

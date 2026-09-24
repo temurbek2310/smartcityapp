@@ -1,4 +1,10 @@
-import { formatDayMonth, formatTime, tashkentDayKey } from "@/lib/format";
+import { formatDayMonth, formatTime } from "@/lib/format";
+import {
+  addTashkentDays,
+  type DateLike,
+  tashkentDayKey,
+  tashkentWallClockInstant,
+} from "@/lib/tashkent-time";
 
 // When a table could be booked for.
 //
@@ -8,13 +14,9 @@ import { formatDayMonth, formatTime, tashkentDayKey } from "@/lib/format";
 // booking only ever carried that label, so Bron repeated whatever the sheet
 // had claimed rather than the moment the customer actually picked.
 //
-// All of the arithmetic here is Tashkent wall-clock. Uzbekistan sits at
-// UTC+05:00 the whole year with no daylight saving, so a calendar day plus a
-// HH:mm maps onto exactly one instant without a timezone library — and the
-// module stays pure, which is what makes the rules testable instead of only
-// clickable.
-
-const UZ_UTC_OFFSET = "+05:00";
+// All of the arithmetic here is Tashkent wall-clock, through the shared
+// helpers in tashkent-time — the module stays pure, which is what makes the
+// rules testable instead of only clickable.
 
 // The catalog carries no opening hours per venue, so one service window
 // covers every restaurant rather than a per-restaurant guess invented here.
@@ -26,22 +28,12 @@ const SLOT_STEP_MINUTES = 30;
 // Today plus six. Further out than a date rail stays usable on a phone.
 export const BOOKING_DAY_COUNT = 7;
 
-type DateLike = string | number | Date;
-
 const pad = (value: number) => String(value).padStart(2, "0");
 
 // The instant a HH:mm on a Tashkent calendar day refers to.
-export function slotInstant(dayKey: string, time: string) {
-  return new Date(`${dayKey}T${time}:00.000${UZ_UTC_OFFSET}`);
-}
+export const slotInstant = tashkentWallClockInstant;
 
-// Day keys shift by whole days, never by 24h of elapsed time — anchoring at
-// noon keeps the arithmetic away from any edge that could land a day early.
-export function addDays(dayKey: string, days: number) {
-  const anchor = slotInstant(dayKey, "12:00");
-  anchor.setUTCDate(anchor.getUTCDate() + days);
-  return tashkentDayKey(anchor);
-}
+export const addDays = addTashkentDays;
 
 export function slotTimes() {
   const times: string[] = [];
@@ -54,6 +46,23 @@ export function slotTimes() {
   }
   return times;
 }
+
+// Cinema, clinic and event: today only, at these fixed times, until a real
+// schedule exists. Read through daySlots() like the table grid, so a time that
+// has gone by today cannot be picked.
+export const SAME_DAY_SLOTS = [
+  "11:30",
+  "12:00",
+  "12:30",
+  "13:00",
+  "14:00",
+  "18:00",
+  "19:00",
+  "20:00",
+] as const;
+
+// Where the same-day list opens while that time is still ahead.
+export const SAME_DAY_DEFAULT_SLOT = "12:30";
 
 export type BookingDay = {
   key: string;
@@ -91,9 +100,15 @@ export type BookingSlot = {
   past: boolean;
 };
 
-export function daySlots(dayKey: string, now: DateLike = new Date()) {
+// `times` defaults to the table service window; cinema and clinic pass their
+// own fixed same-day list and get the same past-aware treatment.
+export function daySlots(
+  dayKey: string,
+  now: DateLike = new Date(),
+  times: readonly string[] = slotTimes(),
+) {
   const nowMs = new Date(now).getTime();
-  return slotTimes().map<BookingSlot>((time) => {
+  return times.map<BookingSlot>((time) => {
     const at = slotInstant(dayKey, time);
     return {
       time,
@@ -118,8 +133,9 @@ export function resolveSlotTime(
   dayKey: string,
   preferred: string | null | undefined,
   now: DateLike = new Date(),
+  times: readonly string[] = slotTimes(),
 ): string | null {
-  const slots = daySlots(dayKey, now);
+  const slots = daySlots(dayKey, now, times);
   const kept = slots.find((slot) => slot.time === preferred && !slot.past);
   return (kept ?? slots.find((slot) => !slot.past))?.time ?? null;
 }

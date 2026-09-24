@@ -1,4 +1,8 @@
-export const UZ_TIME_ZONE = "Asia/Tashkent";
+import { tashkentParts } from "@/lib/tashkent-time";
+
+// The canonical zone and day-key helper live in tashkent-time; re-exported so
+// display code keeps one import for everything it formats.
+export { UZ_TIME_ZONE, tashkentDayKey } from "@/lib/tashkent-time";
 
 // Chrome ships no CLDR data for `uz`, so Intl quietly falls back to the root
 // locale: dates came out as "2026 M09 11 11:30" and prices as "12,000".
@@ -10,34 +14,6 @@ const MONTHS_SHORT = [
   "yan", "fev", "mar", "apr", "may", "iyn",
   "iyl", "avg", "sen", "okt", "noy", "dek",
 ];
-
-const TASHKENT_PARTS = new Intl.DateTimeFormat("en-US", {
-  timeZone: UZ_TIME_ZONE,
-  year: "numeric",
-  month: "numeric",
-  day: "numeric",
-  hour: "2-digit",
-  minute: "2-digit",
-  hour12: false,
-});
-
-function tashkentParts(value: string | number | Date) {
-  const parts = TASHKENT_PARTS.formatToParts(new Date(value));
-  const pick = (type: Intl.DateTimeFormatPartTypes) =>
-    Number(parts.find((part) => part.type === type)?.value);
-
-  const year = pick("year");
-  const month = pick("month");
-  const day = pick("day");
-  return {
-    year,
-    month,
-    day,
-    // hour12:false still renders midnight as "24" in some engines.
-    hour: pick("hour") % 24,
-    minute: pick("minute"),
-  };
-}
 
 const pad = (value: number) => String(value).padStart(2, "0");
 
@@ -66,14 +42,6 @@ export function formatDayMonth(value: string | number | Date) {
 // "11-sen, 2026"
 export function formatDate(value: string | number | Date) {
   return `${formatDayMonth(value)}, ${tashkentParts(value).year}`;
-}
-
-// "2026-09-11" — the Tashkent calendar day an instant falls on. Not shown to
-// anyone; it is the stable key a date picker selects by and slot arithmetic
-// builds instants from, so neither has to carry a Date around.
-export function tashkentDayKey(value: string | number | Date) {
-  const { year, month, day } = tashkentParts(value);
-  return `${year}-${pad(month)}-${pad(day)}`;
 }
 
 export function formatTime(value: string | number | Date) {

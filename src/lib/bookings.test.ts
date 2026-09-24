@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { bookingRows, isOpen, serviceBookingDraft } from './bookings'
 import { tashkentDayKey } from '@/lib/format'
+import { expectedEndAt } from '@/lib/booking-lifecycle'
 import { serviceWhenLabel, slotInstant } from '@/lib/service-slots'
 import type {
 	QueueTicket,
@@ -313,5 +314,27 @@ describe('isOpen', () => {
 			],
 		})
 		expect(rows.filter(isOpen).map(r => r.id)).toEqual(['a', 'b'])
+	})
+})
+
+describe('service booking time on any device', () => {
+	it('a table for 24-sen 14:00 stores 09:00Z and completes on Tashkent time', () => {
+		const startAt = slotInstant('2026-09-24', '14:00')
+		const draft = serviceBookingDraft({
+			kind: 'table',
+			refId: 'x',
+			title: 'X',
+			count: 2,
+			unit: 'kishi',
+			startAt,
+			now: new Date('2026-09-24T10:00:00+05:00'),
+		})
+		expect(draft.startAt).toBe('2026-09-24T09:00:00.000Z')
+		expect(draft.whenLabel).toBe('Bugun, 14:00')
+		expect(draft.subtitle).toBe('2 kishi · 14:00')
+		// Two hours of table, ending 16:00 Tashkent.
+		expect(
+			expectedEndAt({ kind: 'table', startAt: draft.startAt, createdAt: draft.startAt }),
+		).toBe(Date.parse('2026-09-24T16:00:00+05:00'))
 	})
 })
