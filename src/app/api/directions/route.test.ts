@@ -145,6 +145,122 @@ describe('POST /api/directions — success', () => {
 	})
 })
 
+// A 2GIS walking answer: no road connectors, the maneuvers follow
+// footpaths away from the straight line between the ends.
+const TWO_GIS_WALK = {
+	status: 'OK',
+	type: 'result',
+	result: [
+		{
+			id: '1',
+			total_distance: 3120,
+			total_duration: 2460,
+			maneuvers: [
+				{ comment: 'start' },
+				{
+					outcoming_path: {
+						geometry: [
+							{ selection: 'LINESTRING(69.27968 41.31108, 69.2702 41.3071)' },
+							{ selection: 'LINESTRING(69.2702 41.3071, 69.2555 41.3102)' },
+						],
+					},
+				},
+				{
+					outcoming_path: {
+						geometry: [{ selection: 'LINESTRING(69.2555 41.3102, 69.2486 41.3164)' }],
+					},
+				},
+				{ comment: 'finish' },
+			],
+		},
+	],
+}
+
+const OLOY = { lat: 41.3164, lng: 69.2486 }
+const walk = { origin: AMIR_TEMUR, destination: OLOY, mode: 'walk' }
+
+describe('POST /api/directions — walking', () => {
+	it('asks 2GIS for a detailed walking route (walking, not pedestrian)', async () => {
+		upstreamJson(TWO_GIS_WALK)
+		await call(walk)
+		expect(fetchMock).toHaveBeenCalledTimes(1)
+		const [url, init] = fetchMock.mock.calls[0]
+		expect(String(url)).toBe(`${TWO_GIS_ROUTING_ENDPOINT}?key=${KEY}`)
+		expect(String(url)).not.toContain('public_transport')
+		expect(JSON.parse(String(init?.body))).toEqual({
+			points: [
+				{ type: 'stop', lon: AMIR_TEMUR.lng, lat: AMIR_TEMUR.lat },
+				{ type: 'stop', lon: OLOY.lng, lat: OLOY.lat },
+			],
+			transport: 'walking',
+			route_mode: 'fastest',
+			output: 'detailed',
+		})
+	})
+
+	it('normalizes the walking distance, duration and WKT geometry', async () => {
+		upstreamJson(TWO_GIS_WALK)
+		await expectResult(await call(walk), 200, {
+			status: 'ok',
+			source: '2gis',
+			mode: 'walk',
+			distanceMeters: 3120,
+			durationSeconds: 2460,
+			geometry: [
+				[69.27968, 41.31108],
+				[69.2702, 41.3071],
+				[69.2555, 41.3102],
+				[69.2486, 41.3164],
+			],
+		})
+	})
+
+	it('still maps car to driving', async () => {
+		upstreamJson(TWO_GIS_ROUTE)
+		await call(valid)
+		expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body)).transport).toBe('driving')
+	})
+
+	it('no_route: 204, empty result, or a not-found status', async () => {
+		fetchMock.mockResolvedValueOnce(new Response(null, { status: 204 }))
+		await expectResult(await call(walk), 404, { status: 'unavailable', reason: 'no_route' })
+		upstreamJson({ status: 'OK', result: [] })
+		await expectResult(await call(walk), 404, { status: 'unavailable', reason: 'no_route' })
+		upstreamJson({ status: 'ROUTE_NOT_FOUND' })
+		await expectResult(await call(walk), 404, { status: 'unavailable', reason: 'no_route' })
+	})
+
+	it('upstream: a malformed walking response is never drawn partially', async () => {
+		const broken = structuredClone(TWO_GIS_WALK)
+		broken.result[0].maneuvers[2].outcoming_path!.geometry[0].selection = 'LINESTRING(69.2555 41.3102, oops)'
+		upstreamJson(broken)
+		await expectResult(await call(walk), 502, { status: 'unavailable', reason: 'upstream' })
+
+		const noDuration = structuredClone(TWO_GIS_WALK) as { result: Record<string, unknown>[] }
+		delete noDuration.result[0].total_duration
+		upstreamJson(noDuration)
+		await expectResult(await call(walk), 502, { status: 'unavailable', reason: 'upstream' })
+	})
+
+	it('upstream: HTTP failure', async () => {
+		upstreamJson({ message: 'nope' }, 500)
+		await expectResult(await call(walk), 502, { status: 'unavailable', reason: 'upstream' })
+	})
+
+	it('timeout: aborts the upstream walking call', async () => {
+		vi.useFakeTimers()
+		fetchMock.mockImplementationOnce(
+			(_url, init) =>
+				new Promise((_resolve, reject) => {
+					init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')))
+				}),
+		)
+		const pending = call(walk)
+		await vi.advanceTimersByTimeAsync(ROUTING_TIMEOUT_MS + 1)
+		await expectResult(await pending, 504, { status: 'unavailable', reason: 'timeout' })
+	})
+})
+
 describe('POST /api/directions — refused before any upstream call', () => {
 	it('config: no routing key', async () => {
 		vi.stubEnv('DGIS_ROUTING_API_KEY', '')
@@ -201,8 +317,10 @@ describe('POST /api/directions — refused before any upstream call', () => {
 		expect(fetchMock).not.toHaveBeenCalled()
 	})
 
-	it('invalid: modes that are not routed yet', async () => {
-		for (const mode of ['walk', 'scooter', 'metro', 'truck']) {
+	it('invalid: modes that are not routed yet — never mapped to another mode', async () => {
+		// Provider names are not B SPACE modes either: 'walking' and
+		// 'driving' are refused, not passed through.
+		for (const mode of ['scooter', 'metro', 'truck', 'pedestrian', 'walking', 'driving', null]) {
 			await expectResult(await call({ ...valid, mode }), 400, { status: 'unavailable', reason: 'invalid' })
 		}
 		expect(fetchMock).not.toHaveBeenCalled()

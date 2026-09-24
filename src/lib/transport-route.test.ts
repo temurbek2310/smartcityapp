@@ -2,7 +2,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 
-import { CarRouteStatus } from '@/components/transport/car-route-status'
+import { RouteStatus } from '@/components/transport/route-status'
 import { estimateFareUZS, estimateFuelCostUZS, estimateMinutesForMode, fastestMode } from '@/lib/eta'
 import { distanceKm } from '@/lib/geo'
 import { createRouteLoader, deriveRouteState, type RouteState } from '@/lib/route-client'
@@ -27,8 +27,8 @@ import {
 } from '@/lib/transport-route'
 import type { TransportMode } from '@/lib/transport'
 
-// Phase 1 of real routing on /transport: the car from 2GIS, everything else
-// estimated. Every fetch here is a mock — nothing reaches /api/directions,
+// Real routing on /transport: the car (Phase 1) and walking (Phase 2) from
+// 2GIS, metro and scooter estimated. Every fetch here is a mock — nothing reaches /api/directions,
 // let alone 2GIS.
 
 const ORIGIN: RoutableEndpoint = { lat: 41.31108, lng: 69.27968, kind: 'saved', approximate: false }
@@ -77,7 +77,7 @@ describe('which modes request a real route', () => {
 		})
 	})
 
-	it.each(['metro', 'scooter', 'walk'] as const)('never requests %s', mode => {
+	it.each(['metro', 'scooter'] as const)('never requests %s', mode => {
 		expect(transportRouteRequest({ mode, origin: ORIGIN, destination: DESTINATION })).toBeNull()
 	})
 
@@ -107,12 +107,12 @@ describe('which modes request a real route', () => {
 })
 
 describe('request count against a mocked /api/directions', () => {
-	it('one route identity is one request; non-car modes are none; retry is exactly one more', async () => {
+	it('one route identity is one request; metro and scooter are none; retry is exactly one more', async () => {
 		const fetchImpl = vi.fn<typeof fetch>(async () => json(REAL))
 		const loader = createRouteLoader({ fetch: fetchImpl })
 
-		// Walk, metro and scooter produce no request at all.
-		for (const mode of ['walk', 'metro', 'scooter'] as const) {
+		// Metro and scooter produce no request at all.
+		for (const mode of ['metro', 'scooter'] as const) {
 			expect(transportRouteRequest({ mode, origin: ORIGIN, destination: DESTINATION })).toBeNull()
 		}
 		expect(fetchImpl).not.toHaveBeenCalled()
@@ -217,7 +217,8 @@ describe('a car route that is loading', () => {
 
 	it('announces itself in the status card without any distance or time', () => {
 		const html = renderToStaticMarkup(
-			createElement(CarRouteStatus, {
+			createElement(RouteStatus, {
+				mode: 'car',
 				route: { status: 'loading' },
 				onRetry: () => {},
 				navigateHref: null,
@@ -251,7 +252,7 @@ describe('a car route that failed', () => {
 
 	it('keeps provider internals out of the message', () => {
 		for (const reason of ['config', 'invalid', 'timeout', 'upstream', 'no_route'] as const) {
-			const message = routeUnavailableMessage(reason)
+			const message = routeUnavailableMessage(reason, 'car')
 			expect(message).not.toMatch(/2gis|config|timeout|upstream|key|api/i)
 		}
 	})
@@ -261,7 +262,8 @@ describe('a car route that failed', () => {
 		const active = failedCar(reason)
 		if (active.status !== 'unavailable') throw new Error('expected unavailable')
 		return renderToStaticMarkup(
-			createElement(CarRouteStatus, {
+			createElement(RouteStatus, {
+				mode: 'car',
 				route: active,
 				onRetry: () => {},
 				navigateHref,
@@ -291,7 +293,7 @@ describe('a car route that failed', () => {
 })
 
 describe('estimated modes', () => {
-	it.each(['metro', 'scooter', 'walk'] as const)('%s keeps the estimate and the demo line', mode => {
+	it.each(['metro', 'scooter'] as const)('%s keeps the estimate and the demo line', mode => {
 		const active = activeTransportRoute({
 			mode,
 			estimate: estimateFor(mode),
@@ -330,14 +332,14 @@ describe('mode pills', () => {
 		expect(labels.car).toBeNull()
 	})
 
-	it('shows every mode as an estimate when car is not selected', () => {
-		const walk = activeTransportRoute({
-			mode: 'walk',
-			estimate: estimateFor('walk'),
+	it('shows every mode as an estimate when an estimated mode is selected', () => {
+		const metro = activeTransportRoute({
+			mode: 'metro',
+			estimate: estimateFor('metro'),
 			request: null,
 			state: { status: 'idle' },
 		})
-		const labels = modeDurationLabels({ active: walk, selected: 'walk', estimatedMinutes })
+		const labels = modeDurationLabels({ active: metro, selected: 'metro', estimatedMinutes })
 		for (const mode of MODES) expect(labels[mode]).toBe(`≈${estimatedMinutes[mode]} daq`)
 	})
 })

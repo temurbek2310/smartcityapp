@@ -19,10 +19,12 @@ type RouteSummaryProps = {
 	distanceKm: number | null
 	costUZS: number | null
 	costLabel: string
-	// Where time and distance come from: 2GIS for a real car route, the
-	// haversine estimate otherwise. The cost is B SPACE's own estimate either
-	// way — fed with the 2GIS road distance when there is one.
-	source: '2gis' | 'estimate'
+	// Where time and distance come from: 2GIS for a real car or walking
+	// route, the haversine estimate otherwise. The cost is B SPACE's own
+	// estimate either way — fed with the 2GIS road distance when there is one.
+	// null while a real route is still pending: nothing above is an estimate
+	// then, and the footer does not say it is.
+	source: '2gis' | 'estimate' | null
 	facts: RouteFactRow[]
 	// The car park this route suggests, and what to call it. Absent whenever
 	// there is nothing to suggest — arriving by metro, on a scooter or on
@@ -161,8 +163,14 @@ export function RouteSummary({
 				</span>
 			</div>
 			<p className='mt-1.5 px-1 text-[10.5px] text-ink-3'>
-				{source === '2gis'
-					? 'Vaqt va masofa — 2GIS marshruti. Yoqilg‘i narxi shu masofaga asoslangan B SPACE taxminiy hisobi. Yo‘l holati bo‘yicha qatorlar — namunaviy ma’lumot.'
+				{source === null
+					? 'Vaqt va masofa 2GIS marshruti tayyor bo‘lgach ko‘rsatiladi.'
+					: source === '2gis'
+					? [
+							'Vaqt va masofa — 2GIS marshruti.',
+							mode === 'car' && 'Yoqilg‘i narxi shu masofaga asoslangan B SPACE taxminiy hisobi.',
+							facts.length > 0 && 'Yo‘l holati bo‘yicha qatorlar — namunaviy ma’lumot.',
+						].filter(Boolean).join(' ')
 					: 'Yo‘l holati bo‘yicha qatorlar — namunaviy ma’lumot. Narx va vaqt real masofaga asoslangan taxminiy hisob.'}
 			</p>
 		</section>

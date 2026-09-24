@@ -3,7 +3,7 @@
 import { Bot, ChevronRight } from 'lucide-react'
 import { useState } from 'react'
 
-import type { TransportRecommendation } from '@/lib/transport-route'
+import { neutralRecommendationReason, type TransportRecommendation } from '@/lib/transport-route'
 import { TRANSPORT_MODES, type TransportMode } from '@/lib/transport'
 
 type AiRecommendationCardProps = {
@@ -17,9 +17,9 @@ type AiRecommendationCardProps = {
 // NOT real is a live traffic percentage, so the explanation stays generic
 // about how the estimate is made instead of inventing one.
 //
-// Once the car is routed by 2GIS its time is a different kind of number from
-// the other modes' estimates, and the two are not ranked against each other:
-// the card then only states the selected mode's time (see
+// Once the car or walking is routed by 2GIS its time is a different kind of
+// number from the other modes' estimates, and the two are not ranked against
+// each other: the card then only states the selected mode's time (see
 // transportRecommendation in lib/transport-route.ts).
 export function AiRecommendationCard({
 	currentMode,
@@ -162,9 +162,7 @@ function NeutralRecommendation({
 
 					{showWhy && (
 						<p className='mt-2 rounded-xl bg-white/70 p-2.5 text-[11.5px] leading-5 text-ink-3'>
-							Avtomobil marshruti 2GIS orqali hisoblanadi, metro, skuter va
-							piyoda vaqti esa o‘rtacha shahar tezligiga asoslangan taxminiy
-							hisob. Turli manbadagi raqamlarni solishtirib tavsiya berilmaydi.
+							{neutralRecommendationReason(currentMode)}
 						</p>
 					)}
 

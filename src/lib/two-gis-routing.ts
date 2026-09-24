@@ -3,6 +3,8 @@ import { z } from 'zod'
 import { isInsideUzbekistan } from '@/lib/geo'
 import {
 	normalizeRouteRequest,
+	REAL_ROUTING_MODES,
+	type RealRoutingMode,
 	routeUnavailable,
 	type RouteCoordinate,
 	type RouteRequest,
@@ -22,10 +24,29 @@ export const TWO_GIS_ROUTING_ENDPOINT = 'https://routing.api.2gis.com/routing/7.
 // provider does not hold a customer's screen on a spinner.
 export const ROUTING_TIMEOUT_MS = 8000
 
+// --- B SPACE mode → 2GIS transport ---------------------------------------
+// The one place a B SPACE mode name meets a 2GIS one. Components, the hook
+// and the wire format all speak B SPACE ('car', 'walk'); only the body sent
+// upstream says 'driving' or 'walking'. Unrelated to the consumer-app
+// deep link in lib/route-endpoints.ts, whose walking type is 'pedestrian' —
+// a different product with its own vocabulary.
+const TWO_GIS_TRANSPORT = {
+	car: 'driving',
+	walk: 'walking',
+} as const satisfies Record<RealRoutingMode, string>
+
+export type TwoGisTransport = (typeof TWO_GIS_TRANSPORT)[RealRoutingMode]
+
+export function twoGisTransport(mode: RealRoutingMode): TwoGisTransport {
+	return TWO_GIS_TRANSPORT[mode]
+}
+
 // --- What a caller may ask for ---------------------------------------------
-// Only points inside Uzbekistan, and only by car for now. Anything else is
-// refused before a paid request is made, so the endpoint is not a general-
-// purpose routing proxy for the rest of the world.
+// Only points inside Uzbekistan, and only the modes that have a real route
+// (car and walking). Anything else is refused before a paid request is
+// made, so the endpoint is not a general-purpose routing proxy for the rest
+// of the world — and a mode that is not routed is never quietly answered
+// with another mode's route.
 const coordinateSchema = z
 	.strictObject({
 		lat: z.number().min(-90).max(90),
@@ -36,27 +57,30 @@ const coordinateSchema = z
 const requestSchema = z.strictObject({
 	origin: coordinateSchema,
 	destination: coordinateSchema,
-	// Car only until each other mode gets its own phase. Omitting it means
-	// car, which is what the endpoint has always routed.
-	mode: z.literal('car').default('car'),
+	// Metro and scooter are refused until each gets its own phase. Omitting
+	// the mode means car, which is what the endpoint has always routed.
+	mode: z.enum(REAL_ROUTING_MODES).default('car'),
 })
 
-export function parseDirectionsRequest(body: unknown): RouteRequest | null {
+export type DirectionsRequest = RouteRequest & { mode: RealRoutingMode }
+
+export function parseDirectionsRequest(body: unknown): DirectionsRequest | null {
 	const parsed = requestSchema.safeParse(body)
 	if (!parsed.success) return null
-	return normalizeRouteRequest(parsed.data)
+	return { ...normalizeRouteRequest(parsed.data), mode: parsed.data.mode }
 }
 
 // --- What is sent ------------------------------------------------------------
 // `output: 'detailed'` is what makes 2GIS return the per-maneuver geometry;
 // the summary output has distance and duration only.
-export function twoGisRoutingBody({ origin, destination }: RouteRequest) {
+// `route_mode: 'fastest'` is the same for both transports.
+export function twoGisRoutingBody({ origin, destination, mode }: DirectionsRequest) {
 	return {
 		points: [
 			{ type: 'stop', lon: origin.lng, lat: origin.lat },
 			{ type: 'stop', lon: destination.lng, lat: destination.lat },
 		],
-		transport: 'driving',
+		transport: twoGisTransport(mode),
 		route_mode: 'fastest',
 		output: 'detailed',
 	}
@@ -82,7 +106,9 @@ const NO_ROUTE_STATUS = /NOT_FOUND|NO_ROUTE|ROUTE_NOT/i
 
 // Concatenates every geometry segment 2GIS returns, in order: the pedestrian
 // connector from the exact origin to the nearest road, each maneuver's
-// road-following segments, then the connector to the exact destination.
+// road-following segments, then the connector to the exact destination. A
+// walking route has the same shape — its maneuvers follow footpaths, and
+// the connectors are simply absent when the ends are already on one.
 // Returns null the moment any segment is unreadable — a line with a piece
 // silently missing would cut straight across the city.
 function collectRouteGeometry(route: TwoGisRoute): RouteCoordinate[] | null {

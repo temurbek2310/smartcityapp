@@ -101,6 +101,9 @@ type RouteMapProps = {
 	// location fix). The map then draws no line at all — the demo line never
 	// stands in for a real one.
 	realRoutePending?: 'loading' | 'unavailable'
+	// The demo road-problem chips under the map. Off for walking, where
+	// roadworks, crashes and speed cameras are not what the route is about.
+	showRoadProblems?: boolean
 }
 
 // Reproduces City Goo's map card for the Transport screen using B SPACE's
@@ -118,6 +121,7 @@ export function RouteMap({
 	onOpenProblem,
 	realRoute,
 	realRoutePending,
+	showRoadProblems = true,
 }: RouteMapProps) {
 	const isGpsOrigin = origin.kind === 'me' && !origin.approximate
 	const realGeometry = realRoute?.source === '2gis' && realRoute.geometry.length >= 2
@@ -236,6 +240,7 @@ export function RouteMap({
 				)}
 			</div>
 
+			{showRoadProblems && (
 			<div className='flex gap-2 p-2.5'>
 				{ROUTE_PROBLEMS.map(problem => (
 					<button
@@ -256,10 +261,13 @@ export function RouteMap({
 					</button>
 				))}
 			</div>
-			<p className='px-3 pb-3 text-[10.5px] leading-4 text-ink-3'>
+			)}
+			<p className={cn('px-3 pb-3 text-[10.5px] leading-4 text-ink-3', !showRoadProblems && 'pt-2.5')}>
 				{realGeometry
-					? 'Marshrut chizig‘i va vaqti — 2GIS. Yo‘l holati — namunaviy. Yo‘l bo‘ylab navigatsiya uchun 2GISni oching.'
-					: 'Namunaviy yo‘nalish va yo‘l holati. Yo‘l bo‘ylab navigatsiya uchun 2GISni oching.'}
+					? `Marshrut chizig‘i va vaqti — 2GIS.${showRoadProblems ? ' Yo‘l holati — namunaviy.' : ''} Yo‘l bo‘ylab navigatsiya uchun 2GISni oching.`
+					: realRoutePending
+						? 'Chiziq faqat 2GIS marshruti tayyor bo‘lganda chiziladi.'
+						: 'Namunaviy yo‘nalish va yo‘l holati. Yo‘l bo‘ylab navigatsiya uchun 2GISni oching.'}
 			</p>
 		</div>
 	)

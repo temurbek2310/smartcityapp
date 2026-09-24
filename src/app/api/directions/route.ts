@@ -9,9 +9,9 @@ import {
 	twoGisRoutingBody,
 } from '@/lib/two-gis-routing'
 
-// Car routes from 2GIS, normalized into B SPACE's RouteResult. Server-side
-// only: the routing key lives in DGIS_ROUTING_API_KEY, which — having no
-// NEXT_PUBLIC_ prefix — is never inlined into a browser bundle. The browser's
+// Car and walking routes from 2GIS, normalized into B SPACE's RouteResult.
+// Server-side only: the routing key lives in DGIS_ROUTING_API_KEY, which —
+// having no NEXT_PUBLIC_ prefix — is never inlined into a browser bundle. The browser's
 // MapGL key (NEXT_PUBLIC_MAPGL_API_KEY) is a different credential for a
 // different product and is never used here.
 //

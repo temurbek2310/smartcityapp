@@ -10,6 +10,16 @@ import type { TransportMode } from '@/lib/transport'
 // alternatives, no traffic segments, no transit legs — each of those arrives
 // with the phase that actually renders it.
 
+// The modes /api/directions routes for real. Metro and scooter stay
+// estimates (lib/eta.ts) and are refused by the endpoint. The provider's
+// own name for each mode lives only in lib/two-gis-routing.ts.
+export const REAL_ROUTING_MODES = ['car', 'walk'] as const satisfies readonly TransportMode[]
+export type RealRoutingMode = (typeof REAL_ROUTING_MODES)[number]
+
+export function isRealRoutingMode(mode: TransportMode): mode is RealRoutingMode {
+	return (REAL_ROUTING_MODES as readonly TransportMode[]).includes(mode)
+}
+
 // [lng, lat] — the order MapLine.coordinates and 2GIS both use.
 export type RouteCoordinate = [number, number]
 
