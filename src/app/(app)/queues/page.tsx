@@ -10,6 +10,10 @@ import {
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Suspense, useMemo, useState } from 'react'
 
+import {
+	scheduledDayLabel,
+	ticketDeskLabel,
+} from '@/components/queues/desk-grid'
 import { QueueForecastCard } from '@/components/queues/queue-forecast-card'
 import { QueueOrgCard } from '@/components/queues/queue-org-card'
 import { QueueTicketCard } from '@/components/queues/queue-ticket-card'
@@ -32,14 +36,18 @@ import { useApp } from '@/context/app-context'
 import { useDistanceFromUser } from '@/context/location-context'
 import { getParking } from '@/data/parkings'
 import { QUEUE_HOURS, QUEUE_ORGS, getQueueOrg } from '@/data/queue-orgs'
+import { useClock } from '@/hooks/use-clock'
 import { useDirections } from '@/hooks/use-directions'
 import { useToast } from '@/hooks/use-toast'
 import { occupancyTone } from '@/lib/availability'
-import { isQueueTicketLive } from '@/lib/booking-lifecycle'
+import {
+	QUEUE_CHECKIN_LEAD_MINUTES,
+	isQueueTicketLive,
+} from '@/lib/booking-lifecycle'
 import { findLiveQueueTicket } from '@/lib/booking-conflicts'
 import { cn } from '@/lib/cn'
 import { formatDistance, formatTime } from '@/lib/format'
-import type { QueueCategory } from '@/lib/types'
+import type { QueueCategory, QueueTicket } from '@/lib/types'
 
 const CATEGORIES: { id: QueueCategory | 'all'; label: string }[] = [
 	{ id: 'all', label: 'Barchasi' },
@@ -51,12 +59,33 @@ const CATEGORIES: { id: QueueCategory | 'all'; label: string }[] = [
 ]
 
 const HOW_IT_WORKS = [
-	'Tashkilot va xizmatni tanlang — raqam va oyna shunga bog‘liq.',
+	'Tashkilot va xizmatni tanlang — talon va oyna shunga bog‘liq.',
 	'Talon olasiz, o‘rningiz shu zahoti band qilinadi.',
 	'Navbat qanday siljiyotganini real vaqtda kuzatasiz.',
 	'Navbatingizga 10 daqiqa qolganda xabar beramiz.',
-	'Kelib talonni ko‘rsatasiz — raqam 5 daqiqa saqlanadi.',
+	'Kelib talonni ko‘rsatasiz — talon 5 daqiqa saqlanadi.',
 ]
+
+// What the banner says about the ticket in hand, by where it stands. A booked
+// ticket is not in line yet — its slot and desk are the news, not an
+// estimate it does not have.
+function activeTicketNotice(ticket: QueueTicket, now: number | null) {
+	const desk = ticketDeskLabel(getQueueOrg(ticket.orgId), ticket)
+	switch (ticket.status) {
+		case 'scheduled':
+			return ticket.scheduledAt
+				? `${scheduledDayLabel(ticket.scheduledAt, now)}, ${formatTime(ticket.scheduledAt)} · ${desk}. Navbat ${QUEUE_CHECKIN_LEAD_MINUTES} daqiqa oldin boshlanadi.`
+				: `Oldindan band qilingan · ${desk}.`
+		case 'called':
+			return `Sizni chaqirishmoqda — ${desk}.`
+		case 'arrived':
+			return `Kelganingiz qayd etildi · ${desk}.`
+		default:
+			return ticket.etaMinutes > 0
+				? `Taxminan ${ticket.etaMinutes} daqiqadan keyin chaqiramiz.`
+				: 'Navbatingiz yetib keldi — tayyor turing.'
+	}
+}
 
 export default function QueuesPage() {
 	return (
@@ -94,6 +123,7 @@ function QueuesView() {
 	const history = queueTickets.filter(
 		ticket => !isQueueTicketLive(ticket.status),
 	)
+	const now = useClock(30_000)
 
 	const filtered = useMemo(() => {
 		const needle = query.trim().toLowerCase()
@@ -142,7 +172,7 @@ function QueuesView() {
 						icon: Users,
 						tone: 'bg-ok-bg text-ok',
 						title: `Sizning navbatingiz ${activeTicket.number}`,
-						body: `Taxminan ${activeTicket.etaMinutes} daqiqadan keyin chaqiramiz.`,
+						body: activeTicketNotice(activeTicket, now),
 						time: formatTime(activeTicket.createdAt),
 					},
 				]
@@ -165,7 +195,7 @@ function QueuesView() {
 						icon: CircleParking,
 						tone: 'bg-brand-50 text-brand',
 						title: 'Chiqish haqida eslatma',
-						body: `${parking.name}da ${parking.availableSpaces} joy bo‘sh — oldindan bron qiling.`,
+						body: `${parking.name}da ${parking.availableSpaces} joy bo‘sh — oldindan band qiling.`,
 						time: 'hozir',
 					},
 				]

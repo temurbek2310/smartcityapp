@@ -2,14 +2,23 @@ import { NextResponse } from 'next/server'
 
 import { routeUnavailable, type RouteFailureReason, type RouteResult } from '@/lib/routing'
 import {
+	isRoadRoutingMode,
 	normalizeTwoGisResponse,
 	parseDirectionsRequest,
 	ROUTING_TIMEOUT_MS,
 	TWO_GIS_ROUTING_ENDPOINT,
 	twoGisRoutingBody,
 } from '@/lib/two-gis-routing'
+import {
+	normalizeTwoGisTransitResponse,
+	TWO_GIS_TRANSIT_ENDPOINT,
+	twoGisTransitBody,
+} from '@/lib/two-gis-transit'
 
-// Car and walking routes from 2GIS, normalized into B SPACE's RouteResult.
+// Car, walking, scooter and public transport routes from 2GIS, normalized
+// into B SPACE's RouteResult. The road modes go to the Routing API; metro
+// goes to the Public Transport API through its own adapter — one key, two
+// products, never one payload read as the other.
 // Server-side only: the routing key lives in DGIS_ROUTING_API_KEY, which —
 // having no NEXT_PUBLIC_ prefix — is never inlined into a browser bundle. The browser's
 // MapGL key (NEXT_PUBLIC_MAPGL_API_KEY) is a different credential for a
@@ -84,6 +93,18 @@ export async function POST(request: Request) {
 	const routeRequest = parseDirectionsRequest(body)
 	if (!routeRequest) return respond(routeUnavailable('invalid'))
 
+	const upstreamCall = isRoadRoutingMode(routeRequest.mode)
+		? {
+				endpoint: TWO_GIS_ROUTING_ENDPOINT,
+				body: twoGisRoutingBody({ ...routeRequest, mode: routeRequest.mode }),
+				normalize: (data: unknown) => normalizeTwoGisResponse(data, routeRequest),
+			}
+		: {
+				endpoint: TWO_GIS_TRANSIT_ENDPOINT,
+				body: twoGisTransitBody(routeRequest),
+				normalize: (data: unknown) => normalizeTwoGisTransitResponse(data, routeRequest),
+			}
+
 	// One signal for both ways the upstream call can end early: the timeout,
 	// and the customer's own request going away (they changed the route, or
 	// left the screen), which is no reason to keep paying for the answer.
@@ -100,10 +121,10 @@ export async function POST(request: Request) {
 	try {
 		let response: Response
 		try {
-			response = await fetch(`${TWO_GIS_ROUTING_ENDPOINT}?key=${encodeURIComponent(key)}`, {
+			response = await fetch(`${upstreamCall.endpoint}?key=${encodeURIComponent(key)}`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify(twoGisRoutingBody(routeRequest)),
+				body: JSON.stringify(upstreamCall.body),
 				signal: upstream.signal,
 				cache: 'no-store',
 			})
@@ -132,7 +153,7 @@ export async function POST(request: Request) {
 			return respond(routeUnavailable(reason))
 		}
 
-		const result = normalizeTwoGisResponse(data, routeRequest)
+		const result = upstreamCall.normalize(data)
 		if (result.status !== 'ok' && result.reason !== 'no_route') logFailure(result.reason)
 		return respond(result)
 	} finally {

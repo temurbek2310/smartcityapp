@@ -21,6 +21,11 @@ import {
 	BookingQrPanel,
 	QR_INSTRUCTIONS,
 } from '@/components/booking/booking-qr-panel'
+import {
+	scheduledDayLabel,
+	ticketDeskLabel,
+	ticketDeskNoun,
+} from '@/components/queues/desk-grid'
 import { AppBar } from '@/components/ui/app-bar'
 import { Badge, type BadgeTone } from '@/components/ui/badge'
 import { BottomSheet } from '@/components/ui/bottom-sheet'
@@ -38,18 +43,23 @@ import { useDirections } from '@/hooks/use-directions'
 import { useToast } from '@/hooks/use-toast'
 import {
 	ACTION_LABELS,
+	QUEUE_CANCEL_LABEL,
 	presentActionLabel,
 	queueTicketJourney,
 	serviceBookingJourney,
 	type BookingActionId,
 } from '@/lib/booking-journey'
-import { isQueueTicketLive } from '@/lib/booking-lifecycle'
+import {
+	QUEUE_CHECKIN_LEAD_MINUTES,
+	isQueueTicketLive,
+} from '@/lib/booking-lifecycle'
 import {
 	resolveBookingDetail,
 	type BookingDetail as ResolvedBookingDetail,
 	type BookingRow,
 } from '@/lib/bookings'
-import { formatDateTime } from '@/lib/format'
+import { formatDateTime, formatTime } from '@/lib/format'
+import { durationLabel } from '@/lib/service-slots'
 import type { ServiceBookingKind } from '@/lib/types'
 
 // The detail page for every booking that is not parking. Queue tickets and
@@ -144,7 +154,7 @@ export function BookingDetail({
 		const text = `${row!.title} · ${row!.code}`
 		try {
 			await navigator.clipboard.writeText(text)
-			toast.show('Bron nusxalandi')
+			toast.show(ticket ? 'Talon nusxalandi' : 'Bron nusxalandi')
 		} catch {
 			// Clipboard needs a secure context and permission; the code is on
 			// screen either way.
@@ -156,18 +166,23 @@ export function BookingDetail({
 		if (ticket) cancelQueueTicket(ticket.id)
 		else if (booking) cancelServiceBooking(booking.id)
 		setCancelOpen(false)
-		toast.show('Bron bekor qilindi')
+		toast.show(ticket ? 'Talon bekor qilindi' : 'Bron bekor qilindi')
 	}
 
 	// Only while the ticket is live: a served or cancelled number has no
 	// position left to report, and its stored one is whatever it was at close.
 	const queueLive = ticket && isQueueTicketLive(ticket.status)
 	const checkedIn = ticket?.status === 'arrived'
+	// Booked ahead and not in line yet: its slot is what matters, and there
+	// is no position to draw a progress bar from.
+	const scheduled = ticket?.status === 'scheduled'
+	const deskLabel = ticket ? ticketDeskLabel(org, ticket) : ''
+	const deskNoun = ticket ? ticketDeskNoun(org, ticket) : ''
 	// Which action leads right now — derived from status, start time (or the
 	// queue's estimate) and the clock, never stored.
 	const availability = { hasDestination: Boolean(row.destinationId) }
 	const journey = ticket
-		? queueTicketJourney(ticket, availability)
+		? queueTicketJourney(ticket, availability, now)
 		: serviceBookingJourney(booking!, now, availability)
 	const supporting = journey.secondary.filter(
 		id => id !== 'cancel' || row.cancellable,
@@ -246,7 +261,8 @@ export function BookingDetail({
 						block
 						onClick={() => setCancelOpen(true)}
 					>
-						<X className='size-4' /> {ACTION_LABELS.cancel}
+						<X className='size-4' />{' '}
+						{ticket ? QUEUE_CANCEL_LABEL : ACTION_LABELS.cancel}
 					</Button>
 				)
 			default:
@@ -285,16 +301,38 @@ export function BookingDetail({
 							</p>
 						</div>
 						<div className='text-right'>
-							<p className='text-[11.5px] text-ink-3'>Oyna</p>
+							<p className='text-[11.5px] text-ink-3'>{deskNoun}</p>
 							<p className='mt-0.5 text-[16px] font-black text-ink'>
-								{ticket.windowNumber}-oyna
+								{deskLabel}
 							</p>
 						</div>
 					</div>
 				</Card>
 			)}
 
-			{ticket && queueLive && !checkedIn && (
+			{ticket && scheduled && ticket.scheduledAt && (
+				<Card>
+					<div className='grid grid-cols-3 gap-3'>
+						{[
+							['Sana', scheduledDayLabel(ticket.scheduledAt, now)],
+							['Vaqt', formatTime(ticket.scheduledAt)],
+							[deskNoun, deskLabel],
+						].map(([label, value]) => (
+							<div key={label} className='min-w-0'>
+								<p className='text-[11.5px] text-ink-3'>{label}</p>
+								<p className='mt-0.5 truncate text-[16px] font-black text-ink'>
+									{value}
+								</p>
+							</div>
+						))}
+					</div>
+					<p className='mt-3 border-t border-line pt-3 text-[11.5px] text-ink-3'>
+						Navbat {QUEUE_CHECKIN_LEAD_MINUTES} daqiqa oldin boshlanadi
+					</p>
+				</Card>
+			)}
+
+			{ticket && queueLive && !checkedIn && !scheduled && (
 				<Card>
 					<div className='flex items-center justify-between gap-3'>
 						<div>
@@ -317,7 +355,7 @@ export function BookingDetail({
 			<Card>
 				<KeyValueList>
 					<KeyValue
-						label={ticket ? 'Joy' : 'Manzil'}
+						label={ticket ? 'Tashkilot' : 'Manzil'}
 						value={
 							place ? (
 								<Link href={`/home?place=${place.id}`} className='text-brand'>
@@ -329,11 +367,20 @@ export function BookingDetail({
 						}
 					/>
 					{ticket && <KeyValue label='Xizmat' value={service?.title ?? '—'} />}
-					{ticket && (
-						<KeyValue label='Oyna' value={`${ticket.windowNumber}-oyna`} />
-					)}
+					{ticket && <KeyValue label={deskNoun} value={deskLabel} />}
 					{booking && <KeyValue label='Tafsilot' value={booking.subtitle} />}
 					<KeyValue label='Vaqt' value={row.whenLabel} />
+					{/* The table's own choices; the other kinds store a
+					    lifecycle default the customer never picked. */}
+					{booking?.kind === 'table' && (booking.durationMinutes ?? 0) > 0 && (
+						<KeyValue
+							label='Davomiyligi'
+							value={durationLabel(booking.durationMinutes!)}
+						/>
+					)}
+					{booking?.seatingArea && (
+						<KeyValue label='Joy' value={booking.seatingArea} />
+					)}
 					{(org?.address ?? place?.address) && (
 						<KeyValue
 							label='Manzil'
@@ -370,7 +417,7 @@ export function BookingDetail({
 
 			{cancelOpen && (
 				<BottomSheet
-					title='Bronni bekor qilish?'
+					title={ticket ? 'Talonni bekor qilish?' : 'Bronni bekor qilish?'}
 					onClose={() => setCancelOpen(false)}
 				>
 					<Card>

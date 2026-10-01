@@ -208,7 +208,7 @@ export default function ProfilePage() {
 						<ChevronRight className='size-4 text-white' />
 					</div>
 					<p className='mt-2.5 text-[16px] font-black text-white'>
-						Kafolat to‘lovisiz bron qiling
+						Kafolat to‘lovisiz band qiling
 					</p>
 					<p className='mt-1.5 text-[12.5px] text-white/80'>
 						Joy 30 daqiqa saqlanadi, navbatda ustunlik ·{' '}
@@ -413,8 +413,8 @@ export default function ProfilePage() {
 
 					<AiCallout className='mt-3' title='AI kuzatuvi'>
 						{busiestHour === null
-							? 'Hali yetarli ma’lumot yo‘q — bir nechta bron qilganingizdan keyin odatlaringizni tahlil qilamiz.'
-							: `Siz ko‘pincha ${String(busiestHour).padStart(2, '0')}:00 atrofida bron qilasiz. Shu payt markazdagi parkinglar tezroq to‘ladi — kechqurundan bron qilib qo‘ying.`}
+							? 'Hali yetarli ma’lumot yo‘q — bir nechta parking band qilganingizdan keyin odatlaringizni tahlil qilamiz.'
+							: `Siz ko‘pincha ${String(busiestHour).padStart(2, '0')}:00 atrofida band qilasiz. Shu payt markazdagi parkinglar tezroq to‘ladi — kechqurundan band qilib qo‘ying.`}
 					</AiCallout>
 				</BottomSheet>
 			)}
@@ -426,7 +426,7 @@ export default function ProfilePage() {
 							{displayUzbekPlate(user.vehiclePlate)}
 						</p>
 						<p className='mt-2 text-[12px] text-ink-3'>
-							Raqam faqat siz bron qilgan joyga, faqat bron vaqtiga uzatiladi
+							Raqam faqat siz band qilgan joyga, faqat bron vaqtiga uzatiladi
 						</p>
 					</Card>
 
@@ -559,7 +559,7 @@ export default function ProfilePage() {
 				<BottomSheet title='Yordam' onClose={() => setSheet(null)}>
 					<div className='space-y-2'>
 						{[
-							'Parkingni qanday bron qilaman?',
+							'Parkingni qanday band qilaman?',
 							'Joy bo‘lmasa nima qilaman?',
 							'To‘lov qanday qaytariladi?',
 							'Operator bilan bog‘lanish',

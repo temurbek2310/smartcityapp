@@ -69,7 +69,7 @@ export function OccupancyForecastCard({
 				<AiCallout className='mt-4'>
 					Eng tinch vaqt — <b>{best.label}</b> ({best.percent}% band).
 					{peak.percent >= 90
-						? ` ${peak.label} da parking deyarli to‘ladi, oldindan bron qiling.`
+						? ` ${peak.label} da parking deyarli to‘ladi, oldindan band qiling.`
 						: ` Eng gavjum payt — ${peak.label}.`}
 				</AiCallout>
 			</Card>
@@ -139,7 +139,7 @@ export function OccupancyForecastCard({
 					<Card className='mt-3'>
 						<p className='text-[13px] leading-5 text-ink-2'>
 							{points[sheet].percent >= 90
-								? 'Bu vaqtda joy topish qiyin bo‘ladi — oldindan bron qilib qo‘ying.'
+								? 'Bu vaqtda joy topish qiyin bo‘ladi — oldindan band qilib qo‘ying.'
 								: points[sheet].percent >= 70
 									? 'Parking ancha band bo‘ladi, biroz erta kelganingiz ma’qul.'
 									: 'Bu vaqtda joy yetarli — bemalol kelishingiz mumkin.'}
@@ -155,7 +155,7 @@ export function OccupancyForecastCard({
 							onBook(selected.id)
 						}}
 					>
-						Bron qilish
+						Band qilish
 					</Button>
 				</BottomSheet>
 			)}

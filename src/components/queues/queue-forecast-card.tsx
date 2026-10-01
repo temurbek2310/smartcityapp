@@ -7,6 +7,7 @@ import { BottomSheet } from '@/components/ui/bottom-sheet'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { cn } from '@/lib/cn'
+import { queueActionLabel } from '@/lib/lexicon'
 import type { QueueForecastPoint, QueueOrg } from '@/lib/types'
 
 const TONE_TEXT = { ok: 'text-ok', warn: 'text-warn', bad: 'text-bad' } as const
@@ -108,6 +109,7 @@ export function QueueForecastCard({
 			{open !== null && (
 				<ForecastDetailSheet
 					point={points[open]}
+					takeLabel={queueActionLabel(org.category)}
 					onClose={() => setOpen(null)}
 					onTake={() => {
 						setOpen(null)
@@ -121,10 +123,13 @@ export function QueueForecastCard({
 
 function ForecastDetailSheet({
 	point,
+	takeLabel,
 	onClose,
 	onTake,
 }: {
 	point: QueueForecastPoint
+	// Named by the organisation, not by the mechanism — see lib/lexicon.
+	takeLabel: string
 	onClose: () => void
 	onTake: () => void
 }) {
@@ -151,7 +156,7 @@ function ForecastDetailSheet({
 			</Card>
 
 			<Button variant='primary' block className='mt-4' onClick={onTake}>
-				Navbat olish
+				{takeLabel}
 			</Button>
 		</BottomSheet>
 	)

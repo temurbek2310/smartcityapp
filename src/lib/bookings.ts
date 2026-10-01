@@ -1,5 +1,5 @@
 import { getParking } from '@/data/parkings'
-import { getQueueOrg } from '@/data/queue-orgs'
+import { getQueueDesk, getQueueOrg } from '@/data/queue-orgs'
 import { formatDateTime, formatTime, formatUZS } from '@/lib/format'
 import {
 	isQueueTicketLive,
@@ -14,7 +14,7 @@ import {
 } from '@/lib/booking-qr'
 import { destinationIdFrom } from '@/lib/navigation'
 import { reservationHref } from '@/lib/reservation'
-import { serviceWhenLabel } from '@/lib/service-slots'
+import { durationLabel, serviceWhenLabel } from '@/lib/service-slots'
 import type {
 	BookingKind,
 	BSpaceState,
@@ -118,7 +118,7 @@ function fromReservation(reservation: Reservation): BookingRow {
 		id: reservation.id,
 		kind: 'parking',
 		title: parking?.name ?? 'Parking',
-		subtitle: `${reservation.durationHours} soat · ${formatTime(reservation.startAt)}–${formatTime(reservation.endAt)}`,
+		subtitle: `${durationLabel(reservation.durationHours * 60)} · ${formatTime(reservation.startAt)}–${formatTime(reservation.endAt)}`,
 		// The full uuid is unreadable on a card; the tail is what a gate
 		// operator would actually be read out.
 		...codeOf(reservationReference(reservation)),
@@ -139,8 +139,8 @@ function fromReservation(reservation: Reservation): BookingRow {
 	})
 }
 
-// Called and checked-in are both "at the window now"; waiting has not got
-// there yet. served and cancelled are history.
+// Called and checked-in are both "at the window now"; waiting and a ticket
+// booked for later have not got there yet. served and cancelled are history.
 export function queueTicketRowStatus(
 	status: QueueTicket['status'],
 ): BookingRowStatus {
@@ -148,6 +148,7 @@ export function queueTicketRowStatus(
 		case 'called':
 		case 'arrived':
 			return 'active'
+		case 'scheduled':
 		case 'waiting':
 			return 'upcoming'
 		case 'served':
@@ -164,23 +165,39 @@ function fromQueueTicket(ticket: QueueTicket): BookingRow {
 	const service = org?.services.find(item => item.id === ticket.serviceId)
 	const status = queueTicketRowStatus(ticket.status)
 	const atWindow = ticket.status === 'called' || ticket.status === 'arrived'
+	// The desk the customer picked names itself — «Dr. Karimova», «2-kassa».
+	// A ticket without one keeps the window number it was always shown with.
+	const desk = org ? getQueueDesk(org, ticket.deskId) : undefined
+	const place = desk?.label ?? `${ticket.windowNumber}-oyna`
+	const serviceTitle = service?.title ?? 'Xizmat'
+	const scheduledFor =
+		ticket.scheduledAt && !Number.isNaN(Date.parse(ticket.scheduledAt))
+			? ticket.scheduledAt
+			: undefined
 
 	return row({
 		id: ticket.id,
 		kind: 'queue',
 		title: org?.title ?? 'Navbat',
-		subtitle: atWindow
-			? `${service?.title ?? 'Xizmat'} · ${ticket.windowNumber}-oyna`
-			: `${service?.title ?? 'Xizmat'} · oldingizda ${ticket.position}`,
+		subtitle:
+			atWindow || ticket.status === 'scheduled'
+				? desk || atWindow
+					? `${serviceTitle} · ${place}`
+					: serviceTitle
+				: `${serviceTitle} · oldingizda ${ticket.position}`,
 		...codeOf(queueTicketReference(ticket)),
 		whenLabel:
-			ticket.status === 'called'
-				? 'Sizni chaqirishmoqda'
-				: ticket.status === 'arrived'
-					? 'Kelganingiz qayd etildi'
-					: ticket.status === 'waiting'
-						? `taxminan ${ticket.etaMinutes} daqiqa`
-						: formatDateTime(ticket.closedAt ?? ticket.createdAt),
+			ticket.status === 'scheduled'
+				? scheduledFor
+					? serviceWhenLabel(scheduledFor)
+					: 'Oldindan band qilingan'
+				: ticket.status === 'called'
+					? 'Sizni chaqirishmoqda'
+					: ticket.status === 'arrived'
+						? 'Kelganingiz qayd etildi'
+						: ticket.status === 'waiting'
+							? `taxminan ${ticket.etaMinutes} daqiqa`
+							: formatDateTime(ticket.closedAt ?? ticket.createdAt),
 		status,
 		// The ticket's own page, the same way a parking booking has one. It
 		// used to point at /queues, which is the organisation's screen rather
@@ -198,10 +215,12 @@ function fromQueueTicket(ticket: QueueTicket): BookingRow {
 	})
 }
 
-// Live until booking-lifecycle's reconciliation completes it on the clock.
+// Kutilmoqda until its start, Faol from then until booking-lifecycle's
+// reconciliation completes it on the clock.
 export function serviceBookingRowStatus(
 	status: ServiceBooking['status'],
 ): BookingRowStatus {
+	if (status === 'upcoming') return 'upcoming'
 	if (isServiceBookingLive(status)) return 'active'
 	return status === 'completed' ? 'done' : 'cancelled'
 }
@@ -306,6 +325,11 @@ export type ServiceBookingDraft = {
 	subtitle: string
 	whenLabel: string
 	startAt: string
+	// How long the venue is held — what the lifecycle completes by and what
+	// the conflict check spans. Always sent, so no new booking leans on a
+	// fallback.
+	durationMinutes: number
+	seatingArea?: string
 }
 
 export function serviceBookingDraft(input: {
@@ -315,6 +339,8 @@ export function serviceBookingDraft(input: {
 	count: number
 	unit: string
 	startAt: Date
+	durationMinutes: number
+	seatingArea?: string
 	now?: string | number | Date
 }): ServiceBookingDraft {
 	const time = formatTime(input.startAt)
@@ -325,5 +351,7 @@ export function serviceBookingDraft(input: {
 		subtitle: `${input.count} ${input.unit} · ${time}`,
 		whenLabel: serviceWhenLabel(input.startAt, input.now),
 		startAt: input.startAt.toISOString(),
+		durationMinutes: input.durationMinutes,
+		...(input.seatingArea ? { seatingArea: input.seatingArea } : {}),
 	}
 }

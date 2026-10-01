@@ -26,6 +26,9 @@ const REAL: RealRoute = {
 	distanceMeters: 6400,
 	durationSeconds: 840,
 	geometry: [[69.27968, 41.31108], [69.21938, 41.33983]],
+	alternatives: [],
+	maneuvers: [],
+	traffic: [],
 }
 
 function json(body: unknown, status = 200) {

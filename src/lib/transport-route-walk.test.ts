@@ -48,6 +48,9 @@ const REAL_WALK: RealRoute = {
 	distanceMeters: 3120,
 	durationSeconds: 2460,
 	geometry: [[69.27968, 41.31108], [69.2702, 41.3071], [69.2555, 41.3102], [69.2486, 41.3164]],
+	alternatives: [],
+	maneuvers: [],
+	traffic: [],
 }
 
 const haversineKm = distanceKm(ORIGIN, DESTINATION)
@@ -87,7 +90,7 @@ describe('walking request', () => {
 
 	it('the client and the endpoint agree on which modes are real', () => {
 		expect([...REAL_ROUTED_MODES].sort()).toEqual([...REAL_ROUTING_MODES].sort())
-		expect([...REAL_ROUTED_MODES].sort()).toEqual(['car', 'scooter', 'walk'])
+		expect([...REAL_ROUTED_MODES].sort()).toEqual(['car', 'metro', 'scooter', 'walk'])
 	})
 
 	it('never sends the approximate city centre — no request at all', () => {
@@ -114,7 +117,7 @@ describe('walking request', () => {
 })
 
 describe('request count per selected mode against a mocked /api/directions', () => {
-	it('car, walk and scooter request, metro does not; one walk identity is one request', async () => {
+	it('every mode requests as itself; one walk identity is one request', async () => {
 		const fetchImpl = vi.fn<typeof fetch>(async () => json(REAL_WALK))
 		const loader = createRouteLoader({ fetch: fetchImpl })
 
@@ -122,7 +125,7 @@ describe('request count per selected mode against a mocked /api/directions', () 
 		const requests = Object.fromEntries(
 			MODES.map(mode => [mode, transportRouteRequest({ mode, origin: ORIGIN, destination: DESTINATION })]),
 		) as Record<TransportMode, ReturnType<typeof transportRouteRequest>>
-		expect(requests.metro).toBeNull()
+		expect(requests.metro?.mode).toBe('metro')
 		expect(requests.scooter?.mode).toBe('scooter')
 		expect(requests.car?.mode).toBe('car')
 		expect(requests.walk?.mode).toBe('walk')
@@ -169,7 +172,7 @@ describe('a successful walking route', () => {
 		expect(estimateFareUZS(figures.distanceKm, figures.minutes, 'walk')).toBe(0)
 	})
 
-	it('pill: walk is not approximate; unintegrated modes keep ≈', () => {
+	it('pill: walk is not approximate; unselected modes keep ≈', () => {
 		const labels = modeDurationLabels({ active: REAL, selected: 'walk', estimatedMinutes })
 		expect(labels.walk).toBe('41 daq')
 		expect(labels.metro).toBe(`≈${estimatedMinutes.metro} daq`)
@@ -204,23 +207,23 @@ describe('walking demo sections', () => {
 		})
 	})
 
-	it('the car keeps its Phase 1 sections; metro is unchanged', () => {
+	it('the car drops every demo section for 2GIS alternatives; metro drops them for its legs', () => {
 		expect(modeCapabilities('car')).toEqual({
 			realRoute: true,
-			roadProblems: true,
-			demoFacts: true,
-			demoTimeline: true,
-			demoTip: true,
-			alternatives: 'demo-labelled',
+			roadProblems: false,
+			demoFacts: false,
+			demoTimeline: false,
+			demoTip: false,
+			alternatives: 'real',
 		})
 		for (const mode of ['metro'] as const) {
 			expect(modeCapabilities(mode)).toEqual({
-				realRoute: false,
-				roadProblems: true,
-				demoFacts: true,
-				demoTimeline: true,
-				demoTip: true,
-				alternatives: 'selectable',
+				realRoute: true,
+				roadProblems: false,
+				demoFacts: false,
+				demoTimeline: false,
+				demoTip: false,
+				alternatives: 'hidden',
 			})
 		}
 	})

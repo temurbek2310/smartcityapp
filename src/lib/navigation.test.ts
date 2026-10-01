@@ -87,13 +87,14 @@ describe('destinationIdFrom · queue organisations', () => {
 		)
 	})
 
-	it('keeps a desk with no place on its own recorded position', () => {
-		const org = QUEUE_ORGS.find(item => !item.placeId)!
-		const point = endpointFor({ from: 'queueOrg', orgId: org.id })
-		expect(destinationIdFrom({ from: 'queueOrg', orgId: org.id })).toBe(
-			`queue:${org.id}`,
-		)
-		expect([point?.lat, point?.lng]).toEqual([org.lat, org.lng])
+	it('sends every desk to its own place — none is left without one', () => {
+		for (const org of QUEUE_ORGS) {
+			const point = endpointFor({ from: 'queueOrg', orgId: org.id })
+			expect(destinationIdFrom({ from: 'queueOrg', orgId: org.id })).toBe(
+				`place:${org.placeId}`,
+			)
+			expect([point?.lat, point?.lng]).toEqual([org.lat, org.lng])
+		}
 	})
 
 	it('resolves every organisation to somewhere real, and nothing otherwise', () => {

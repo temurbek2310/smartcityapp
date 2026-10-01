@@ -292,7 +292,7 @@ export default function BookingsPage() {
 						title={tab === 'open' ? 'Faol bron yo‘q' : 'Tarix bo‘sh'}
 						text={
 							tab === 'open'
-								? 'Parking bron qiling, navbat oling yoki stol band qiling — hammasi shu yerda ko‘rinadi.'
+								? 'Parking band qiling, navbat oling yoki stol band qiling — hammasi shu yerda ko‘rinadi.'
 								: 'Yakunlangan va bekor qilingan bronlar shu yerda saqlanadi.'
 						}
 						href='/parking'

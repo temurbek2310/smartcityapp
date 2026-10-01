@@ -31,6 +31,7 @@ import { liveAvailabilityAll } from '@/lib/live-availability'
 import {
 	MAP_CATEGORIES,
 	buildMapObjects,
+	inMapCategory,
 	mapObjectKey,
 	type MapObject,
 	type MapCatalogKind,
@@ -77,7 +78,7 @@ export default function MapPage() {
 			all: all.length,
 			place: all.filter(item => item.kind === 'place').length,
 			parking: all.filter(item => item.kind === 'parking').length,
-			queue: all.filter(item => item.kind === 'queue').length,
+			queue: all.filter(item => inMapCategory(item, 'queue')).length,
 			event: all.filter(item => item.kind === 'event').length,
 		}
 	}, [parkings, query, origin])

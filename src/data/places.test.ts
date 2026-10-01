@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
-import { PLACES, tableBookablePlaces } from '@/data/places'
+import {
+	DEFAULT_SEATING_AREA,
+	PLACES,
+	tableBookablePlaces,
+	tableSeatingAreas,
+} from '@/data/places'
 
 // The generic «Stol bron qilish» picker reads this and nothing else. If it
 // ever returns a car park or a museum the customer is offered a table
@@ -53,5 +58,28 @@ describe('tableBookablePlaces', () => {
 			expect(place.address.length).toBeGreaterThan(0)
 			expect(place.subtitle.length).toBeGreaterThan(0)
 		}
+	})
+})
+
+// The seating picker reads the venue's own tags; a venue that names no room
+// of its own still has its main hall, and that is the default.
+describe('tableSeatingAreas', () => {
+	it('always offers the main hall first', () => {
+		for (const place of tableBookablePlaces()) {
+			expect(tableSeatingAreas(place)[0]).toBe(DEFAULT_SEATING_AREA)
+		}
+		expect(tableSeatingAreas(undefined)).toEqual([DEFAULT_SEATING_AREA])
+	})
+
+	it('adds only the rooms a venue is tagged with', () => {
+		expect(tableSeatingAreas({ tags: ['Wi-Fi', 'Veranda'] })).toEqual([
+			'Asosiy zal',
+			'Veranda',
+		])
+		expect(tableSeatingAreas({ tags: ['Parking', 'Banket'] })).toEqual([
+			'Asosiy zal',
+			'Banket zali',
+		])
+		expect(tableSeatingAreas({ tags: ['Nonushta', 'Wi-Fi'] })).toEqual(['Asosiy zal'])
 	})
 })

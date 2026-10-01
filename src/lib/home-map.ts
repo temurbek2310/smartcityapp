@@ -10,6 +10,10 @@ export type MapLine = {
 	id: string
 	coordinates: [number, number][]
 	color: string
+	// Drawing order where lines overlap: higher is on top. Needed because a
+	// changed line is re-created, and a new polyline otherwise lands above
+	// the ones it should sit under.
+	zIndex?: number
 }
 
 // Illustrative overlays from the City Goo reference; no live transit feed.
@@ -49,7 +53,6 @@ export function buildHomeMapObjects({ parkings, layers, city, category, origin, 
 		.filter(object => {
 			if (object.kind === 'parking') return layers.parking
 			if (object.kind === 'event') return layers.events
-			if (object.kind === 'queue') return false
 			// Favorites are scoped to the place catalog. Parking favorites are
 			// already applied by the caller when it builds `parkings`; applying
 			// place IDs to every map object would accidentally hide all parking

@@ -7,9 +7,13 @@ import {
 	FALLBACK_TABLE_MINUTES,
 } from './booking-lifecycle'
 import {
+	FALLBACK_QUEUE_SERVICE_MINUTES,
+	QUEUE_DESK_CONFLICT_MESSAGE,
 	SERVICE_CONFLICT_MESSAGE,
 	findConflictingServiceBooking,
 	findLiveQueueTicket,
+	findQueueDeskClash,
+	queueTicketInterval,
 	sameServiceBookingTarget,
 	serviceBookingInterval,
 } from './booking-conflicts'
@@ -160,9 +164,31 @@ describe('table — same restaurant, overlapping live booking', () => {
 			count: 2,
 			unit: 'kishi',
 			startAt: slotInstant(DAY, '19:00'),
+			durationMinutes: FALLBACK_TABLE_MINUTES,
 			now: slotInstant(DAY, '09:00'),
 		})
 		expect(findConflictingServiceBooking([held], draft)?.id).toBe('held')
+	})
+
+	it('spans the duration the customer chose, on both sides', () => {
+		// A one-hour table ending 17:00 stays clear of the 18:00 booking; a
+		// three-hour one starting 15:30 runs into it.
+		expect(
+			findConflictingServiceBooking([held], { ...request('16:00'), durationMinutes: 60 }),
+		).toBeUndefined()
+		expect(
+			findConflictingServiceBooking([held], { ...request('15:30'), durationMinutes: 180 })?.id,
+		).toBe('held')
+		// A held 60-minute table (18:00–19:00) leaves 19:00 free.
+		expect(
+			findConflictingServiceBooking([booking({ durationMinutes: 60 })], request('19:00')),
+		).toBeUndefined()
+	})
+
+	it('an upcoming booking blocks exactly like a started one', () => {
+		expect(
+			findConflictingServiceBooking([booking({ status: 'upcoming' })], request('19:00'))?.id,
+		).toBe('held')
 	})
 })
 
@@ -312,6 +338,7 @@ describe('findLiveQueueTicket', () => {
 	const line = { orgId: 'coffee-lab-queue', serviceId: 'takeaway' }
 
 	it.each<[QueueTicketStatus, boolean]>([
+		['scheduled', true], // a line booked ahead is still this line
 		['waiting', true], // A
 		['called', true], // B
 		['arrived', true], // C
@@ -340,6 +367,96 @@ describe('findLiveQueueTicket', () => {
 
 	it('never matches an empty org id', () => {
 		expect(findLiveQueueTicket([ticket({ orgId: '' })], { orgId: '' })).toBeUndefined()
+	})
+})
+
+// --- Queue desks ----------------------------------------------------------------
+// Real catalog ids: the slot length comes from the service's serviceMinutes.
+// Medical Plaza's diagnostics room (d2) serves both the lab (10 min) and the
+// scanner (40 min); Davlat xizmatlari's passport line (20 min) has three
+// windows.
+
+describe('queueTicketInterval', () => {
+	const slot = (patch: Partial<QueueTicket> = {}) =>
+		ticket({ orgId: 'davlat-xizmat', serviceId: 'passport', scheduledAt: at('11:00'), ...patch })
+
+	it('a booked ticket holds its desk for the service’s own length', () => {
+		expect(queueTicketInterval(slot())).toEqual({
+			start: Date.parse(at('11:00')),
+			end: Date.parse(at('11:20')),
+		})
+	})
+
+	it('a live ticket, or an unreadable time, has no slot', () => {
+		expect(queueTicketInterval(slot({ scheduledAt: undefined }))).toBeNull()
+		expect(queueTicketInterval(slot({ scheduledAt: 'soon' }))).toBeNull()
+	})
+
+	it('a service the catalog lost still holds the grid’s half-hour', () => {
+		expect(queueTicketInterval(slot({ serviceId: 'gone' }))?.end).toBe(
+			Date.parse(at('11:00')) + FALLBACK_QUEUE_SERVICE_MINUTES * MIN,
+		)
+	})
+})
+
+describe('findQueueDeskClash', () => {
+	const held = (patch: Partial<QueueTicket> = {}) =>
+		ticket({
+			id: 'held',
+			orgId: 'medical-plaza',
+			serviceId: 'lab',
+			deskId: 'd2',
+			status: 'scheduled',
+			scheduledAt: at('12:00'),
+			...patch,
+		})
+	const ask = (time: string, patch: Partial<QueueTicket> = {}) => ({
+		orgId: 'medical-plaza',
+		serviceId: 'mri',
+		deskId: 'd2',
+		scheduledAt: at(time),
+		...patch,
+	})
+
+	it('the same desk through another line, overlapping, is a clash', () => {
+		expect(findQueueDeskClash([held()], ask('12:00'))?.id).toBe('held')
+		// The scanner's 40 minutes from 11:55 reach into 12:00–12:10.
+		expect(findQueueDeskClash([held()], ask('11:55'))?.id).toBe('held')
+	})
+
+	it('back-to-back slots do not clash', () => {
+		// The lab holds 12:00–12:10; the next one may start at 12:10.
+		expect(findQueueDeskClash([held()], ask('12:10'))).toBeUndefined()
+		// The scanner's 40 minutes from 11:20 end exactly at 12:00.
+		expect(findQueueDeskClash([held()], ask('11:20'))).toBeUndefined()
+	})
+
+	it('another desk or another organisation is free', () => {
+		expect(findQueueDeskClash([held()], ask('12:00', { deskId: 'd1' }))).toBeUndefined()
+		expect(
+			findQueueDeskClash([held({ orgId: 'plov-center' })], ask('12:00')),
+		).toBeUndefined()
+	})
+
+	it('history never blocks, every live status does', () => {
+		for (const status of ['served', 'cancelled'] as const) {
+			expect(findQueueDeskClash([held({ status })], ask('12:00'))).toBeUndefined()
+		}
+		for (const status of ['scheduled', 'waiting', 'called', 'arrived'] as const) {
+			expect(findQueueDeskClash([held({ status })], ask('12:00'))?.id).toBe('held')
+		}
+	})
+
+	it('a live ticket — no slot — neither clashes nor is clashed with', () => {
+		expect(
+			findQueueDeskClash([held({ scheduledAt: undefined })], ask('12:00')),
+		).toBeUndefined()
+		expect(findQueueDeskClash([held()], ask('12:00', { scheduledAt: undefined }))).toBeUndefined()
+		expect(findQueueDeskClash([held()], ask('12:00', { deskId: undefined }))).toBeUndefined()
+	})
+
+	it('names the clash in Uzbek', () => {
+		expect(QUEUE_DESK_CONFLICT_MESSAGE).toBe('Bu vaqtda ushbu oynada navbatingiz mavjud')
 	})
 })
 
@@ -392,6 +509,7 @@ describe('enforcement lives in the store', () => {
 	it('each creating mutation checks its synchronous list before appending', () => {
 		expect(store).toMatch(/findOverlappingReservation\(reservationsRef\.current/)
 		expect(store).toMatch(/findLiveQueueTicket\(queueTicketsRef\.current/)
+		expect(store).toMatch(/findQueueDeskClash\(queueTicketsRef\.current/)
 		expect(store).toMatch(/findConflictingServiceBooking\(\s*serviceBookingsRef\.current/)
 		expect(store).toContain('reservationsRef.current = [reservation, ...reservationsRef.current]')
 		expect(store).toContain('queueTicketsRef.current = [ticket, ...queueTicketsRef.current]')
@@ -421,7 +539,10 @@ describe('enforcement lives in the store', () => {
 		expect(callers('createServiceBooking')).toEqual([
 			'src/components/booking/service-booking-sheet.tsx',
 		])
-		expect(callers('createReservation')).toEqual([
+		// The table sheet's success view books the lot beside the table in one
+		// tap; everything it sends is inherited, and the store checks it.
+		expect(callers('createReservation').sort()).toEqual([
+			'src/components/booking/table-parking-offer.tsx',
 			'src/components/parking/parking-booking-sheet.tsx',
 		])
 	})

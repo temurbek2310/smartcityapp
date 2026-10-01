@@ -3,6 +3,7 @@
 import { Bot, ChevronRight } from 'lucide-react'
 import { useState } from 'react'
 
+import { formatDistance } from '@/lib/format'
 import { neutralRecommendationReason, type TransportRecommendation } from '@/lib/transport-route'
 import { TRANSPORT_MODES, type TransportMode } from '@/lib/transport'
 
@@ -10,12 +11,15 @@ type AiRecommendationCardProps = {
 	currentMode: TransportMode
 	recommendation: TransportRecommendation
 	onSwitch: (mode: TransportMode) => void
+	// Metres 2GIS reports as slow or jammed on the route on screen, or null
+	// when 2GIS gave no traffic (see trafficCongestionMeters).
+	congestionMeters?: number | null
 }
 
 // The comparison itself is real: both ETAs come from the same real,
-// distance-based estimate (see lib/eta.ts) for every mode. What is honestly
-// NOT real is a live traffic percentage, so the explanation stays generic
-// about how the estimate is made instead of inventing one.
+// distance-based estimate (see lib/eta.ts) for every mode. Estimates carry
+// no traffic, so the explanation says so rather than inventing any. Traffic
+// is only ever stated for a real 2GIS route, from 2GIS's own segments.
 //
 // Once the car, walking or the scooter is routed by 2GIS its time is a different kind of
 // number from the other modes' estimates, and the two are not ranked against
@@ -25,6 +29,7 @@ export function AiRecommendationCard({
 	currentMode,
 	recommendation,
 	onSwitch,
+	congestionMeters = null,
 }: AiRecommendationCardProps) {
 	const [showWhy, setShowWhy] = useState(false)
 	if (recommendation.kind === 'neutral') {
@@ -32,6 +37,7 @@ export function AiRecommendationCard({
 			<NeutralRecommendation
 				currentMode={currentMode}
 				minutes={recommendation.minutes}
+				congestionMeters={congestionMeters}
 				showWhy={showWhy}
 				onToggleWhy={() => setShowWhy(current => !current)}
 			/>
@@ -83,8 +89,8 @@ export function AiRecommendationCard({
 					{showWhy && (
 						<p className='mt-2 rounded-xl bg-white/70 p-2.5 text-[11.5px] leading-5 text-ink-3'>
 							Bu taqqoslash haqiqiy masofa va har bir transport turi uchun
-							o‘rtacha shahar tezligiga asoslangan taxminiy hisob — jonli
-							tirbandlik xizmati B SPACE MVPda hali ulanmagan.
+							o‘rtacha shahar tezligiga asoslangan taxminiy hisob — unda
+							tirbandlik hisobga olinmaydi.
 						</p>
 					)}
 
@@ -118,11 +124,13 @@ export function AiRecommendationCard({
 function NeutralRecommendation({
 	currentMode,
 	minutes,
+	congestionMeters,
 	showWhy,
 	onToggleWhy,
 }: {
 	currentMode: TransportMode
 	minutes: number | null
+	congestionMeters: number | null
 	showWhy: boolean
 	onToggleWhy: () => void
 }) {
@@ -153,6 +161,14 @@ function NeutralRecommendation({
 							{minutes !== null ? `${minutes} daq` : '—'}
 						</p>
 					</div>
+
+					{minutes !== null && congestionMeters !== null && (
+						<p className='mt-0.5 text-[12px] text-ink-3'>
+							{congestionMeters > 0
+								? `${formatDistance(congestionMeters / 1000)} tirbandlik`
+								: 'Tirbandlik yo‘q'}
+						</p>
+					)}
 
 					<p className='mt-1 text-[12.5px] leading-5 text-ink-2'>
 						{minutes !== null

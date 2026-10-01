@@ -10,7 +10,10 @@ import {
 	realRouteRequest,
 	routeRequestKey,
 	routeUnavailable,
+	routeVariant,
+	REAL_ROUTING_MODES,
 	type RealRoute,
+	type TransitLeg,
 	type RouteRequest,
 } from '@/lib/routing'
 
@@ -29,6 +32,9 @@ const REAL: RealRoute = {
 	distanceMeters: 6400,
 	durationSeconds: 840,
 	geometry: [[69.27968, 41.31108], [69.25, 41.33], [69.21938, 41.33983]],
+	alternatives: [],
+	maneuvers: [],
+	traffic: [],
 }
 
 describe('routeRequestKey', () => {
@@ -159,5 +165,128 @@ describe('parseRouteResult', () => {
 		for (const body of [null, 'html', 42, {}, { ...REAL, geometry: [[1, 2]] }, { ...REAL, geometry: [[1, 'a'], [2, 3]] }, { ...REAL, distanceMeters: -1 }]) {
 			expect(parseRouteResult(body)).toEqual(routeUnavailable('upstream'))
 		}
+	})
+})
+
+describe('parseRouteResult — public transport legs', () => {
+	const WALK: TransitLeg = {
+		type: 'walk', durationSeconds: 300, distanceMeters: 400,
+		geometry: [[69.27968, 41.31108], [69.2787, 41.3115]],
+		lineInfo: null, fromStop: null, toStop: null, stopCount: null,
+	}
+	const RIDE: TransitLeg = {
+		type: 'ride', durationSeconds: 1020, distanceMeters: 6300,
+		geometry: [[69.2787, 41.3115], [69.21938, 41.33983]],
+		lineInfo: { vehicle: 'metro', name: 'Chilonzor yo‘li', color: '#e90101' },
+		fromStop: 'Amir Temur xiyoboni', toStop: 'Bunyodkor', stopCount: 3,
+	}
+	const METRO: RealRoute = { ...REAL, mode: 'metro', transitLegs: [WALK, RIDE] }
+
+	it('metro is a real routing mode now', () => {
+		expect(REAL_ROUTING_MODES).toContain('metro')
+	})
+
+	it('round-trips a metro route with its legs', () => {
+		expect(parseRouteResult(JSON.parse(JSON.stringify(METRO)))).toEqual(METRO)
+	})
+
+	it('a road route carries no legs', () => {
+		expect(parseRouteResult(JSON.parse(JSON.stringify(REAL)))).not.toHaveProperty('transitLegs')
+	})
+
+	it('legs are all-or-nothing: one broken leg fails the whole route', () => {
+		for (const broken of [
+			{ ...RIDE, geometry: [[1, 2]] },
+			{ ...RIDE, lineInfo: null },
+			{ ...RIDE, lineInfo: { vehicle: 'rocket', name: '1', color: null } },
+			{ ...WALK, type: 'teleport' },
+			{ ...WALK, durationSeconds: -1 },
+		]) {
+			expect(parseRouteResult({ ...METRO, transitLegs: [WALK, broken] })).toEqual(routeUnavailable('upstream'))
+		}
+	})
+
+	it('a metro route without legs, or with walking only, is not a route', () => {
+		expect(parseRouteResult({ ...METRO, transitLegs: undefined })).toEqual(routeUnavailable('upstream'))
+		expect(parseRouteResult({ ...METRO, transitLegs: [] })).toEqual(routeUnavailable('upstream'))
+		expect(parseRouteResult({ ...METRO, transitLegs: [WALK] })).toEqual(routeUnavailable('upstream'))
+	})
+
+	it('drops a line colour that is not a plain hex value', () => {
+		const odd = { ...RIDE, lineInfo: { ...RIDE.lineInfo, color: 'url(javascript:x)' } }
+		const parsed = parseRouteResult({ ...METRO, transitLegs: [WALK, odd] }) as RealRoute
+		expect(parsed.transitLegs?.[1].lineInfo?.color).toBeNull()
+	})
+})
+
+describe('parseRouteResult — alternatives, maneuvers and traffic', () => {
+	const ALT = { distanceMeters: 7100, durationSeconds: 960, geometry: [[69.27968, 41.31108], [69.21938, 41.33983]] }
+
+	it('keeps well-formed extras', () => {
+		const full = {
+			...REAL,
+			alternatives: [ALT],
+			maneuvers: [{ type: 'left', instruction: 'Chapga buriling', distanceMeters: 300 }],
+			traffic: [{ speed: 'jam', distanceMeters: 120, geometry: ALT.geometry }],
+		}
+		expect(parseRouteResult(JSON.parse(JSON.stringify(full)))).toEqual(full)
+	})
+
+	it('reads a route without extras as having none', () => {
+		const { alternatives, maneuvers, traffic, ...bare } = REAL
+		void alternatives; void maneuvers; void traffic
+		expect(parseRouteResult(bare)).toEqual(REAL)
+	})
+
+	it('drops malformed items one by one, never the route', () => {
+		const result = parseRouteResult({
+			...REAL,
+			alternatives: [ALT, { ...ALT, geometry: [[1, 2]] }, null],
+			maneuvers: [{ type: 'teleport', distanceMeters: 1 }, { type: 'right', distanceMeters: -5 }, { type: 'right', distanceMeters: 40 }],
+			traffic: [
+				{ speed: 'ludicrous', distanceMeters: 1, geometry: ALT.geometry },
+				{ speed: 'jam', distanceMeters: 50 },
+				{ speed: 'slow', distanceMeters: 80, geometry: ALT.geometry },
+			],
+		})
+		expect(isRealRoute(result)).toBe(true)
+		if (!isRealRoute(result)) return
+		expect(result.alternatives).toEqual([ALT])
+		expect(result.maneuvers).toEqual([{ type: 'right', instruction: 'O‘ngga buriling', distanceMeters: 40 }])
+		expect(result.traffic).toEqual([{ speed: 'slow', distanceMeters: 80, geometry: ALT.geometry }])
+	})
+
+	it('prints B SPACE’s own instruction, never the one on the wire', () => {
+		const result = parseRouteResult({
+			...REAL,
+			maneuvers: [{ type: 'left', instruction: 'Left turn onto somewhere', distanceMeters: 10 }],
+		})
+		expect(isRealRoute(result) && result.maneuvers[0].instruction).toBe('Chapga buriling')
+	})
+})
+
+describe('routeVariant', () => {
+	const ALT = { distanceMeters: 7100, durationSeconds: 960, geometry: [[69.27968, 41.31108], [69.21938, 41.33983]] as [number, number][] }
+	const WITH_ALT: RealRoute = {
+		...REAL,
+		alternatives: [ALT],
+		maneuvers: [{ type: 'start', instruction: 'Yo‘lga chiqing', distanceMeters: 100 }],
+		traffic: [{ speed: 'fast', distanceMeters: 100, geometry: ALT.geometry }],
+	}
+
+	it('index 0, or one with no alternative, is the primary route unchanged', () => {
+		expect(routeVariant(WITH_ALT, 0)).toBe(WITH_ALT)
+		expect(routeVariant(WITH_ALT, 5)).toBe(WITH_ALT)
+	})
+
+	it('an alternative replaces line, distance and time whole — and brings no primary maneuvers or traffic', () => {
+		expect(routeVariant(WITH_ALT, 1)).toEqual({
+			...WITH_ALT,
+			distanceMeters: 7100,
+			durationSeconds: 960,
+			geometry: ALT.geometry,
+			maneuvers: [],
+			traffic: [],
+		})
 	})
 })

@@ -16,6 +16,7 @@ import { bayMap, firstFreeBay, isBaySelectable } from '@/lib/bay-map'
 import { saveBookingMeta } from '@/lib/booking-meta'
 import { useBookingMeta } from '@/hooks/use-booking-meta'
 import { formatTime, formatUZS } from '@/lib/format'
+import { PARKING_BOOK_LABEL } from '@/lib/lexicon'
 import {
 	isParkingStartPast,
 	PARKING_ARRIVAL_SLOTS,
@@ -32,7 +33,7 @@ import {
 
 // The one parking booking UI in the app. It used to live inline in Home
 // and duplicated an older standalone /reserve/[id] form; both are gone and
-// every "Bron qilish" entry point (Home cards, Home AI tip, Home services,
+// every "Band qilish" entry point (Home cards, Home AI tip, Home services,
 // Favorites, Transport destination card and notice, parking detail) opens
 // this sheet. The UI layer only — reservations are still created by
 // B SPACE's own createReservation().
@@ -313,7 +314,7 @@ function ParkingBookingSheetBody({
 	const hasAnpr = parking.plateRecognition
 
 	return (
-		<BottomSheet title='Parkingni bron qilish' onClose={onClose}>
+		<BottomSheet title={PARKING_BOOK_LABEL} onClose={onClose}>
 			<div className='rounded-2xl bg-white p-3 shadow-card'>
 				<div className='flex items-center gap-3'>
 					<span className='grid size-12 shrink-0 place-items-center rounded-2xl bg-ink text-white'>
@@ -522,8 +523,8 @@ function ParkingBookingSheetBody({
 				{conflict
 					? 'Vaqt band'
 					: total
-						? 'To‘lash va bron qilish'
-						: 'Bron qilish'}
+						? 'To‘lash va band qilish'
+						: 'Band qilish'}
 			</button>
 			<p className='mt-2 text-center text-[11px] text-ink-3'>
 				Kelishdan 1 soat oldin bepul bekor qilish mumkin

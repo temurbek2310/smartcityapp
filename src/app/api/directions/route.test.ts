@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { POST } from '@/app/api/directions/route'
 import { ROUTING_TIMEOUT_MS, TWO_GIS_ROUTING_ENDPOINT } from '@/lib/two-gis-routing'
+import { TWO_GIS_TRANSIT_ENDPOINT } from '@/lib/two-gis-transit'
 
 // Every upstream call is mocked: this suite consumes no 2GIS quota. A test
 // that reached the real fetch would fail on the stub below first.
@@ -24,21 +25,60 @@ const TWO_GIS_ROUTE = {
 				geometry: { selection: 'LINESTRING(69.27968 41.31108, 69.2797 41.3111)' },
 			},
 			maneuvers: [
-				{ comment: 'start' },
+				{ comment: 'start', icon: 'start' },
 				{
+					comment: 'Left turn onto проспект Амира Темура',
+					icon: 'crossroad_left',
 					outcoming_path: {
+						distance: 6300,
 						geometry: [
-							{ selection: 'LINESTRING(69.2797 41.3111, 69.26 41.32)', color: 'fast' },
-							{ selection: 'LINESTRING(69.26 41.32, 69.2194 41.3398)', color: 'slow' },
+							{ selection: 'LINESTRING(69.2797 41.3111, 69.26 41.32)', color: 'fast', length: 2500 },
+							{ selection: 'LINESTRING(69.26 41.32, 69.25 41.33)', color: 'slow', length: 1800 },
+							{ selection: 'LINESTRING(69.25 41.33, 69.2194 41.3398)', color: 'slow-jams', length: 2000 },
 						],
 					},
 				},
-				{ comment: 'finish' },
+				{ comment: 'finish', icon: 'finish' },
 			],
 			end_pedestrian_path: {
 				geometry: { selection: 'LINESTRING(69.2194 41.3398, 69.21938 41.33983)' },
 			},
 		},
+		{
+			id: '2',
+			total_distance: 7100,
+			total_duration: 960,
+			maneuvers: [
+				{
+					icon: 'start',
+					outcoming_path: {
+						geometry: [{ selection: 'LINESTRING(69.27968 41.31108, 69.24 41.30, 69.21938 41.33983)', color: 'fast' }],
+					},
+				},
+				{ icon: 'finish' },
+			],
+		},
+	],
+}
+
+// What TWO_GIS_ROUTE carries beyond the primary line, as B SPACE speaks it.
+const CAR_EXTRAS = {
+	alternatives: [
+		{
+			distanceMeters: 7100,
+			durationSeconds: 960,
+			geometry: [[69.27968, 41.31108], [69.24, 41.3], [69.21938, 41.33983]],
+		},
+	],
+	maneuvers: [
+		{ type: 'start', instruction: 'Yo‘lga chiqing', distanceMeters: 0 },
+		{ type: 'left', instruction: 'Chapga buriling', distanceMeters: 6300 },
+		{ type: 'finish', instruction: 'Manzilga yetib keldingiz', distanceMeters: 0 },
+	],
+	// Neighbouring slow and slow-jams segments merge into one stretch.
+	traffic: [
+		{ speed: 'fast', distanceMeters: 2500, geometry: [[69.2797, 41.3111], [69.26, 41.32]] },
+		{ speed: 'slow', distanceMeters: 3800, geometry: [[69.26, 41.32], [69.25, 41.33], [69.2194, 41.3398]] },
 	],
 }
 
@@ -110,11 +150,52 @@ describe('POST /api/directions — success', () => {
 				[69.27968, 41.31108],
 				[69.2797, 41.3111],
 				[69.26, 41.32],
+				[69.25, 41.33],
 				[69.2194, 41.3398],
 				[69.21938, 41.33983],
 			],
+			...CAR_EXTRAS,
 		})
 		expect(response.headers.get('cache-control')).toBe('no-store')
+	})
+
+	it('drops an unreadable alternative on its own, never the primary', async () => {
+		const broken = structuredClone(TWO_GIS_ROUTE)
+		broken.result[1].maneuvers[0].outcoming_path!.geometry[0].selection = 'LINESTRING(oops)'
+		upstreamJson(broken)
+		const result = await (await call(valid)).json()
+		expect(result.status).toBe('ok')
+		expect(result.distanceMeters).toBe(6400)
+		expect(result.alternatives).toEqual([])
+	})
+
+	it('maps unknown maneuver icons to a neutral step and leaves out colours with no speed', async () => {
+		const odd = structuredClone(TWO_GIS_ROUTE)
+		odd.result[0].maneuvers[1].icon = 'something_new'
+		odd.result[0].maneuvers[1].outcoming_path!.geometry[1].color = 'no-data'
+		upstreamJson(odd)
+		const result = await (await call(valid)).json()
+		expect(result.maneuvers[1]).toEqual({ type: 'continue', instruction: 'Yo‘lda davom eting', distanceMeters: 6300 })
+		expect(result.traffic).toEqual([
+			{ speed: 'fast', distanceMeters: 2500, geometry: [[69.2797, 41.3111], [69.26, 41.32]] },
+			{ speed: 'slow', distanceMeters: 2000, geometry: [[69.25, 41.33], [69.2194, 41.3398]] },
+		])
+	})
+
+	it('never merges two stretches across one that was left out', async () => {
+		const gap = structuredClone(TWO_GIS_ROUTE)
+		gap.result[0].maneuvers[1].outcoming_path!.geometry[0].color = 'slow'
+		gap.result[0].maneuvers[1].outcoming_path!.geometry[1].color = 'ignore'
+		upstreamJson(gap)
+		const result = await (await call(valid)).json()
+		expect(result.traffic.map((segment: { distanceMeters: number }) => segment.distanceMeters)).toEqual([2500, 2000])
+	})
+
+	it('never passes on the provider’s English comment text', async () => {
+		upstreamJson(TWO_GIS_ROUTE)
+		const text = await (await call(valid)).text()
+		expect(text).not.toContain('Left turn')
+		expect(text).not.toContain('comment')
 	})
 
 	it('asks 2GIS for a detailed fastest driving route with the server key only', async () => {
@@ -134,7 +215,15 @@ describe('POST /api/directions — success', () => {
 			transport: 'driving',
 			route_mode: 'fastest',
 			output: 'detailed',
+			alternative: 2,
 		})
+	})
+
+	it('never takes a key from the caller', async () => {
+		upstreamJson(TWO_GIS_ROUTE)
+		const response = await call({ ...valid, key: 'caller-key' })
+		expect(response.status).toBe(400)
+		expect(fetchMock).not.toHaveBeenCalled()
 	})
 
 	it('treats a missing mode as car, and rounds coordinates before sending', async () => {
@@ -212,6 +301,15 @@ describe('POST /api/directions — walking', () => {
 				[69.2555, 41.3102],
 				[69.2486, 41.3164],
 			],
+			alternatives: [],
+			// No icons in this answer: each step is kept, claiming no direction.
+			maneuvers: [
+				{ type: 'continue', instruction: 'Yo‘lda davom eting', distanceMeters: 0 },
+				{ type: 'continue', instruction: 'Yo‘lda davom eting', distanceMeters: 0 },
+				{ type: 'continue', instruction: 'Yo‘lda davom eting', distanceMeters: 0 },
+				{ type: 'continue', instruction: 'Yo‘lda davom eting', distanceMeters: 0 },
+			],
+			traffic: [],
 		})
 	})
 
@@ -347,9 +445,13 @@ describe('POST /api/directions — scooter', () => {
 		expect(sent[0]).not.toHaveProperty('filters')
 		expect(sent[1]).not.toHaveProperty('filters')
 		expect(sent[2].filters).toEqual(['ban_car_road', 'ban_stairway'])
+		// Alternatives are asked for with the car only.
+		expect(sent[0].alternative).toBe(2)
+		expect(sent[1]).not.toHaveProperty('alternative')
+		expect(sent[2]).not.toHaveProperty('alternative')
 	})
 
-	it('normalizes the primary route only: its distance, duration and WKT geometry', async () => {
+	it('normalizes the primary route, and the second route as an alternative', async () => {
 		upstreamJson(TWO_GIS_SCOOTER)
 		await expectResult(await call(scooter), 200, {
 			status: 'ok',
@@ -365,6 +467,18 @@ describe('POST /api/directions — scooter', () => {
 				[69.28012, 41.31052],
 				[69.2801, 41.3105],
 			],
+			alternatives: [
+				{
+					distanceMeters: 8087,
+					durationSeconds: 2362,
+					geometry: [[69.2215, 41.2846], [69.2, 41.35], [69.2801, 41.3105]],
+				},
+			],
+			maneuvers: [
+				{ type: 'continue', instruction: 'Yo‘lda davom eting', distanceMeters: 0 },
+				{ type: 'continue', instruction: 'Yo‘lda davom eting', distanceMeters: 0 },
+			],
+			traffic: [],
 		})
 	})
 
@@ -413,6 +527,149 @@ describe('POST /api/directions — scooter', () => {
 			reason: 'invalid',
 		})
 		expect(fetchMock).not.toHaveBeenCalled()
+	})
+})
+
+// A 2GIS public transport answer in the documented shape: walk to the
+// station, one metro ride, walk out, then the finish marker. A walking-only
+// journey comes first to prove it is never presented as public transport.
+const TWO_GIS_TRANSIT = [
+	{
+		pedestrian: true,
+		total_distance: 3200,
+		total_duration: 2400,
+		movements: [
+			{
+				type: 'walkway',
+				distance: 3200,
+				moving_duration: 2400,
+				waypoint: { name: 'A', subtype: 'start' },
+				alternatives: [{ geometry: [{ selection: 'LINESTRING(69.27968 41.31108, 69.21938 41.33983)' }] }],
+			},
+		],
+	},
+	{
+		pedestrian: false,
+		total_distance: 7000,
+		total_duration: 1500,
+		transfer_count: 0,
+		movements: [
+			{
+				type: 'walkway',
+				distance: 400,
+				moving_duration: 300,
+				waiting_duration: 0,
+				waypoint: { name: 'A', subtype: 'start', comment: 'пешком 400 м' },
+				alternatives: [{ geometry: [{ selection: 'LINESTRING(69.27968 41.31108, 69.2787 41.3115)' }] }],
+			},
+			{
+				type: 'passage',
+				distance: 6300,
+				moving_duration: 840,
+				waiting_duration: 180,
+				waypoint: { name: 'Amir Temur xiyoboni', subtype: 'metro' },
+				metro: { line_name: 'Chilonzor yo‘li', color: '#e90101' },
+				platforms: { names: ['Mustaqillik maydoni', 'Paxtakor'] },
+				routes: [{ names: ['1'], subtype: 'metro', color: '' }],
+				alternatives: [{ geometry: [{ selection: 'LINESTRING(69.2787 41.3115, 69.25 41.32, 69.2205 41.3390)' }] }],
+			},
+			{
+				type: 'walkway',
+				distance: 300,
+				moving_duration: 180,
+				waypoint: { name: 'Bunyodkor', subtype: 'pedestrian', comment: 'пешком 300 м' },
+				alternatives: [{ geometry: [{ selection: 'LINESTRING(69.2205 41.3390, 69.21938 41.33983)' }] }],
+			},
+			{ type: 'walkway', waypoint: { name: 'B', subtype: 'finish', comment: 'Вы на месте в 17:53.' } },
+		],
+	},
+]
+
+const metro = { origin: AMIR_TEMUR, destination: HUMO_ARENA, mode: 'metro' }
+
+describe('POST /api/directions — metro (public transport)', () => {
+	it('asks the 2GIS Public Transport API, never the road Routing API', async () => {
+		upstreamJson(TWO_GIS_TRANSIT)
+		await call(metro)
+		expect(fetchMock).toHaveBeenCalledTimes(1)
+		const [url, init] = fetchMock.mock.calls[0]
+		expect(String(url)).toBe(`${TWO_GIS_TRANSIT_ENDPOINT}?key=${KEY}`)
+		const body = JSON.parse(String(init?.body))
+		expect(body.source.point).toEqual({ lat: AMIR_TEMUR.lat, lon: AMIR_TEMUR.lng })
+		expect(body.target.point).toEqual({ lat: HUMO_ARENA.lat, lon: HUMO_ARENA.lng })
+		expect(body.transport).toContain('metro')
+		expect(body).not.toHaveProperty('points')
+	})
+
+	it('normalizes the first riding journey into legs; the walking-only one is skipped', async () => {
+		upstreamJson(TWO_GIS_TRANSIT)
+		const response = await call(metro)
+		expect(response.status).toBe(200)
+		const route = await response.json()
+		expect(route).toMatchObject({ status: 'ok', source: '2gis', mode: 'metro', distanceMeters: 7000, durationSeconds: 1500 })
+		expect(route.transitLegs).toEqual([
+			{
+				type: 'walk', durationSeconds: 300, distanceMeters: 400,
+				geometry: [[69.27968, 41.31108], [69.2787, 41.3115]],
+				lineInfo: null, fromStop: null, toStop: null, stopCount: null,
+			},
+			{
+				type: 'ride', durationSeconds: 1020, distanceMeters: 6300,
+				geometry: [[69.2787, 41.3115], [69.25, 41.32], [69.2205, 41.339]],
+				lineInfo: { vehicle: 'metro', name: 'Chilonzor yo‘li', color: '#e90101' },
+				fromStop: 'Amir Temur xiyoboni', toStop: 'Bunyodkor', stopCount: 3,
+			},
+			{
+				type: 'walk', durationSeconds: 180, distanceMeters: 300,
+				geometry: [[69.2205, 41.339], [69.21938, 41.33983]],
+				lineInfo: null, fromStop: null, toStop: null, stopCount: null,
+			},
+		])
+		// The whole line is the legs joined, start to finish.
+		expect(route.geometry[0]).toEqual([69.27968, 41.31108])
+		expect(route.geometry.at(-1)).toEqual([69.21938, 41.33983])
+		// Russian provider prose never reaches the wire.
+		expect(JSON.stringify(route)).not.toMatch(/пешком|Вы на месте/)
+	})
+
+	it('no_route: 204, an empty list, or walking-only journeys', async () => {
+		fetchMock.mockResolvedValueOnce(new Response(null, { status: 204 }))
+		await expectResult(await call(metro), 404, { status: 'unavailable', reason: 'no_route' })
+		upstreamJson([])
+		await expectResult(await call(metro), 404, { status: 'unavailable', reason: 'no_route' })
+		upstreamJson([TWO_GIS_TRANSIT[0]])
+		await expectResult(await call(metro), 404, { status: 'unavailable', reason: 'no_route' })
+	})
+
+	it('upstream: a journey with one unreadable leg is never shown partially or as a straight line', async () => {
+		const broken = structuredClone(TWO_GIS_TRANSIT[1])
+		broken.movements[1].alternatives = [{ geometry: [{ selection: 'LINESTRING(69.2787)' }] }]
+		upstreamJson([broken])
+		await expectResult(await call(metro), 502, { status: 'unavailable', reason: 'upstream' })
+
+		const noDuration = structuredClone(TWO_GIS_TRANSIT[1]) as { movements: Record<string, unknown>[] }
+		delete noDuration.movements[1].moving_duration
+		upstreamJson([noDuration])
+		await expectResult(await call(metro), 502, { status: 'unavailable', reason: 'upstream' })
+
+		upstreamJson({ type: 'error', message: 'bad' })
+		await expectResult(await call(metro), 502, { status: 'unavailable', reason: 'upstream' })
+	})
+
+	it('upstream: HTTP failure; timeout aborts the transit call', async () => {
+		upstreamJson({ message: 'nope' }, 422)
+		await expectResult(await call(metro), 502, { status: 'unavailable', reason: 'upstream' })
+
+		vi.useFakeTimers()
+		fetchMock.mockImplementationOnce(
+			(_url, init) =>
+				new Promise((_resolve, reject) => {
+					init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')))
+				}),
+		)
+		const pending = call(metro)
+		await vi.advanceTimersByTimeAsync(ROUTING_TIMEOUT_MS + 1)
+		await expectResult(await pending, 504, { status: 'unavailable', reason: 'timeout' })
 	})
 })
 
@@ -476,7 +733,7 @@ describe('POST /api/directions — refused before any upstream call', () => {
 		// Provider names are not B SPACE modes either: 'walking' and
 		// 'driving' are refused, not passed through. Nor is 2GIS's
 		// 'bicycle' a stand-in for the scooter.
-		for (const mode of ['metro', 'public_transport', 'bicycle', 'truck', 'pedestrian', 'walking', 'driving', null]) {
+		for (const mode of ['public_transport', 'bicycle', 'truck', 'pedestrian', 'walking', 'driving', null]) {
 			await expectResult(await call({ ...valid, mode }), 400, { status: 'unavailable', reason: 'invalid' })
 		}
 		expect(fetchMock).not.toHaveBeenCalled()

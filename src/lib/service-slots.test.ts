@@ -5,7 +5,13 @@ import {
 	bookingDays,
 	BOOKING_DAY_COUNT,
 	daySlots,
+	DEFAULT_TABLE_DURATION,
+	durationLabel,
 	defaultBookingSelection,
+	defaultQueueSelection,
+	QUEUE_NOW_SLOT,
+	QUEUE_SLOT_STEP_MINUTES,
+	queueSlotTimes,
 	firstOpenSlot,
 	resolveSlotTime,
 	SAME_DAY_DEFAULT_SLOT,
@@ -13,6 +19,7 @@ import {
 	serviceWhenLabel,
 	slotInstant,
 	slotTimes,
+	TABLE_DURATIONS,
 } from './service-slots'
 
 // Every timestamp here is written with an explicit +05:00 so the expectations
@@ -203,5 +210,81 @@ describe('service construction is unchanged', () => {
 		const booked = slotInstant('2026-09-25', '14:00')
 		expect(serviceWhenLabel(booked, at('2026-09-24T23:59:00+05:00'))).toBe('Ertaga, 14:00')
 		expect(serviceWhenLabel(booked, at('2026-09-25T00:00:00+05:00'))).toBe('Bugun, 14:00')
+	})
+})
+
+describe('table durations', () => {
+	it('offers one to three hours, two pre-selected as before', () => {
+		expect([...TABLE_DURATIONS]).toEqual([60, 90, 120, 180])
+		expect(DEFAULT_TABLE_DURATION).toBe(120)
+		expect(TABLE_DURATIONS).toContain(DEFAULT_TABLE_DURATION)
+	})
+
+	it('labels them in Uzbek, with a decimal comma', () => {
+		expect(TABLE_DURATIONS.map(durationLabel)).toEqual([
+			'1 soat',
+			'1,5 soat',
+			'2 soat',
+			'3 soat',
+		])
+	})
+})
+
+describe('queue slots', () => {
+	const bank = { openTime: '09:00', closeTime: '18:00' }
+	const credit = { serviceMinutes: 40, bookable: true }
+
+	it('«Hozir» is the live choice, not a time', () => {
+		expect(QUEUE_NOW_SLOT).toBe('Hozir')
+		expect(queueSlotTimes(bank, credit)).not.toContain(QUEUE_NOW_SLOT)
+	})
+
+	it('runs from opening to the last slot that still ends by closing', () => {
+		const times = queueSlotTimes(bank, credit)
+		expect(times[0]).toBe('09:00')
+		// 17:30 + 40 min would run past 18:00.
+		expect(times.at(-1)).toBe('17:00')
+		expect(times).toHaveLength(17)
+	})
+
+	it('steps on the same half-hour as tables', () => {
+		expect(QUEUE_SLOT_STEP_MINUTES).toBe(30)
+		expect(queueSlotTimes(bank, { serviceMinutes: 10, bookable: true }).slice(0, 3)).toEqual([
+			'09:00',
+			'09:30',
+			'10:00',
+		])
+		expect(queueSlotTimes(bank, { serviceMinutes: 10, bookable: true }).at(-1)).toBe('17:30')
+	})
+
+	it('a live-only line, or a malformed time, has no slots', () => {
+		expect(queueSlotTimes(bank, { serviceMinutes: 5, bookable: false })).toEqual([])
+		expect(queueSlotTimes({ openTime: 'soon', closeTime: '18:00' }, credit)).toEqual([])
+	})
+
+	it('reads through daySlots, so a time gone by today is past', () => {
+		const slots = daySlots('2026-09-18', FRIDAY_NOON, queueSlotTimes(bank, credit))
+		expect(slots.find(slot => slot.time === '11:30')?.past).toBe(true)
+		expect(slots.find(slot => slot.time === '12:30')?.past).toBe(false)
+	})
+
+	it('opens on the first slot still ahead', () => {
+		expect(defaultQueueSelection(bank, credit, FRIDAY_NOON)).toEqual({
+			dayKey: '2026-09-18',
+			time: '12:30',
+		})
+	})
+
+	it('after closing, opens on tomorrow morning', () => {
+		expect(defaultQueueSelection(bank, credit, FRIDAY_EVENING)).toEqual({
+			dayKey: '2026-09-19',
+			time: '09:00',
+		})
+	})
+
+	it('a live-only line has nothing to select', () => {
+		expect(
+			defaultQueueSelection(bank, { serviceMinutes: 5, bookable: false }, FRIDAY_NOON).time,
+		).toBeNull()
 	})
 })

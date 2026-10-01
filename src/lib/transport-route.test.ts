@@ -2,6 +2,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 
+import { AiRecommendationCard } from '@/components/transport/ai-recommendation-card'
 import { RouteStatus } from '@/components/transport/route-status'
 import { estimateFareUZS, estimateFuelCostUZS, estimateMinutesForMode, fastestMode } from '@/lib/eta'
 import { distanceKm } from '@/lib/geo'
@@ -21,7 +22,11 @@ import {
 	routeMapLayers,
 	routeMinutesFromSeconds,
 	routeUnavailableMessage,
+	realRouteMapLines,
+	REAL_ROUTE_COLOR,
+	trafficCongestionMeters,
 	transportRecommendation,
+	transitMapLines,
 	transportRouteRequest,
 	type ActiveRoute,
 } from '@/lib/transport-route'
@@ -42,6 +47,9 @@ const REAL: RealRoute = {
 	distanceMeters: 8350,
 	durationSeconds: 1110,
 	geometry: [[69.27968, 41.31108], [69.25, 41.33], [69.21938, 41.33983]],
+	alternatives: [],
+	maneuvers: [],
+	traffic: [],
 }
 
 const haversineKm = distanceKm(ORIGIN, DESTINATION)
@@ -77,8 +85,12 @@ describe('which modes request a real route', () => {
 		})
 	})
 
-	it.each(['metro'] as const)('never requests %s', mode => {
-		expect(transportRouteRequest({ mode, origin: ORIGIN, destination: DESTINATION })).toBeNull()
+	it('requests metro as itself (Phase 4: 2GIS public transport)', () => {
+		expect(transportRouteRequest({ mode: 'metro', origin: ORIGIN, destination: DESTINATION })).toEqual({
+			mode: 'metro',
+			origin: { lat: ORIGIN.lat, lng: ORIGIN.lng },
+			destination: { lat: DESTINATION.lat, lng: DESTINATION.lng },
+		})
 	})
 
 	it('never sends the approximate city centre as the car origin', () => {
@@ -107,13 +119,13 @@ describe('which modes request a real route', () => {
 })
 
 describe('request count against a mocked /api/directions', () => {
-	it('one route identity is one request; metro is none; retry is exactly one more', async () => {
+	it('one route identity is one request; retry is exactly one more', async () => {
 		const fetchImpl = vi.fn<typeof fetch>(async () => json(REAL))
 		const loader = createRouteLoader({ fetch: fetchImpl })
 
-		// Metro produces no request at all.
+		// Building requests fetches nothing by itself — metro included.
 		for (const mode of ['metro'] as const) {
-			expect(transportRouteRequest({ mode, origin: ORIGIN, destination: DESTINATION })).toBeNull()
+			expect(transportRouteRequest({ mode, origin: ORIGIN, destination: DESTINATION })).not.toBeNull()
 		}
 		expect(fetchImpl).not.toHaveBeenCalled()
 
@@ -292,16 +304,20 @@ describe('a car route that failed', () => {
 	})
 })
 
-describe('estimated modes', () => {
-	it.each(['metro'] as const)('%s keeps the estimate and the demo line', mode => {
+describe('no estimated selected mode remains', () => {
+	it.each(['metro'] as const)('%s never falls back to the estimate or the demo line', mode => {
 		const active = activeTransportRoute({
 			mode,
 			estimate: estimateFor(mode),
 			request: null,
 			state: { status: 'idle' },
 		})
-		expect(active).toEqual({ status: 'estimate', figures: { source: 'estimate', ...estimateFor(mode) } })
-		expect(routeLineKind(active)).toBe('demo')
+		expect(active).toEqual({ status: 'needs-location' })
+		expect(activeFigures(active)).toBeNull()
+		expect(routeLineKind(active)).toBe('none')
+	})
+
+	it('the demo layers still describe only the demo line', () => {
 		expect(routeMapLayers({ showRoute: true, lineKind: 'demo' })).toEqual({
 			line: 'demo',
 			problemPins: true,
@@ -332,7 +348,7 @@ describe('mode pills', () => {
 		expect(labels.car).toBeNull()
 	})
 
-	it('shows every mode as an estimate when an estimated mode is selected', () => {
+	it('shows no metro number, never its old estimate, while metro has no real route', () => {
 		const metro = activeTransportRoute({
 			mode: 'metro',
 			estimate: estimateFor('metro'),
@@ -340,7 +356,10 @@ describe('mode pills', () => {
 			state: { status: 'idle' },
 		})
 		const labels = modeDurationLabels({ active: metro, selected: 'metro', estimatedMinutes })
-		for (const mode of MODES) expect(labels[mode]).toBe(`≈${estimatedMinutes[mode]} daq`)
+		expect(labels.metro).toBeNull()
+		for (const mode of MODES.filter(item => item !== 'metro')) {
+			expect(labels[mode]).toBe(`≈${estimatedMinutes[mode]} daq`)
+		}
 	})
 })
 
@@ -356,18 +375,169 @@ describe('AI tavsiyasi and the fastest mode', () => {
 		expect(transportRecommendation({ active: failedCar('timeout'), fastest })).toEqual({ kind: 'neutral', minutes: null })
 	})
 
-	it('still ranks when every number is an estimate', () => {
+	it('does not rank metro against the estimates either', () => {
 		const metro = activeTransportRoute({
 			mode: 'metro',
 			estimate: estimateFor('metro'),
 			request: null,
 			state: { status: 'idle' },
 		})
-		expect(transportRecommendation({ active: metro, fastest })).toEqual({
-			kind: 'ranked',
-			currentMinutes: estimatedMinutes.metro,
-			fastestMode: fastest.mode,
-			fastestMinutes: fastest.minutes,
+		expect(transportRecommendation({ active: metro, fastest })).toEqual({ kind: 'neutral', minutes: null })
+	})
+})
+
+describe('public transport on the map', () => {
+	const WALK: [number, number][] = [[69.27968, 41.31108], [69.2787, 41.3115]]
+	const RIDE: [number, number][] = [[69.2787, 41.3115], [69.21938, 41.33983]]
+	const palette = { walk: 'var-walk', ride: 'var-ride' }
+
+	it('draws each leg in its own colour, rides above walking', () => {
+		const lines = transitMapLines(
+			[
+				{ type: 'walk', geometry: WALK },
+				{ type: 'ride', geometry: RIDE },
+				{ type: 'transfer', geometry: WALK },
+			],
+			palette,
+		)
+		expect(lines.map(line => [line.color, line.zIndex])).toEqual([
+			['var-walk', 1],
+			['var-ride', 2],
+			['var-walk', 1],
+		])
+		expect(lines[1].coordinates).toBe(RIDE)
+		expect(new Set(lines.map(line => line.id)).size).toBe(3)
+	})
+
+	it('never draws a leg without a line', () => {
+		expect(transitMapLines([{ type: 'ride', geometry: [[1, 2]] }], palette)).toEqual([])
+	})
+})
+
+describe('real traffic on the map', () => {
+	const LINE: [number, number][] = [[69.27968, 41.31108], [69.25, 41.33], [69.21938, 41.33983]]
+	const SLOW: [number, number][] = [[69.27968, 41.31108], [69.25, 41.33]]
+	const JAM: [number, number][] = [[69.25, 41.33], [69.21938, 41.33983]]
+
+	it('draws the whole route in the brand colour, then only slow and jammed stretches over it', () => {
+		const lines = realRouteMapLines({
+			geometry: LINE,
+			traffic: [
+				{ speed: 'fast', distanceMeters: 900, geometry: SLOW },
+				{ speed: 'slow', distanceMeters: 700, geometry: SLOW },
+				{ speed: 'normal', distanceMeters: 300, geometry: JAM },
+				{ speed: 'jam', distanceMeters: 500, geometry: JAM },
+			],
 		})
+		expect(lines.map(line => [line.color, line.zIndex])).toEqual([
+			[REAL_ROUTE_COLOR, 1],
+			['#c99a4b', 2],
+			['#b4564e', 2],
+		])
+		expect(lines[0].coordinates).toBe(LINE)
+		expect(new Set(lines.map(line => line.id)).size).toBe(lines.length)
+	})
+
+	it('a route without traffic is one plain line', () => {
+		expect(realRouteMapLines({ geometry: LINE, traffic: [] })).toEqual([
+			{ id: 'route-real', color: REAL_ROUTE_COLOR, coordinates: LINE, zIndex: 1 },
+		])
+	})
+
+	it('counts slow and jammed metres; no traffic data is null, not zero', () => {
+		expect(trafficCongestionMeters({ traffic: [] })).toBeNull()
+		expect(trafficCongestionMeters({
+			traffic: [
+				{ speed: 'fast', distanceMeters: 900, geometry: SLOW },
+				{ speed: 'normal', distanceMeters: 400, geometry: SLOW },
+			],
+		})).toBe(0)
+		expect(trafficCongestionMeters({
+			traffic: [
+				{ speed: 'slow', distanceMeters: 700, geometry: SLOW },
+				{ speed: 'normal', distanceMeters: 400, geometry: SLOW },
+				{ speed: 'jam', distanceMeters: 500, geometry: JAM },
+			],
+		})).toBe(1200)
+	})
+})
+
+describe('AI card traffic line', () => {
+	const fastest = { mode: 'car' as const, minutes: 10 }
+	const render = (congestionMeters?: number | null) =>
+		renderToStaticMarkup(
+			createElement(AiRecommendationCard, {
+				currentMode: 'car',
+				recommendation: transportRecommendation({ active: REAL_CAR, fastest }),
+				onSwitch: () => {},
+				congestionMeters,
+			}),
+		)
+
+	it('states 2GIS’s slow and jammed distance, and nothing when there is no traffic data', () => {
+		expect(render(1200)).toContain('1,2 km tirbandlik')
+		expect(render(0)).toContain('Tirbandlik yo‘q')
+		expect(render(null)).not.toContain('irbandlik')
+		expect(render()).not.toContain('irbandlik')
+	})
+
+	it('no longer says the traffic service is not connected', () => {
+		expect(render(1200)).not.toContain('ulanmagan')
+	})
+})
+
+describe('metro journey card', () => {
+	const METRO_ROUTE: RealRoute = {
+		status: 'ok',
+		source: '2gis',
+		mode: 'metro',
+		distanceMeters: 7000,
+		durationSeconds: 1500,
+		geometry: [[69.27968, 41.31108], [69.21938, 41.33983]],
+		alternatives: [],
+		maneuvers: [],
+		traffic: [],
+		transitLegs: [
+			{
+				type: 'walk', durationSeconds: 300, distanceMeters: 400,
+				geometry: [[69.27968, 41.31108], [69.2787, 41.3115]],
+				lineInfo: null, fromStop: null, toStop: null, stopCount: null,
+			},
+			{
+				type: 'ride', durationSeconds: 1020, distanceMeters: 6300,
+				geometry: [[69.2787, 41.3115], [69.21938, 41.33983]],
+				lineInfo: { vehicle: 'metro', name: 'Chilonzor yo‘li', color: '#e90101' },
+				fromStop: 'Amir Temur xiyoboni', toStop: 'Bunyodkor', stopCount: 3,
+			},
+		],
+	}
+
+	const html = renderToStaticMarkup(
+		createElement(RouteStatus, {
+			mode: 'metro',
+			route: {
+				status: 'real',
+				route: METRO_ROUTE,
+				figures: { source: '2gis', minutes: 25, distanceKm: 7 },
+			},
+			onRetry: () => {},
+			navigateHref: null,
+			locating: false,
+			onLocate: () => {},
+			onPickOrigin: () => {},
+		}),
+	)
+
+	it('lists 2GIS’s legs: walk with its distance, the line with its stations', () => {
+		expect(html).toContain('2GIS marshruti')
+		expect(html).toContain('Piyoda')
+		expect(html).toContain('Metro · Chilonzor yo‘li')
+		expect(html).toContain('Amir Temur xiyoboni → Bunyodkor')
+		expect(html).toContain('3 bekat')
+		expect(html).toContain('17 daq')
+	})
+
+	it('shows none of the demo metro content', () => {
+		for (const demo of ['vagon', 'eng bo‘sh', '%', 'Namunaviy']) expect(html).not.toContain(demo)
 	})
 })

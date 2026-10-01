@@ -84,6 +84,10 @@ export const ACTION_LABELS: Record<
 	cancel: 'Bronni bekor qilish',
 }
 
+// A queue hands out a talon, not a booking, so cancelling one is named after
+// what the customer is actually holding.
+export const QUEUE_CANCEL_LABEL = 'Talonni bekor qilish'
+
 // A film or an event is a ticket; a table or a clinic slot is a booking.
 const PRESENT_LABELS: Record<ServiceBookingKind, string> = {
 	table: 'Bronni ko‘rsatish',
@@ -200,16 +204,34 @@ export function serviceBookingJourney(
 }
 
 // --- Queue ---------------------------------------------------------------
-// A ticket has no start time; its clock is the estimate of when the number
-// comes up. The same window applies to it: far off, the customer still has
-// to get there; close, they are watching the line; called, «Men keldim»
+// A live ticket has no start time; its clock is the estimate of when the
+// number comes up. The same window applies to it: far off, the customer still
+// has to get there; close, they are watching the line; called, «Men keldim»
 // checks them in; arrived, they are at the window and follow the queue until
 // the service is done. Only served and cancelled are over.
+//
+// A ticket booked ahead does have a start — its slot — and reads it the way a
+// table does: getting there leads until the arrival window opens, then the
+// line it is about to join. `now` is only needed for that case, and is
+// optional so a live ticket reads exactly as it always has.
 export function queueTicketJourney(
-	ticket: Pick<QueueTicket, 'status' | 'etaMinutes'>,
+	ticket: Pick<QueueTicket, 'status' | 'etaMinutes' | 'scheduledAt'>,
 	availability: Availability,
+	now: number | null = null,
 ): BookingJourney {
 	switch (ticket.status) {
+		case 'scheduled': {
+			const timed = arrivalStage(ticket.scheduledAt, now)
+			const stage = timed ?? 'upcoming'
+			return journey(
+				stage,
+				timed ? 'time' : 'status',
+				stage === 'arrival'
+					? ['track', 'directions', 'share', 'cancel']
+					: ['directions', 'track', 'share', 'cancel'],
+				availability,
+			)
+		}
 		case 'waiting': {
 			const known = Number.isFinite(ticket.etaMinutes)
 			const stage =

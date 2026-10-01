@@ -1,8 +1,8 @@
-import { CircleParking, MapPin, Ticket, Users, type LucideIcon } from 'lucide-react'
+import { CircleParking, MapPin, Ticket, type LucideIcon } from 'lucide-react'
 
 import { EVENTS } from '@/data/events'
 import { PLACES } from '@/data/places'
-import { QUEUE_ORGS } from '@/data/queue-orgs'
+import { getQueueOrgByPlace } from '@/data/queue-orgs'
 import { distanceKm, type Coordinate } from '@/lib/geo'
 import { formatUZS } from '@/lib/format'
 import type { Parking, PlaceCategory } from '@/lib/types'
@@ -51,7 +51,6 @@ export const MAP_CATEGORIES: { id: MapCatalogKind | 'all'; label: string }[] = [
 ]
 
 const BRAND = '#6c47e0'
-const INK_3 = '#8a91a6'
 const EVENT = '#7c3aed'
 const OK = '#12b76a'
 const WARN = '#f79009'
@@ -61,12 +60,6 @@ const BAD = '#f04438'
 function freeColor(percent: number) {
 	if (percent >= 30) return OK
 	if (percent >= 15) return WARN
-	return BAD
-}
-
-function waitColor(minutes: number) {
-	if (minutes < 15) return OK
-	if (minutes < 35) return WARN
 	return BAD
 }
 
@@ -121,27 +114,6 @@ function parkingObjects(
 	})
 }
 
-function queueObjects(origin: Coordinate | undefined): MapObject[] {
-	return QUEUE_ORGS.map(org => ({
-		kind: 'queue' as const,
-		id: org.id,
-		title: org.title,
-		subtitle: 'Navbat',
-		address: org.address,
-		meta: `${org.waiting} kishi navbatda · ${org.windows} oyna`,
-		tag: `${org.waitMinutes} daq`,
-		lat: org.lat,
-		lng: org.lng,
-		distanceKm: origin
-			? distanceKm(origin, { lat: org.lat, lng: org.lng })
-			: org.distanceKm,
-		icon: Users,
-		color: org.open ? waitColor(org.waitMinutes) : INK_3,
-		href: `/queues?org=${org.id}`,
-		parkingId: org.parkingId,
-	}))
-}
-
 // Events have no address of their own — they borrow the venue's parking, the
 // way City Goo's EV_GEO borrows the venue's coordinates.
 function eventObjects(
@@ -175,6 +147,19 @@ function eventObjects(
 	})
 }
 
+// A queue desk is a venue first (QueueOrg.placeId, 1:1), so it has no pin of
+// its own — a second marker on the same spot was the same place drawn
+// twice. «Navbatlar» is the places that keep a live queue.
+export function inMapCategory(
+	object: Pick<MapObject, 'kind' | 'id'>,
+	category: MapCatalogKind | 'all',
+) {
+	if (category === 'all') return true
+	if (category === 'queue')
+		return object.kind === 'place' && Boolean(getQueueOrgByPlace(object.id))
+	return object.kind === category
+}
+
 export function buildMapObjects({
 	parkings,
 	category = 'all',
@@ -191,16 +176,15 @@ export function buildMapObjects({
 	placeCategory?: PlaceCategory
 }): MapObject[] {
 	const all = [
-		...(category === 'all' || category === 'place'
+		...(category === 'all' || category === 'place' || category === 'queue'
 			? placeObjects(origin).filter(object =>
+				inMapCategory(object, category) &&
 				(!city || city === 'Toshkent') && (placeCategory === 'all' ||
 					PLACES.find(place => place.id === object.id)?.category === placeCategory))
 			: []),
 		...(category === 'all' || category === 'parking'
 			? parkingObjects(parkings.filter(parking => !city || parking.city === city), origin)
 			: []),
-		...(category === 'all' || category === 'queue'
-			? queueObjects(origin).filter(() => !city || city === 'Toshkent') : []),
 		...(category === 'all' || category === 'event'
 			? eventObjects(parkings.filter(parking => !city || parking.city === city), origin)
 			: []),

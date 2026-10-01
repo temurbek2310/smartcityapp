@@ -12,8 +12,8 @@ export const PREMIUM_PRICE_UZS = 39000
 
 export const PREMIUM_PERKS: PremiumPerk[] = [
 	{
-		title: 'Kafolat to‘lovisiz bron',
-		description: 'Bron qilishda kafolat summasi ushlab qolinmaydi.',
+		title: 'Kafolat to‘lovisiz band qilish',
+		description: 'Band qilishda kafolat summasi ushlab qolinmaydi.',
 	},
 	{
 		title: 'Joy 30 daqiqa saqlanadi',

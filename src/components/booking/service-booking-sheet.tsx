@@ -1,82 +1,139 @@
 'use client'
 
-import { Minus, Plus } from 'lucide-react'
+import {
+	CalendarClock,
+	Check,
+	Clapperboard,
+	Minus,
+	Plus,
+	Stethoscope,
+	Ticket,
+	Utensils,
+	type LucideIcon,
+} from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useMemo, useRef, useState } from 'react'
 
+import { TableParkingOffer } from '@/components/booking/table-parking-offer'
 import { BottomSheet } from '@/components/ui/bottom-sheet'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Chip } from '@/components/ui/chip'
 import { HorizontalRail } from '@/components/ui/horizontal-rail'
+import { IconTile } from '@/components/ui/icon-tile'
 import { KeyValue, KeyValueList } from '@/components/ui/key-value'
+import { SegmentedTabs } from '@/components/ui/segmented-tabs'
 import { useApp } from '@/context/app-context'
 import { getParking } from '@/data/parkings'
-import { getPlace } from '@/data/places'
+import { getPlace, tableSeatingAreas } from '@/data/places'
 import {
 	SERVICE_CONFLICT_MESSAGE,
 	findConflictingServiceBooking,
 } from '@/lib/booking-conflicts'
+import {
+	expectedEndAt,
+	FALLBACK_SERVICE_DURATION_MINUTES,
+} from '@/lib/booking-lifecycle'
 import { serviceBookingDraft, serviceBookingHref } from '@/lib/bookings'
-import { tashkentDayKey } from '@/lib/format'
+import { formatTime, tashkentDayKey } from '@/lib/format'
+import { CLINIC_BOOK_LABEL, TABLE_BOOK_LABEL } from '@/lib/lexicon'
 import {
 	bookingDays,
 	daySlots,
+	DEFAULT_TABLE_DURATION,
 	defaultBookingSelection,
+	durationLabel,
 	resolveSlotTime,
 	SAME_DAY_DEFAULT_SLOT,
 	SAME_DAY_SLOTS,
 	serviceWhenLabel,
 	slotInstant,
+	TABLE_DURATIONS,
 } from '@/lib/service-slots'
-import type { ServiceBookingKind } from '@/lib/types'
+import type { ServiceBooking, ServiceBookingKind } from '@/lib/types'
 
 // Tables, cinema seats, clinic slots and event tickets. Parking and queues
 // have their own flows because they have their own lifecycles; these four
 // only need a time, a count and a confirmation, so one sheet covers them.
 //
-// Home already had this UI, but it ended in a toast and stored nothing —
-// the booking never existed. It writes a real ServiceBooking now, which is
-// why it shows up in the Booking Center.
+// Laid out the way the parking sheet is — venue, then when, then how long
+// and where, then one summary and one button — so booking a table and booking
+// the space beside it read as the same product.
 //
-// Tables also pick a day. A restaurant reservation is the one of the four a
-// customer routinely makes for tomorrow, and the fixed «Bugun» list left the
-// evening crowd choosing between eight times that had all gone by. Cinema,
-// clinic and event keep the same-day list they have always had: their slots
-// come from a schedule this sheet does not know about, and inventing a week
-// of them would promise showings that do not exist. The date/time model in
-// lib/service-slots is ready for them the day that schedule arrives. Their
-// same-day list is still read against Tashkent's clock, though: a showing at
-// 12:30 cannot be booked at 21:00.
+// Tables also pick a day, a duration and, where the venue has more than one,
+// a seating area. A restaurant reservation is the one of the four a customer
+// routinely makes for tomorrow and for a length of their own choosing.
+// Cinema, clinic and event keep the same-day list they have always had: their
+// slots come from a schedule this sheet does not know about, and inventing a
+// week of them would promise showings that do not exist. Their duration is
+// the lifecycle default, stored so the booking never leans on a fallback.
 
 const COPY: Record<
 	ServiceBookingKind,
-	{ title: string; countLabel: string; unit: string; confirm: string }
+	{
+		title: string
+		countLabel: string
+		unit: string
+		confirm: string
+		// What the confirmation says it did, and the way back to it: the
+		// sheet used to report «Stol muvaffaqiyatli band qilindi» whatever
+		// the customer had actually booked.
+		done: string
+		view: string
+		icon: LucideIcon
+	}
 > = {
 	table: {
-		title: 'Stol bron qilish',
+		title: TABLE_BOOK_LABEL,
 		countLabel: 'Mehmonlar',
 		unit: 'kishi',
-		confirm: 'Stolni bron qilish',
+		confirm: 'Stolni band qilish',
+		done: 'Stol band qilindi!',
+		view: 'Stol bandligini ko‘rish',
+		icon: Utensils,
 	},
 	cinema: {
 		title: 'Kino chiptasi',
 		countLabel: 'Chiptalar',
 		unit: 'ta',
 		confirm: 'Chiptani olish',
+		done: 'Chipta olindi!',
+		view: 'Chiptani ko‘rish',
+		icon: Clapperboard,
 	},
 	clinic: {
-		title: 'Klinikaga yozilish',
+		title: CLINIC_BOOK_LABEL,
 		countLabel: 'Bemorlar',
 		unit: 'kishi',
 		confirm: 'Qabulga yozilish',
+		done: 'Qabulga yozildingiz!',
+		view: 'Yozuvni ko‘rish',
+		icon: Stethoscope,
 	},
 	event: {
-		title: 'Tadbirga bron',
+		title: 'Tadbir chiptasi',
 		countLabel: 'Chiptalar',
 		unit: 'ta',
 		confirm: 'Chiptani olish',
+		done: 'Chipta olindi!',
+		view: 'Chiptani ko‘rish',
+		icon: Ticket,
 	},
+}
+
+const DURATION_TABS = TABLE_DURATIONS.map(minutes => ({
+	id: String(minutes),
+	label: durationLabel(minutes),
+}))
+
+const MINUTE = 60_000
+
+// «Bugun, 19:30–21:30», read back off what the store kept.
+function bookedWhenLabel(booking: ServiceBooking) {
+	if (!booking.startAt) return booking.whenLabel
+	const end = expectedEndAt(booking)
+	const when = serviceWhenLabel(booking.startAt)
+	return end === null ? when : `${when}–${formatTime(end)}`
 }
 
 export function ServiceBookingSheet({
@@ -100,6 +157,9 @@ export function ServiceBookingSheet({
 	// set by the time the second handler runs. The store refuses the second
 	// booking as a duplicate anyway — this keeps it from reading as an error.
 	const submittingRef = useRef(false)
+	// The table just stored, once confirm succeeds — the sheet then shows its
+	// success view instead of the form.
+	const [booked, setBooked] = useState<ServiceBooking | null>(null)
 
 	// Read once, so the grid does not reshuffle under a thumb while the sheet
 	// is open. Confirm re-reads the real clock and refreshes this if the
@@ -112,6 +172,20 @@ export function ServiceBookingSheet({
 	)
 	const [count, setCount] = useState(2)
 
+	const copy = COPY[kind]
+	const place = getPlace(refId)
+	const title = venueName ?? place?.title ?? copy.title
+	// Every service booking still points at somewhere to park, which is the
+	// whole reason this app is the one making the booking.
+	const parking = place?.parkingId ? getParking(place.parkingId) : undefined
+
+	// A venue with one room gets no picker — its main hall is simply where
+	// the table is, and says so in the summary.
+	const seatingAreas = dated ? tableSeatingAreas(place) : []
+	const [seating, setSeating] = useState(() => seatingAreas[0])
+	const [duration, setDuration] = useState(DEFAULT_TABLE_DURATION)
+	const durationMinutes = dated ? duration : FALLBACK_SERVICE_DURATION_MINUTES[kind]
+
 	const days = useMemo(() => bookingDays(now), [now])
 	const slots = useMemo(
 		() => daySlots(selection.dayKey, now),
@@ -119,13 +193,6 @@ export function ServiceBookingSheet({
 	)
 	const todayKey = tashkentDayKey(now)
 	const todaySlots = useMemo(() => daySlots(todayKey, now, SAME_DAY_SLOTS), [todayKey, now])
-
-	const copy = COPY[kind]
-	const place = getPlace(refId)
-	const title = venueName ?? place?.title ?? copy.title
-	// Every service booking still points at somewhere to park, which is the
-	// whole reason this app is the one making the booking.
-	const parking = place?.parkingId ? getParking(place.parkingId) : undefined
 
 	// The instant being booked, for both shapes of the sheet: a table's chosen
 	// day and time, or today at one of the fixed slots.
@@ -137,16 +204,24 @@ export function ServiceBookingSheet({
 			? slotInstant(todayKey, slot)
 			: null
 
-	const whenLabel = startAt ? serviceWhenLabel(startAt, now) : '—'
+	// «Bugun, 19:30–21:30» for a table, whose end is the customer's own
+	// choice; the other kinds show their start alone.
+	const whenLabel = startAt
+		? dated
+			? `${serviceWhenLabel(startAt, now)}–${formatTime(startAt.getTime() + durationMinutes * MINUTE)}`
+			: serviceWhenLabel(startAt, now)
+		: '—'
 
-	// The live booking the customer already holds for this venue at this
-	// time, shown before they reach for the button. It is only the early
-	// warning: createServiceBooking() applies the same rule when it stores.
+	// The live booking the customer already holds for this venue across the
+	// span asked for, shown before they reach for the button. It is only the
+	// early warning: createServiceBooking() applies the same rule when it
+	// stores.
 	const conflict = startAt
 		? findConflictingServiceBooking(serviceBookings, {
 				kind,
 				refId,
 				startAt: startAt.toISOString(),
+				durationMinutes,
 			})
 		: undefined
 
@@ -192,6 +267,8 @@ export function ServiceBookingSheet({
 				count,
 				unit: copy.unit,
 				startAt,
+				durationMinutes,
+				seatingArea: dated ? seating : undefined,
 				now,
 			}),
 		)
@@ -201,6 +278,9 @@ export function ServiceBookingSheet({
 			submittingRef.current = false
 			return onNotify(SERVICE_CONFLICT_MESSAGE[kind])
 		}
+		// A table stays in the sheet for one more step: the success view,
+		// where the space beside it is one tap away.
+		if (dated) return setBooked(attempt.created)
 		// Straight to the booking itself, the way parking lands on its
 		// reservation: the page is the confirmation. A toast on the screen
 		// being left would be gone before it could be read.
@@ -208,24 +288,67 @@ export function ServiceBookingSheet({
 		router.push(serviceBookingHref(attempt.created.id))
 	}
 
+	if (booked) {
+		return (
+			<BottomSheet title='Bron tasdiqlandi' onClose={onClose}>
+				<div className='flex flex-col items-center pt-2 text-center'>
+					<span className='grid size-14 place-items-center rounded-full bg-ok-bg text-ok'>
+						<Check className='size-7' strokeWidth={2.5} />
+					</span>
+					<p className='mt-3 text-[17px] font-black text-ink'>
+						{COPY[booked.kind].done}
+					</p>
+					<p className='mt-1 text-xs text-ink-3'>
+						{booked.title} · {bookedWhenLabel(booked)}
+					</p>
+					<p className='mt-0.5 text-[11.5px] text-ink-3'>Bron kodi · {booked.code}</p>
+				</div>
+
+				<TableParkingOffer booking={booked} onClose={onClose} onNotify={onNotify} />
+
+				<Button
+					variant='outline'
+					block
+					className='mt-2'
+					onClick={() => {
+						onClose()
+						router.push(serviceBookingHref(booked.id))
+					}}
+				>
+					{COPY[booked.kind].view}
+				</Button>
+			</BottomSheet>
+		)
+	}
+
+	const Icon = copy.icon
+
 	return (
 		<BottomSheet title={copy.title} onClose={onClose}>
 			<Card>
-				<p className='text-[15px] font-extrabold text-ink'>{title}</p>
-				{place && (
-					<p className='mt-1 text-[12px] text-ink-3'>{place.address}</p>
-				)}
+				<div className='flex items-center gap-3'>
+					<IconTile size={48} tone='bg-ink text-white'>
+						<Icon className='size-5' strokeWidth={2} />
+					</IconTile>
+					<div className='min-w-0 flex-1'>
+						<p className='truncate text-sm font-black text-ink'>{title}</p>
+						{place && (
+							<p className='mt-1 truncate text-xs text-ink-3'>{place.address}</p>
+						)}
+					</div>
+				</div>
 			</Card>
 
 			{dated && (
-				<Card className='mt-3'>
-					<p className='text-[14px] font-bold text-ink'>Sana</p>
+				<Card className='mt-3 p-4'>
+					<p className='text-sm font-black text-ink'>Sana</p>
 					<HorizontalRail className='mt-3 gap-2'>
 						{days.map(day => (
 							<Chip
 								key={day.key}
 								active={selection.dayKey === day.key}
 								onClick={() => selectDay(day.key)}
+								className='h-11 px-4'
 							>
 								{day.label}
 							</Chip>
@@ -234,101 +357,129 @@ export function ServiceBookingSheet({
 				</Card>
 			)}
 
-			<Card className='mt-3'>
-				<p className='text-[14px] font-bold text-ink'>Vaqt</p>
+			<Card className='mt-3 p-4'>
+				<p className='text-sm font-black text-ink'>Vaqt</p>
 				<div className='mt-3 grid grid-cols-4 gap-2'>
-					{dated
-						? slots.map(option => (
-								<Chip
-									key={option.time}
-									active={selection.time === option.time}
-									// A time that has gone by stays on screen rather than
-									// vanishing, so the grid keeps its shape as the day
-									// wears on and it is obvious why it cannot be picked.
-									disabled={option.past}
-									onClick={() =>
-										setSelection(current => ({
-											...current,
-											time: option.time,
-										}))
-									}
-									className='justify-center disabled:cursor-not-allowed disabled:opacity-40'
-								>
-									{option.time}
-								</Chip>
-							))
-						: todaySlots.map(option => (
-								<Chip
-									key={option.time}
-									active={slot === option.time}
-									disabled={option.past}
-									onClick={() => setSlot(option.time)}
-									className='justify-center disabled:cursor-not-allowed disabled:opacity-40'
-								>
-									{option.time}
-								</Chip>
-							))}
+					{(dated ? slots : todaySlots).map(option => (
+						<Chip
+							key={option.time}
+							active={(dated ? selection.time : slot) === option.time}
+							// A time that has gone by stays on screen rather than
+							// vanishing, so the grid keeps its shape as the day
+							// wears on and it is obvious why it cannot be picked.
+							disabled={option.past}
+							onClick={() =>
+								dated
+									? setSelection(current => ({ ...current, time: option.time }))
+									: setSlot(option.time)
+							}
+							className='h-11 justify-center disabled:cursor-not-allowed disabled:opacity-40'
+						>
+							{option.time}
+						</Chip>
+					))}
 				</div>
-				{dated && !selection.time && (
+				{!startAt && (
 					<p className='mt-3 text-[11.5px] text-ink-3'>
-						Bugungi vaqtlar tugadi. Boshqa kunni tanlang.
-					</p>
-				)}
-				{!dated && !slot && (
-					<p className='mt-3 text-[11.5px] text-ink-3'>
-						Bugungi vaqtlar tugadi.
+						{dated
+							? 'Bugungi vaqtlar tugadi. Boshqa kunni tanlang.'
+							: 'Bugungi vaqtlar tugadi.'}
 					</p>
 				)}
 			</Card>
 
-			<Card className='mt-3'>
+			{dated && (
+				<Card className='mt-3 p-4'>
+					<p className='text-sm font-black text-ink'>Davomiyligi</p>
+					<SegmentedTabs
+						className='mt-3'
+						items={DURATION_TABS}
+						value={String(duration)}
+						onChange={next => setDuration(Number(next))}
+					/>
+				</Card>
+			)}
+
+			{seatingAreas.length > 1 && (
+				<Card className='mt-3 p-4'>
+					<p className='text-sm font-black text-ink'>Joy</p>
+					<HorizontalRail className='mt-3 gap-2'>
+						{seatingAreas.map(area => (
+							<Chip
+								key={area}
+								active={seating === area}
+								onClick={() => setSeating(area)}
+								className='h-11 px-4'
+							>
+								{area}
+							</Chip>
+						))}
+					</HorizontalRail>
+				</Card>
+			)}
+
+			<Card className='mt-3 p-4'>
 				<div className='flex items-center justify-between gap-3'>
-					<p className='text-[14px] font-bold text-ink'>{copy.countLabel}</p>
+					<p className='text-sm font-black text-ink'>{copy.countLabel}</p>
 					<div className='flex items-center gap-3'>
 						<button
 							type='button'
 							aria-label='Kamaytirish'
 							onClick={() => setCount(Math.max(1, count - 1))}
-							className='grid size-10 place-items-center rounded-xl bg-card-2 text-ink'
+							className='grid size-11 place-items-center rounded-xl bg-card-2 text-ink'
 						>
-							<Minus className='size-4' />
+							<Minus className='size-5' />
 						</button>
-						<strong className='min-w-10 text-center text-[17px] font-black text-ink'>
+						<strong className='min-w-12 text-center text-lg font-black text-ink'>
 							{count}
 						</strong>
 						<button
 							type='button'
 							aria-label='Ko‘paytirish'
 							onClick={() => setCount(Math.min(12, count + 1))}
-							className='grid size-10 place-items-center rounded-xl bg-card-2 text-ink'
+							className='grid size-11 place-items-center rounded-xl bg-card-2 text-ink'
 						>
-							<Plus className='size-4' />
+							<Plus className='size-5' />
 						</button>
 					</div>
 				</div>
 			</Card>
 
-			<Card className='mt-3'>
+			<Card className='mt-3 px-4 py-1'>
 				<KeyValueList>
 					<KeyValue label='Vaqt' value={whenLabel} />
+					{dated && <KeyValue label='Davomiyligi' value={durationLabel(duration)} />}
+					{dated && seating && <KeyValue label='Joy' value={seating} />}
 					<KeyValue label={copy.countLabel} value={`${count} ${copy.unit}`} />
 					{parking && <KeyValue label='Yaqin parking' value={parking.name} />}
 					<KeyValue label='Joyni ushlab turamiz' value='15 daqiqa' />
+					{dated && (
+						<KeyValue
+							label='Jami'
+							value={<span className='text-lg font-black text-ink'>Bepul</span>}
+							className='items-center'
+						/>
+					)}
 				</KeyValueList>
 			</Card>
 
 			{conflict && (
-				<Card className='mt-3 bg-warn-bg'>
-					<p className='text-[13px] font-bold text-ink'>
-						{SERVICE_CONFLICT_MESSAGE[kind]}
-					</p>
-					<p className='mt-1 text-[11.5px] text-ink-3'>
-						{conflict.code} · boshqa vaqtni tanlang yoki bronni oching.
-					</p>
+				<div className='mt-3 rounded-card-lg bg-warn-bg p-4'>
+					<div className='flex items-start gap-3'>
+						<CalendarClock className='mt-0.5 size-4 shrink-0 text-warn' />
+						<div className='min-w-0 flex-1'>
+							<p className='text-[13px] font-black text-ink'>
+								{SERVICE_CONFLICT_MESSAGE[kind]}
+							</p>
+							<p className='mt-1 text-[11.5px] leading-5 text-ink-2'>
+								{conflict.code} · boshqa vaqtni tanlang yoki bronni oching.
+							</p>
+						</div>
+					</div>
 					<Button
 						variant='outline'
 						block
-						className='mt-3'
+						className='mt-3 h-10'
 						onClick={() => {
 							onClose()
 							router.push(serviceBookingHref(conflict.id))
@@ -336,17 +487,17 @@ export function ServiceBookingSheet({
 					>
 						Bronni ko‘rish
 					</Button>
-				</Card>
+				</div>
 			)}
 
 			<Button
 				variant='primary'
 				block
-				className='mt-4'
+				className='mt-4 h-13'
 				disabled={!startAt || Boolean(conflict)}
 				onClick={confirm}
 			>
-				{startAt ? copy.confirm : 'Vaqtni tanlang'}
+				{conflict ? 'Vaqt band' : startAt ? copy.confirm : 'Vaqtni tanlang'}
 			</Button>
 			<p className='mt-2 text-center text-[11px] text-ink-3'>
 				Bir soat oldin bepul bekor qilish mumkin

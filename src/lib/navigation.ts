@@ -46,17 +46,14 @@ export function destinationIdFrom(source: DestinationSource): string | null {
 				? mapObjectKey({ kind: 'place', id: source.placeId })
 				: null
 
-		// A queue desk is a venue first: when it names a place in the catalog,
-		// the route goes to that place, so «Coffee Lab navbati» and «Coffee
-		// Lab» are the same destination. Desks with no place of their own —
-		// the government offices — keep their own recorded position.
+		// A queue desk is a venue first: every one names a place in the
+		// catalog and the route goes to that place, so «Coffee Lab navbati»
+		// and «Coffee Lab» are the same destination.
 		case 'queueOrg': {
 			const org = source.orgId ? getQueueOrg(source.orgId) : undefined
-			if (!org) return null
-			return (
-				destinationIdFrom({ from: 'place', placeId: org.placeId }) ??
-				mapObjectKey({ kind: 'queue', id: org.id })
-			)
+			return org
+				? destinationIdFrom({ from: 'place', placeId: org.placeId })
+				: null
 		}
 
 		// An event's map pin is deliberately nudged off its venue so the two

@@ -136,7 +136,7 @@ export default function ParkingDetailPage() {
 	]
 
 	function pickBay(bay: string, state: BayState) {
-		if (state === 'mine') return toast.show('Bu sizning bron qilgan joyingiz')
+		if (state === 'mine') return toast.show('Bu siz band qilgan joy')
 		if (!isBaySelectable(state)) return toast.show('Bu joy band')
 
 		if (selectedBay === bay) return setSelectedBay(null)
@@ -287,8 +287,8 @@ export default function ParkingDetailPage() {
 
 						<p className='mt-3 text-[11.5px] leading-5 text-ink-3'>
 							{parking.pricePerHour
-								? 'Birinchi 15 daqiqa bepul. To‘lov chiqishda yoki bron qilishda oldindan olinadi.'
-								: 'Parking bepul — joyni oldindan bron qilish mumkin.'}
+								? 'Birinchi 15 daqiqa bepul. To‘lov chiqishda yoki band qilishda oldindan olinadi.'
+								: 'Parking bepul — joyni oldindan band qilish mumkin.'}
 						</p>
 					</Card>
 				</div>
@@ -478,8 +478,8 @@ export default function ParkingDetailPage() {
 						{full
 							? 'Bo‘sh joy yo‘q'
 							: selectedBay
-								? `${selectedBay} joyini bron qilish`
-								: 'Joy bron qilish'}
+								? `${selectedBay} joyini band qilish`
+								: 'Joy band qilish'}
 					</Button>
 				</div>
 			</div>

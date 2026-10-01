@@ -1,0 +1,102 @@
+1. Reservation (parking)
+
+Parking at any of 13 car parks. You pick a date, an arrival time, how many hours, and a space with its level. Entry and exit go through a gate QR, and finishing produces a receipt.
+- Tashkent: Next Mall Parking, Amir Temur Square Parking, Magic City Parking, Tashkent City Parking, Hyatt Regency Parking, Eco Park Parking, Chorsu Bazaar Parking, Humo Arena Parking
+- Other cities: Registan Visitor Parking (Samarqand), Old City Parking (Buxoro), Namangan Center Parking, Andijon Markaz Parking
+
+A table booking can also create a parking reservation in one tap, from the nearby car park the restaurant is linked to.
+
+2. ServiceBooking
+
+The type allows four kinds (table, cinema, clinic, event), but the app only ever creates three:
+- Table at the four food venues: Coffee Lab, Urban Food, Plov Center and Basilic Cafe. You choose a date, a time, a length of 1–3 hours, a seating area and the number of guests.
+- Cinema ticket, always at Magic Cinema, for a fixed set of times today only.
+- Clinic appointment, always at Medical Plaza, for a fixed set of times today only.
+- Event: the kind exists in the code, but no screen creates one.
+
+3. QueueTicket (electronic queue)
+
+A place in a live queue at 8 organisations, for one of their services:
+
+┌─────────────────────────┬─────────────────────────────────────────────────────────────────────────┐
+│      Organisation       │                                Services                                 │
+├─────────────────────────┼─────────────────────────────────────────────────────────────────────────┤
+│ Coffee Lab              │ Stolda buyurtma, O‘zim bilan, Stol navbati                              │
+├─────────────────────────┼─────────────────────────────────────────────────────────────────────────┤
+│ Ipoteka Bank            │ Valyuta ayirboshlash, Hisob ochish, Kredit va bo‘lib to‘lash, Karta va  │
+│                         │ o‘tkazmalar                                                             │
+├─────────────────────────┼─────────────────────────────────────────────────────────────────────────┤
+│ Medical Plaza           │ Terapevt qabuli, Tahlil topshirish, MRT va diagnostika                  │
+├─────────────────────────┼─────────────────────────────────────────────────────────────────────────┤
+│ Plov Center             │ Zalda ovqatlanish, O‘zim bilan                                          │
+├─────────────────────────┼─────────────────────────────────────────────────────────────────────────┤
+│ Davlat xizmatlari       │ Pasport va ID karta, Kadastr va mulk, Notarial xizmatlar, Ma’lumotnoma  │
+│ markazi                 │ olish                                                                   │
+├─────────────────────────┼─────────────────────────────────────────────────────────────────────────┤
+│ Migratsiya bo‘limi      │ Ro‘yxatdan o‘tish, Viza va ruxsatnoma, Maslahat                         │
+├─────────────────────────┼─────────────────────────────────────────────────────────────────────────┤
+│ Avto Servis Plus        │ Diagnostika, Moy almashtirish, Shinamontaj                              │
+├─────────────────────────┼─────────────────────────────────────────────────────────────────────────┤
+│ Tuman poliklinikasi     │ Oilaviy shifokor, Emlash, Tibbiy ma’lumotnoma                           │
+└─────────────────────────┴─────────────────────────────────────────────────────────────────────────┘
+
+Listed but not bookable
+
+- Events in events.ts (Konsert, Hunarmandlar yarmarkasi, Ochiq osmon ostida kino, Shahar yugurishi): you
+  can save them or route to them and re is no booking.
+- Places with no booking of their own, apart from parking at their linked car park:
+  - Magic City and Next Mall (shoppin
+  - Tashkent City BC (business centre)
+  - Tarix muzeyi (museum) and Tashken
+  - Dorixona №1 (pharmacy) and Fitness Pro (gym)
+  - Humo Arena (concert hall and ice
+  - Avtoservis «Master» (car service) and Chorsu bozori (bazaar)
+  - Laboratoriya «Sitora» (lab)
+  - Bank xizmatlari (bank) is the place card for Ipoteka Bank, so it takes queue tickets but has no booking of its own.
+- Taxi in the services rail only shows a toast with an estimated arrival time and price; nothing is booked.
+
+
+
+Prompt: "We fixed the QueueTicket there, and what can we do for the rest (like Listed but not bookable and 2. ServiceBooking) to make all work the same in functionality.
+
+Next one is to think what to do about when user can't make it until the arrival time 
+
+
+This is an incredibly thorough and well-thought-out checklist from Claude. It captures all the necessary structural changes—like adding a `'scheduled'` state, building a desk availability engine, and updating the UI—while ensuring backward compatibility for older "live" tickets.
+
+This is a massive refactor that touches a lot of files. To prevent Claude from breaking the app, we need to split this into two smaller, focused prompts.
+
+**Part 1: The Core Logic & Data Layer.** We will update the types, the queue organization data, the lifecycle engine, and the conflict rules first, and ensure the tests pass.
+**Part 2: The UI & UX.** Once the engine is solid, we will update the booking sheet, the desk grid, and the ticket cards.
+
+### Prompt 1: Core Logic & Data Engine
+
+Paste this exact prompt into your Claude CLI. It instructs the model to execute steps 1 through 8 of the checklist, ignoring the UI for now.
+
+```text
+First, read `PROJECT_BRIEFING.md` to ensure you have the architectural context.
+
+Execute Steps 1 through 8 of the Queue Ticket Parity checklist (Data Model, Catalog, Availability Engine, Time Slots, Lifecycle, Conflicts, Store, Read Models). Do not explain the code, just implement the following and run the tests.
+
+CONTEXT CONSTRAINTS:
+- Language: All user-facing text must be in Uzbek (Latin script).
+- Architecture: Ensure `queueTicketStatusAt` and `deskAvailability` are pure functions. Move the pseudo-random seed generator out of `bay-map.ts` into a shared helper so both the parking and queue availability engines use the same logic without breaking `bay-map.test.ts`.
+- Backward Compatibility: `scheduledAt` and `deskId` must be optional on `QueueTicket` so legacy live tickets remain valid.
+
+IMPLEMENTATION:
+1. Update types in `src/lib/types.ts` (`scheduled` status, `QueueDesk`, etc.).
+2. Update `src/data/queue-orgs.ts` with desks, `openTime`, and `serviceMinutes`.
+3. Create `src/lib/queue-desks.ts` for desk availability logic.
+4. Update `src/lib/service-slots.ts` to support queue slot generation and the `QUEUE_NOW_SLOT = 'Hozir'` constant.
+5. Update `src/lib/booking-lifecycle.ts` to handle the `'scheduled'` state and reconciliation.
+6. Update `src/lib/booking-conflicts.ts` to check for desk clashes.
+7. Update `takeQueueTicket` in `src/context/app-context.tsx`.
+8. Update read models in `src/lib/bookings.ts` and `src/lib/booking-journey.ts`.
+9. Add/update the necessary tests in `src/lib/` (e.g., `queue-desks.test.ts`).
+
+VERIFICATION:
+Run `npx vitest run` strictly on the modified files to ensure the logic is sound before we touch the UI components.
+
+```
+
+Let Claude build out this massive logic layer. If it hits any type errors or test failures, paste the CLI output here and we will guide it through the fix. Once this passes, we will tackle the UI!

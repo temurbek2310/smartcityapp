@@ -1,3 +1,4 @@
+import { getQueueOrg, getQueueService } from '@/data/queue-orgs'
 import {
 	expectedEndAt,
 	isQueueTicketLive,
@@ -109,10 +110,14 @@ export const SERVICE_CONFLICT_MESSAGE: Record<ServiceBookingKind, string> = {
 }
 
 // --- Queue tickets -----------------------------------------------------------
-// A queue is not scheduled: there is no interval, only "am I already in this
-// line". One live ticket (waiting, called or arrived) per organisation and
-// service; served and cancelled free the line up again. Two different
-// services at the same organisation are two different lines.
+// Two rules. The first is "am I already in this line": one live ticket
+// (scheduled, waiting, called or arrived) per organisation and service, taken
+// live or booked ahead alike; served and cancelled free the line up again. Two
+// different services at the same organisation are two different lines.
+//
+// The second only exists because a ticket can now name a desk and a time: a
+// window shared by two lines cannot be booked by the same customer for two
+// overlapping slots, one through each line.
 
 type QueueTarget = { orgId: string; serviceId?: string }
 
@@ -132,11 +137,63 @@ export function findLiveQueueTicket(
 	)
 }
 
-export const QUEUE_CONFLICT_MESSAGE = 'Bu navbatda faol chiptangiz mavjud'
+export const QUEUE_CONFLICT_MESSAGE = 'Bu navbatda faol taloningiz mavjud'
+
+// Used when a ticket names a service the catalog no longer has, so its slot
+// still occupies its desk for something rather than for nothing. The grid's
+// own half-hour.
+export const FALLBACK_QUEUE_SERVICE_MINUTES = 30
+
+type QueueSlotInput = Pick<QueueTicket, 'orgId' | 'serviceId' | 'scheduledAt'>
+
+// The span a booked ticket holds its desk for, as epoch ms: its slot, for the
+// service's own serviceMinutes. Null for a live ticket — it has no slot — and
+// for a time that cannot be read, which is left out of clash checks rather
+// than guessed at, the same way serviceBookingInterval() treats a legacy blob.
+export function queueTicketInterval(ticket: QueueSlotInput) {
+	const start = ticket.scheduledAt ? Date.parse(ticket.scheduledAt) : Number.NaN
+	if (Number.isNaN(start)) return null
+	const org = getQueueOrg(ticket.orgId)
+	const minutes =
+		(org && getQueueService(org, ticket.serviceId)?.serviceMinutes) ||
+		FALLBACK_QUEUE_SERVICE_MINUTES
+	return { start, end: start + minutes * 60_000 }
+}
+
+export type QueueDeskRequest = QueueSlotInput & { deskId?: string }
+
+// The live booked ticket that already holds this desk across the requested
+// slot, if any. A request without a desk or a slot — a live ticket — has
+// nothing to clash on.
+export function findQueueDeskClash(
+	tickets: readonly QueueTicket[],
+	request: QueueDeskRequest,
+): QueueTicket | undefined {
+	if (!request.orgId || !request.deskId) return undefined
+	const wanted = queueTicketInterval(request)
+	if (!wanted) return undefined
+	return tickets.find(ticket => {
+		if (!isQueueTicketLive(ticket.status)) return false
+		if (ticket.orgId !== request.orgId || ticket.deskId !== request.deskId) {
+			return false
+		}
+		const held = queueTicketInterval(ticket)
+		return Boolean(
+			held && intervalsOverlap(held.start, held.end, wanted.start, wanted.end),
+		)
+	})
+}
+
+export const QUEUE_DESK_CONFLICT_MESSAGE =
+	'Bu vaqtda ushbu oynada navbatingiz mavjud'
 
 // --- Mutation result ---------------------------------------------------------
 // What a creating mutation hands back. A clash is an expected answer, not an
 // error, so it is a value the caller branches on rather than an exception.
 
+// past — the requested start has already gone by. Only a queue ticket booked
+// ahead can ask for that; every other check runs on the clock in its sheet.
 export type BookingAttempt<T> =
-	{ ok: true; created: T } | { ok: false; reason: 'conflict'; existing: T }
+	| { ok: true; created: T }
+	| { ok: false; reason: 'conflict'; existing: T }
+	| { ok: false; reason: 'past' }

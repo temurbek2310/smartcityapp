@@ -113,7 +113,7 @@ export function DestinationParkingCard({
 						onClick={onReserve}
 						className='flex h-11 w-full items-center justify-center rounded-[14px] bg-brand text-[13px] font-bold text-white shadow-[0_6px_16px_rgba(108,71,224,.28)]'
 					>
-						Bron qilish
+						Band qilish
 					</button>
 				)}
 			</div>

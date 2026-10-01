@@ -51,8 +51,17 @@ import { CITY_META } from '@/data/city-meta'
 import { PARKINGS } from '@/data/parkings'
 import { EVENTS } from '@/data/events'
 import { PLACES } from '@/data/places'
-import { getQueueOrg, getQueueOrgByPlace } from '@/data/queue-orgs'
+import {
+	getQueueOrg,
+	getQueueOrgByPlace,
+	placeQueueWaitMinutes,
+} from '@/data/queue-orgs'
 import { formatNumber, formatUZS } from '@/lib/format'
+import {
+	TABLE_BOOK_LABEL,
+	TAKEAWAY_SERVICE_ID,
+	queueActionLabel,
+} from '@/lib/lexicon'
 import type { Place, PlaceCategory, ServiceBookingKind } from '@/lib/types'
 import { distanceKm } from '@/lib/geo'
 import {
@@ -171,7 +180,10 @@ function HomeView() {
 	// a number. Held by organisation id so the sheet always belongs to the
 	// place that was actually opened.
 	const [queueOrgId, setQueueOrgId] = useState<string | null>(null)
-	// The generic «Stol bron qilish», which has to ask which restaurant first.
+	// The line within that organisation, when the button named one — a food
+	// venue's «Olib ketish» is the takeaway counter, not «some service here».
+	const [queueServiceId, setQueueServiceId] = useState<string | undefined>()
+	// The generic «Stol band qilish», which has to ask which restaurant first.
 	const [tableFlowOpen, setTableFlowOpen] = useState(false)
 	const [updatedLabel, setUpdatedLabel] = useState('hozirgina')
 
@@ -414,19 +426,20 @@ function HomeView() {
 	// The two things a venue itself can be booked for. Both take the place the
 	// user opened — never a fixed demo venue — and both hand over to the
 	// components /queues and the Bron tab already use.
-	function openPlaceQueue(placeId: string) {
+	function openPlaceQueue(placeId: string, serviceId?: string) {
 		const org = getQueueOrgByPlace(placeId)
 		if (!org) {
-			showToast('Bu joyda elektron navbat yo‘q')
+			showToast('Bu muassasada elektron navbat yo‘q')
 			return
 		}
 		setSheet(null)
+		setQueueServiceId(serviceId)
 		setQueueOrgId(org.id)
 	}
 
 	function openTableBooking(placeId: string) {
 		if (!PLACES.some(place => place.id === placeId)) {
-			showToast('Joy topilmadi')
+			showToast('Muassasa topilmadi')
 			return
 		}
 		setSheet(null)
@@ -987,9 +1000,9 @@ function HomeView() {
 													{place.free} joy
 												</span>
 											)}
-											{place.queue !== undefined && (
+											{placeQueueWaitMinutes(place.id) !== undefined && (
 												<span className='text-ink-2'>
-													{place.queue} daq
+													{placeQueueWaitMinutes(place.id)} daq
 												</span>
 											)}
 										</div>
@@ -1886,11 +1899,30 @@ function HomeView() {
 					const favorite = favoritePlaceIds.includes(place.id)
 					const bars = [35, 42, 55, 68, 82, 74, 58, 40]
 					// What this venue itself can be booked for. A queue only where
-					// the catalog actually has a desk — no dead «Navbat olish» —
-					// and a table only where eating is the point of the place.
+					// the catalog actually has a line — no dead button on a place
+					// that has none — and a table only where eating is the point.
+					//
+					// The queue button is named after what the place does, never
+					// after the mechanism: a restaurant's line is «Olib ketish»,
+					// a clinic's is «Shifokor qabuliga yozilish», and only a bank
+					// or a state desk is a «Navbat olish».
 					const queueOrg = getQueueOrgByPlace(place.id)
 					const canBookTable = place.category === 'food'
+					const queueLabel = queueOrg
+						? queueActionLabel(queueOrg.category)
+						: null
+					// Food venues keep exactly one line, the counter; naming it
+					// here means «Olib ketish» opens that line rather than a
+					// picker with one entry in it.
+					const queueServiceFor = canBookTable
+						? queueOrg?.services.find(
+								item => item.id === TAKEAWAY_SERVICE_ID,
+							)?.id
+						: undefined
 					const hasVenueActions = Boolean(queueOrg) || canBookTable
+					// The line the button opens, so the button quotes that
+					// line's wait. Undefined when the venue has no queue.
+					const queueWait = placeQueueWaitMinutes(place.id, queueServiceFor)
 					return (
 						<BottomSheet title={place.title} onClose={() => setSheet(null)}>
 							<div className='overflow-hidden rounded-3xl bg-white shadow-card'>
@@ -1958,13 +1990,9 @@ function HomeView() {
 								<div className='rounded-2xl bg-white p-3 text-center shadow-card'>
 									<History className='mx-auto size-4 text-brand' />
 									<p className='mt-2 text-lg font-black text-ink'>
-										{/* The queue desk's own number when there is one, so the
-										    stat and the «Navbat olish» button never disagree. */}
-										{queueOrg
-											? `${queueOrg.waitMinutes} daq`
-											: place.queue
-												? `${place.queue} daq`
-												: '—'}
+										{/* The queue desk's own number, so the stat and the
+										    line’s own button never disagree; no desk, no wait. */}
+										{queueWait !== undefined ? `${queueWait} daq` : '—'}
 									</p>
 									<p className='text-[10px] text-ink-3'>navbat</p>
 								</div>
@@ -2023,32 +2051,40 @@ function HomeView() {
 										{place.title}da
 									</p>
 									<p className='mt-1 text-[11px] leading-4 text-ink-3'>
-										Navbat va stol bronlari «Bron» bo‘limida saqlanadi.
+										Band qilingan stol va talonlar «Bron» bo‘limida
+										saqlanadi.
 									</p>
 
+									{/* A restaurant leads with the table — that is what
+									    someone opening it came for — and offers the
+									    counter beside it. Everywhere else the line is
+									    the only thing the venue itself does. */}
 									<div className='mt-3 space-y-2'>
-										{queueOrg && (
-											<button
-												type='button'
-												onClick={() => openPlaceQueue(place.id)}
-												className='flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-brand text-sm font-black text-white shadow-lg shadow-[0_6px_16px_rgb(108_71_224/.28)]'
-											>
-												<Users className='size-4' />
-												Navbat olish · ~{queueOrg.waitMinutes} daq
-											</button>
-										)}
 										{canBookTable && (
 											<button
 												type='button'
 												onClick={() => openTableBooking(place.id)}
+												className='flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-brand text-sm font-black text-white shadow-lg shadow-[0_6px_16px_rgb(108_71_224/.28)]'
+											>
+												<CalendarDays className='size-4' />
+												{TABLE_BOOK_LABEL}
+											</button>
+										)}
+										{queueOrg && queueLabel && (
+											<button
+												type='button'
+												onClick={() =>
+													openPlaceQueue(place.id, queueServiceFor)
+												}
 												className={
-													queueOrg
+													canBookTable
 														? 'flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-brand-50 text-sm font-black text-brand-600 ring-1 ring-brand-100'
 														: 'flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-brand text-sm font-black text-white shadow-lg shadow-[0_6px_16px_rgb(108_71_224/.28)]'
 												}
 											>
-												<CalendarDays className='size-4' />
-												Stol bron qilish
+												<Users className='size-4' />
+												{queueLabel}
+												{queueWait !== undefined && ` · ~${queueWait} daq`}
 											</button>
 										)}
 									</div>
@@ -2109,7 +2145,7 @@ function HomeView() {
 										}`}
 									>
 										<CircleParking className='mr-2 inline size-4 align-text-bottom text-brand' />
-										Yaqin parkingni bron qilish
+										Yaqin parkingni band qilish
 									</button>
 									{hasVenueActions && (
 										<p className='mt-2 text-center text-[11px] text-ink-3'>
@@ -2149,7 +2185,11 @@ function HomeView() {
 					return (
 						<TakeTicketSheet
 							org={org}
-							onClose={() => setQueueOrgId(null)}
+							serviceId={queueServiceId}
+							onClose={() => {
+								setQueueOrgId(null)
+								setQueueServiceId(undefined)
+							}}
 						/>
 					)
 				})()}

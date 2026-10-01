@@ -28,7 +28,7 @@ const reservation = (patch: Partial<Reservation> = {}): Reservation => ({
 const ticket = (patch: Partial<QueueTicket> = {}): QueueTicket => ({
 	id: 't1',
 	orgId: 'coffee-lab',
-	serviceId: 'table',
+	serviceId: 'takeaway',
 	number: 'A-23',
 	position: 12,
 	initialPosition: 12,
@@ -237,6 +237,32 @@ describe('bookingRows', () => {
 			serviceBookings: [service({ status: 'cancelled' })],
 		})
 		expect([table.cancellable, gone.cancellable]).toEqual([true, false])
+
+		const [upcoming] = bookingRows({
+			...empty,
+			serviceBookings: [service({ status: 'upcoming' })],
+		})
+		expect(upcoming.cancellable).toBe(true)
+	})
+
+	it('reads a service booking Kutilmoqda before its start and Faol from it', () => {
+		const [upcoming] = bookingRows({
+			...empty,
+			serviceBookings: [service({ status: 'upcoming' })],
+		})
+		expect([upcoming.status, upcoming.statusLabel]).toEqual(['upcoming', 'Kutilmoqda'])
+		expect(isOpen(upcoming)).toBe(true)
+
+		const [active] = bookingRows({ ...empty, serviceBookings: [service()] })
+		expect([active.status, active.statusLabel]).toEqual(['active', 'Faol'])
+	})
+
+	it('writes a fractional parking duration with the Uzbek decimal comma', () => {
+		const [row] = bookingRows({
+			...empty,
+			reservations: [reservation({ durationHours: 1.5 })],
+		})
+		expect(row.subtitle.startsWith('1,5 soat · ')).toBe(true)
 	})
 
 	it('returns nothing for an empty registry', () => {
@@ -257,6 +283,7 @@ describe('serviceBookingDraft', () => {
 			count: 2,
 			unit: 'kishi',
 			startAt: slotInstant('2026-09-18', '19:30'),
+			durationMinutes: 90,
 			now,
 			...patch,
 		})
@@ -300,6 +327,19 @@ describe('serviceBookingDraft', () => {
 	it('keeps the guest count it was given', () => {
 		expect(draft({ count: 6 }).subtitle).toBe('6 kishi · 19:30')
 	})
+
+	it('stores the chosen duration, which the end is read from', () => {
+		const table = draft()
+		expect(table.durationMinutes).toBe(90)
+		expect(
+			expectedEndAt({ ...table, createdAt: now.toISOString() }),
+		).toBe(Date.parse('2026-09-18T21:00:00+05:00'))
+	})
+
+	it('stores the seating area only when one was chosen', () => {
+		expect(draft({ seatingArea: 'Veranda' }).seatingArea).toBe('Veranda')
+		expect('seatingArea' in draft()).toBe(false)
+	})
 })
 
 describe('isOpen', () => {
@@ -327,6 +367,7 @@ describe('service booking time on any device', () => {
 			count: 2,
 			unit: 'kishi',
 			startAt,
+			durationMinutes: 120,
 			now: new Date('2026-09-24T10:00:00+05:00'),
 		})
 		expect(draft.startAt).toBe('2026-09-24T09:00:00.000Z')
@@ -336,5 +377,65 @@ describe('service booking time on any device', () => {
 		expect(
 			expectedEndAt({ kind: 'table', startAt: draft.startAt, createdAt: draft.startAt }),
 		).toBe(Date.parse('2026-09-24T16:00:00+05:00'))
+	})
+})
+
+describe('a queue ticket booked ahead', () => {
+	const SLOT = slotInstant('2026-09-24', '11:00').toISOString()
+	const booked = (patch: Partial<QueueTicket> = {}) =>
+		ticket({
+			id: 'q1',
+			orgId: 'davlat-xizmat',
+			serviceId: 'passport',
+			status: 'scheduled',
+			position: 0,
+			etaMinutes: 0,
+			windowNumber: 2,
+			scheduledAt: SLOT,
+			deskId: 'd2',
+			...patch,
+		})
+	const rowOf = (item: QueueTicket) =>
+		bookingRows({ ...empty, queueTickets: [item] })[0]
+
+	it('is upcoming and reads its slot, not an estimate', () => {
+		const row = rowOf(booked())
+		expect(row.status).toBe('upcoming')
+		expect(isOpen(row)).toBe(true)
+		expect(row.whenLabel).toBe(serviceWhenLabel(SLOT))
+		expect(row.subtitle).toBe('Pasport va ID karta · 2-oyna')
+		expect(row.cancellable).toBe(true)
+	})
+
+	it('names a specialist by name', () => {
+		const row = rowOf(
+			booked({
+				orgId: 'medical-plaza',
+				serviceId: 'therapist',
+				deskId: 'd1',
+				windowNumber: 1,
+			}),
+		)
+		expect(row.subtitle).toBe('Terapevt qabuli · Dr. Karimova')
+	})
+
+	it('without a desk shows the service alone, without an unreadable slot a fallback', () => {
+		expect(rowOf(booked({ deskId: undefined })).subtitle).toBe('Pasport va ID karta')
+		expect(rowOf(booked({ scheduledAt: 'soon' })).whenLabel).toBe('Oldindan band qilingan')
+	})
+
+	it('once at the window, the chosen desk replaces the window number', () => {
+		const row = rowOf(booked({ status: 'called' }))
+		expect(row.status).toBe('active')
+		expect(row.subtitle).toBe('Pasport va ID karta · 2-oyna')
+		expect(rowOf(booked({ status: 'arrived', orgId: 'medical-plaza', serviceId: 'therapist', deskId: 'd1' })).subtitle).toBe(
+			'Terapevt qabuli · Dr. Karimova',
+		)
+	})
+
+	it('a legacy live ticket keeps its rows exactly', () => {
+		expect(rowOf(ticket()).subtitle).toBe('Olib ketish · oldingizda 12')
+		expect(rowOf(ticket({ status: 'called' })).subtitle).toBe('Olib ketish · 2-oyna')
+		expect(rowOf(ticket()).whenLabel).toBe('taxminan 35 daqiqa')
 	})
 })

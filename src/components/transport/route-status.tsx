@@ -2,8 +2,11 @@
 
 import { ExternalLink, LocateFixed, MapPin, RotateCw, Route as RouteIcon, TriangleAlert } from 'lucide-react'
 
+import { CarRouteStatus } from '@/components/transport/car-route-status'
+import { TransitRouteStatus } from '@/components/transport/transit-route-status'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import type { RealRoute } from '@/lib/routing'
 import type { TransportMode } from '@/lib/transport'
 import { routeNoun, routeUnavailableMessage, type ActiveRoute } from '@/lib/transport-route'
 
@@ -24,17 +27,18 @@ function OpenIn2Gis({ href }: { href: string }) {
 	)
 }
 
-// What /transport says about a real-routed mode (car, walking, scooter)
+// What /transport says about a real-routed mode (car, walking, scooter, metro)
 // whose route is not simply "there": loading, unavailable, or waiting for a
 // real origin. Sits where the route's numbers would be read from, so the "—"
 // in the summary is explained right above it. There is deliberately no
 // estimate in here: the old straight-line figures are not offered in place
 // of a real route.
 //
-// For a route that *is* there, it renders only for the modes with no demo
-// timeline or in-app navigator (walking, the scooter), so this row is where
-// the route is named as 2GIS's — and where «2GIS’da ochish» lives when
-// there is a hand-off. The scooter has none, so it gets no button.
+// For a route that *is* there, this row is where the route is named as
+// 2GIS's — and where «2GIS’da ochish» lives when there is a hand-off. The
+// scooter has none, so it gets no button. For the car it is followed by
+// 2GIS's alternatives and maneuvers (CarRouteStatus); for metro, by the
+// journey's legs (TransitRouteStatus).
 export function RouteStatus({
 	mode,
 	route,
@@ -43,6 +47,7 @@ export function RouteStatus({
 	locating,
 	onLocate,
 	onPickOrigin,
+	carRoutes,
 }: {
 	mode: TransportMode
 	route: RouteStatusState
@@ -52,11 +57,13 @@ export function RouteStatus({
 	locating: boolean
 	onLocate: () => void
 	onPickOrigin: () => void
+	// The car's full 2GIS answer and which of its routes is on screen.
+	carRoutes?: { route: RealRoute; selectedIndex: number; onSelect: (index: number) => void }
 }) {
 	const noun = routeNoun(mode)
 
 	if (route.status === 'real') {
-		return (
+		const summary = (
 			<Card className='flex items-center gap-3'>
 				<span className='grid size-10 shrink-0 place-items-center rounded-2xl bg-brand-50 text-brand'>
 					<RouteIcon className='size-5' />
@@ -69,6 +76,21 @@ export function RouteStatus({
 				</div>
 				{navigateHref && <OpenIn2Gis href={navigateHref} />}
 			</Card>
+		)
+		if (mode === 'metro' && route.route.transitLegs) {
+			return (
+				<div className='space-y-3'>
+					{summary}
+					<TransitRouteStatus legs={route.route.transitLegs} />
+				</div>
+			)
+		}
+		if (mode !== 'car' || !carRoutes) return summary
+		return (
+			<div className='space-y-3'>
+				{summary}
+				<CarRouteStatus {...carRoutes} />
+			</div>
 		)
 	}
 

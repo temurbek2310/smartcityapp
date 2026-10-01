@@ -34,21 +34,37 @@ import * as accountExit from "@/lib/account-exit";
 import {
   arriveQueueTicket as arriveTicket,
   cancelQueueTicket as cancelTicket,
+  isServiceBookingLive,
   liveBookingCount,
   reconcileBookingLifecycles,
+  reconcileQueueTicket,
   serveQueueTicket as serveTicket,
+  serviceBookingStatusAt,
 } from "@/lib/booking-lifecycle";
 import {
   findConflictingServiceBooking,
   findLiveQueueTicket,
+  findQueueDeskClash,
   type BookingAttempt,
 } from "@/lib/booking-conflicts";
+import { serviceWhenLabel } from "@/lib/service-slots";
+import { getQueueOrg } from "@/data/queue-orgs";
+import { assignQueueDesk } from "@/lib/queue-desks";
 
 const STORAGE_KEY = MAIN_STATE_KEY;
 
-// How often bookings that end on the clock are re-checked while the app is
-// open. Minute precision is all a table or a film needs.
+// How often bookings that start and end on the clock are re-checked while
+// the app is open. Minute precision is all a table or a film needs.
 const LIFECYCLE_TICK_MS = 60_000;
+
+// What a cancelled service booking's notification says, per kind — the
+// counterpart of parking's «Parking broni bekor qilindi.»
+const SERVICE_CANCEL_MESSAGE: Record<ServiceBooking["kind"], string> = {
+  table: "Stol bandligi bekor qilindi.",
+  cinema: "Kino chiptasi bekor qilindi.",
+  clinic: "Shifokor qabuli bekor qilindi.",
+  event: "Tadbir chiptasi bekor qilindi.",
+};
 
 type CreateReservationInput = {
   parkingId: string;
@@ -65,6 +81,13 @@ type TakeQueueTicketInput = {
   etaMinutes: number;
   windowNumber: number;
   notify: boolean;
+  // Booked ahead: the slot's instant and the desk chosen for it. Both absent
+  // on a ticket taken «Hozir», which joins the line the moment it is issued
+  // and is given a desk by the organisation once called (windowNumber 0
+  // until then).
+  // position and etaMinutes are re-derived when a booked ticket joins.
+  scheduledAt?: string;
+  deskId?: string;
 };
 
 // Built by lib/bookings' serviceBookingDraft(), which is also where the
@@ -273,8 +296,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
   }, [state.hydrated]);
 
-  // Tables, films, clinic slots and event tickets end on the clock, and
-  // nobody has to open them for that to happen. One timer for every booking;
+  // Tables, films, clinic slots and event tickets end on the clock, and a
+  // queue ticket booked ahead joins its line on it — nobody has to open them
+  // for that to happen. One timer for every booking;
   // reconcileBookingLifecycles() hands back the same state when nothing is
   // due, so an idle tick neither re-renders nor rewrites storage. It emits no
   // notification: a booking reaching its end is not news to the customer.
@@ -568,29 +592,49 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }));
   }, []);
 
-  // One live ticket per organisation and service, whichever screen asks.
+  // One live ticket per organisation and service, whichever screen asks —
+  // taken live or booked ahead alike. A booked ticket must also be for a slot
+  // still ahead, on a desk this customer does not already hold at that time.
   const takeQueueTicket = useCallback(
     (input: TakeQueueTicketInput): BookingAttempt<QueueTicket> => {
       const existing = findLiveQueueTicket(queueTicketsRef.current, input);
       if (existing) return { ok: false, reason: "conflict", existing };
-      const ticket: QueueTicket = {
-        ...input,
-        id: uid("ticket"),
-        initialPosition: input.position,
-        initialEtaMinutes: input.etaMinutes,
-        status: "waiting",
-        createdAt: new Date().toISOString(),
-      };
+      const now = Date.now();
+      if (input.scheduledAt !== undefined) {
+        const start = Date.parse(input.scheduledAt);
+        if (Number.isNaN(start) || start <= now) return { ok: false, reason: "past" };
+      }
+      const deskClash = findQueueDeskClash(queueTicketsRef.current, input);
+      if (deskClash) return { ok: false, reason: "conflict", existing: deskClash };
+      // A slot booked inside the check-in lead joins the line at once, the
+      // same way a service booking is created in the stage its start puts it.
+      const ticket: QueueTicket = reconcileQueueTicket(
+        {
+          ...input,
+          id: uid("ticket"),
+          initialPosition: input.position,
+          initialEtaMinutes: input.etaMinutes,
+          status: input.scheduledAt ? "scheduled" : "waiting",
+          createdAt: new Date(now).toISOString(),
+        },
+        now,
+      );
       queueTicketsRef.current = [ticket, ...queueTicketsRef.current];
       setState((current) => ({
         ...current,
         queueTickets: [ticket, ...current.queueTickets],
         notifications: [
-          makeNotification(
-            "Navbatga yozildingiz",
-            `Talon ${ticket.number} · taxminan ${ticket.etaMinutes} daqiqa.`,
-            "queue",
-          ),
+          ticket.status === "scheduled" && ticket.scheduledAt
+            ? makeNotification(
+                "Talon band qilindi",
+                `Talon ${ticket.number} · ${serviceWhenLabel(ticket.scheduledAt, now)}.`,
+                "queue",
+              )
+            : makeNotification(
+                "Navbatga yozildingiz",
+                `Talon ${ticket.number} · taxminan ${ticket.etaMinutes} daqiqa.`,
+                "queue",
+              ),
           ...current.notifications,
         ],
       }));
@@ -613,11 +657,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const step = 1 + Math.floor(Math.random() * 2);
         const position = Math.max(0, ticket.position - step);
         called = position === 0;
+        // A ticket taken «Hozir» names no desk: the organisation assigns one
+        // when the number comes up.
+        const org = called && !ticket.deskId ? getQueueOrg(ticket.orgId) : undefined;
+        const desk = org
+          ? assignQueueDesk(org, ticket, at, current.queueTickets)
+          : undefined;
         return {
           ...ticket,
           position,
           etaMinutes: position * 3,
           status: called ? ("called" as const) : ticket.status,
+          ...(desk ? { deskId: desk.id, windowNumber: desk.number } : {}),
         };
       });
 
@@ -681,12 +732,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
       );
       if (existing) return { ok: false, reason: "conflict", existing };
       const prefix = { table: "TB", cinema: "CN", clinic: "CL", event: "EV" }[input.kind];
-      const booking: ServiceBooking = {
+      const created: ServiceBooking = {
         ...input,
         id: uid("booking"),
         code: `${prefix}-${Math.floor(1000 + Math.random() * 8999)}`,
-        status: "active",
+        status: "upcoming",
         createdAt: new Date().toISOString(),
+      };
+      // Born in whichever stage its own start puts it — the same rule the
+      // lifecycle tick applies afterwards, so nothing waits a tick to move.
+      const booking: ServiceBooking = {
+        ...created,
+        status: serviceBookingStatusAt(created, Date.now()),
       };
       serviceBookingsRef.current = [booking, ...serviceBookingsRef.current];
       setState((current) => ({
@@ -702,15 +759,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  // Upcoming or already started, the same as parking's cancel: the store
+  // changes and the customer is told, or neither happens.
   const cancelServiceBooking = useCallback((bookingId: string) => {
-    setState((current) => ({
-      ...current,
-      serviceBookings: current.serviceBookings.map((booking) =>
-        booking.id === bookingId && booking.status === "active"
-          ? { ...booking, status: "cancelled" as const }
-          : booking,
-      ),
-    }));
+    setState((current) => {
+      const target = current.serviceBookings.find(
+        (booking) => booking.id === bookingId,
+      );
+      if (!target || !isServiceBookingLive(target.status)) return current;
+
+      return {
+        ...current,
+        serviceBookings: current.serviceBookings.map((booking) =>
+          booking.id === bookingId
+            ? { ...booking, status: "cancelled" as const }
+            : booking,
+        ),
+        notifications: [
+          makeNotification("Bron bekor qilindi", SERVICE_CANCEL_MESSAGE[target.kind], "booking"),
+          ...current.notifications,
+        ],
+      };
+    });
   }, []);
 
   const markNotificationRead = useCallback((notificationId: string) => {

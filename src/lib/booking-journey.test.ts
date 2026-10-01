@@ -224,6 +224,45 @@ describe('queue tickets', () => {
 	})
 })
 
+describe('queue tickets booked ahead', () => {
+	const booked = { status: 'scheduled' as const, etaMinutes: 0, scheduledAt: START }
+
+	it('far from its slot, leads with Yo‘nalish', () => {
+		const journey = queueTicketJourney(booked, dest, at(-120))
+		expect(journey.stage).toBe('upcoming')
+		expect(journey.basis).toBe('time')
+		expect(journey.primary).toBe('directions')
+		expect(journey.secondary).toEqual(['track', 'share', 'cancel'])
+	})
+
+	it('inside the arrival window, leads with the line it is about to join', () => {
+		const journey = queueTicketJourney(booked, dest, at(-ARRIVAL_WINDOW_MINUTES))
+		expect(journey.stage).toBe('arrival')
+		expect(journey.primary).toBe('track')
+		expect(journey.secondary[0]).toBe('directions')
+	})
+
+	it('without a clock or a readable slot, falls back to the status', () => {
+		for (const journey of [
+			queueTicketJourney(booked, dest),
+			queueTicketJourney({ ...booked, scheduledAt: undefined }, dest, at(0)),
+		]) {
+			expect(journey.stage).toBe('upcoming')
+			expect(journey.basis).toBe('status')
+			expect(journey.primary).toBe('directions')
+		}
+	})
+
+	it('offers no Men keldim before it has been called', () => {
+		const journey = queueTicketJourney(booked, dest, at(0))
+		expect([journey.primary, ...journey.secondary]).not.toContain('arrived')
+	})
+
+	it('with no destination, the line leads', () => {
+		expect(queueTicketJourney(booked, noDest, at(-120)).primary).toBe('track')
+	})
+})
+
 describe('Yo‘nalish', () => {
 	it('still routes straight to /transport', () => {
 		expect(routeHref({ destinationId: 'parking:x', mode: 'car' })).toMatch(

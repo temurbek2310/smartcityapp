@@ -55,6 +55,9 @@ const REAL_SCOOTER: RealRoute = {
 	distanceMeters: 7314,
 	durationSeconds: 2138,
 	geometry: [[69.2215, 41.2846], [69.24, 41.29], [69.26, 41.3], [69.2801, 41.3105]],
+	alternatives: [],
+	maneuvers: [],
+	traffic: [],
 }
 
 const haversineKm = distanceKm(ORIGIN, DESTINATION)
@@ -129,14 +132,14 @@ describe('scooter request', () => {
 })
 
 describe('request count per selected mode against a mocked /api/directions', () => {
-	it('car, walk and scooter each request as themselves; metro requests nothing', () => {
+	it('car, walk, scooter and metro each request as themselves', () => {
 		const requests = Object.fromEntries(
 			MODES.map(mode => [mode, transportRouteRequest({ mode, origin: ORIGIN, destination: DESTINATION })]),
 		) as Record<TransportMode, ReturnType<typeof transportRouteRequest>>
 		expect(requests.car?.mode).toBe('car')
 		expect(requests.walk?.mode).toBe('walk')
 		expect(requests.scooter?.mode).toBe('scooter')
-		expect(requests.metro).toBeNull()
+		expect(requests.metro?.mode).toBe('metro')
 		// Three routed modes between the same ends are three identities: no
 		// mode's route is ever served from another's.
 		const keys = new Set([requests.car!, requests.walk!, requests.scooter!].map(routeRequestKey))
@@ -197,7 +200,7 @@ describe('a successful scooter route', () => {
 		expect(modeCapabilities('scooter').roadProblems).toBe(false)
 	})
 
-	it('pill: scooter is not approximate; metro keeps ≈', () => {
+	it('pill: scooter is not approximate; unselected metro keeps ≈', () => {
 		const labels = modeDurationLabels({ active: REAL, selected: 'scooter', estimatedMinutes })
 		expect(labels.scooter).toBe('36 daq')
 		expect(labels.metro).toBe(`≈${estimatedMinutes.metro} daq`)
@@ -396,9 +399,9 @@ describe('AI tavsiyasi next to a real scooter route', () => {
 		expect(html).not.toContain('Eng yaxshi variant')
 	})
 
-	it('metro alone still ranks estimates against estimates', () => {
+	it('metro is no longer an estimate, so it is not ranked either', () => {
 		const metro = activeTransportRoute({ mode: 'metro', estimate: estimateFor('metro'), request: null, state: { status: 'idle' } })
-		expect(transportRecommendation({ active: metro, fastest }).kind).toBe('ranked')
+		expect(transportRecommendation({ active: metro, fastest }).kind).toBe('neutral')
 	})
 })
 
@@ -424,14 +427,7 @@ describe('nearby parking with the scooter', () => {
 
 describe('Mikromobillik: no fake operator data next to a real scooter route', () => {
 	const html = renderToStaticMarkup(
-		createElement(PublicTransportSection, {
-			activeTab: 'micro',
-			onChangeTab: () => {},
-			buses: [],
-			onOpenBus: () => {},
-			metroLines: [],
-			microOptions: DEMO_MICRO_OPTIONS,
-		}),
+		createElement(PublicTransportSection, { microOptions: DEMO_MICRO_OPTIONS }),
 	)
 
 	it('shows no charge level, nearest-vehicle distance, free docks, lane share, shade or path condition', () => {

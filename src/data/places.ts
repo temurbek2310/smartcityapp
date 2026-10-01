@@ -8,6 +8,11 @@ import type { Place } from '@/lib/types'
 //
 // Places are demo content; the parking each one points at is real, and every
 // action on a place routes through that parking.
+//
+// This is also the master record for every queue desk: QUEUE_ORGS names a
+// place and reads its title, address and position from here. «Bank
+// xizmatlari» and «Ipoteka Bank», «Avtoservis «Master»» and «Avto Servis
+// Plus» used to be the same venue under two names; each is one place now.
 export const PLACES: Place[] = [
 	{
 		id: 'coffee-lab',
@@ -21,7 +26,6 @@ export const PLACES: Place[] = [
 		distanceKm: 0.3,
 		free: 15,
 		total: 60,
-		queue: 35,
 		busy: 72,
 		address: 'Amir Temur ko‘chasi, 88',
 		phone: '+998 71 200 11 22',
@@ -41,7 +45,6 @@ export const PLACES: Place[] = [
 		distanceKm: 0.27,
 		free: 6,
 		total: 20,
-		queue: 15,
 		busy: 52,
 		address: 'Sayilgoh ko‘chasi, 3',
 		phone: '+998 71 201 11 22',
@@ -61,7 +64,6 @@ export const PLACES: Place[] = [
 		distanceKm: 0.48,
 		free: 20,
 		total: 60,
-		queue: 25,
 		busy: 88,
 		address: 'Iftixor ko‘chasi, 1',
 		phone: '+998 71 201 55 66',
@@ -81,7 +83,6 @@ export const PLACES: Place[] = [
 		distanceKm: 0.85,
 		free: 18,
 		total: 50,
-		queue: 30,
 		busy: 66,
 		address: 'Shota Rustaveli ko‘chasi, 15',
 		phone: '+998 71 203 55 66',
@@ -101,7 +102,6 @@ export const PLACES: Place[] = [
 		distanceKm: 1.2,
 		free: 85,
 		total: 250,
-		queue: 8,
 		busy: 64,
 		address: 'Bobur ko‘chasi, Toshkent',
 		phone: '+998 71 200 33 44',
@@ -130,7 +130,7 @@ export const PLACES: Place[] = [
 	},
 	{
 		id: 'bank-office',
-		title: 'Bank xizmatlari',
+		title: 'Ipoteka Bank',
 		category: 'services',
 		subtitle: 'Bank · Valyuta ayirboshlash',
 		lat: 41.3092,
@@ -140,7 +140,6 @@ export const PLACES: Place[] = [
 		distanceKm: 0.4,
 		free: 8,
 		total: 20,
-		queue: 22,
 		busy: 74,
 		address: 'Amir Temur ko‘chasi, 60',
 		phone: '+998 71 203 77 88',
@@ -160,7 +159,6 @@ export const PLACES: Place[] = [
 		distanceKm: 1.8,
 		free: 25,
 		total: 40,
-		queue: 10,
 		busy: 35,
 		address: 'Sayilgoh ko‘chasi, 3',
 		phone: '+998 71 204 33 44',
@@ -180,7 +178,6 @@ export const PLACES: Place[] = [
 		distanceKm: 1.2,
 		free: 85,
 		total: 250,
-		queue: 6,
 		busy: 48,
 		address: 'Magic City, 3-qavat',
 		phone: '+998 71 204 55 66',
@@ -200,7 +197,6 @@ export const PLACES: Place[] = [
 		distanceKm: 0.45,
 		free: 38,
 		total: 120,
-		queue: 12,
 		busy: 58,
 		address: 'Nukus ko‘chasi, 12',
 		phone: '+998 71 200 55 66',
@@ -218,7 +214,6 @@ export const PLACES: Place[] = [
 		rating: 4.7,
 		reviews: 410,
 		distanceKm: 0.35,
-		queue: 5,
 		busy: 30,
 		address: 'Nukus ko‘chasi, 5',
 		phone: '+998 71 200 77 88',
@@ -257,7 +252,6 @@ export const PLACES: Place[] = [
 		distanceKm: 0.35,
 		free: 4,
 		total: 16,
-		queue: 20,
 		busy: 61,
 		address: 'Mustaqillik ko‘chasi, 21',
 		phone: '+998 71 201 33 44',
@@ -296,11 +290,10 @@ export const PLACES: Place[] = [
 		distanceKm: 1.5,
 		free: 12,
 		total: 20,
-		queue: 40,
 		busy: 55,
 		address: 'Farg‘ona yo‘li, 9',
 		phone: '+998 71 204 11 22',
-		tags: ['Shinamontaj', 'Diagnostika'],
+		tags: ['Diagnostika', 'Moy almashtirish', 'Shinamontaj'],
 		accent: 'from-stone-800 to-slate-950',
 		parkingId: 'magic-city',
 	},
@@ -345,17 +338,68 @@ export const PLACES: Place[] = [
 		title: 'Laboratoriya «Sitora»',
 		category: 'health',
 		subtitle: 'Tahlillar · Uyga chaqirish',
-		lat: 41.3021,
+		// Off Tuman poliklinikasi's point, so the two pins do not stack.
+		lat: 41.3024,
 		lng: 69.2751,
 		rating: 4.5,
 		reviews: 520,
 		distanceKm: 0.95,
-		queue: 18,
 		busy: 58,
 		address: 'Navoiy ko‘chasi, 24',
 		phone: '+998 71 204 77 88',
 		tags: ['Uyga chaqirish', 'Natija onlayn'],
 		accent: 'from-cyan-900 to-slate-950',
+		parkingId: 'next-mall',
+	},
+	{
+		id: 'davlat-xizmat',
+		title: 'Davlat xizmatlari markazi',
+		category: 'services',
+		subtitle: 'Davlat xizmatlari · Hujjatlar',
+		lat: 41.3196,
+		lng: 69.2612,
+		rating: 4.1,
+		reviews: 890,
+		distanceKm: 1.1,
+		busy: 60,
+		address: 'Islom Karimov ko‘chasi, 12',
+		phone: '+998 71 205 55 66',
+		tags: ['Pasport', 'Kadastr', 'Notarius'],
+		accent: 'from-indigo-800 to-slate-950',
+		parkingId: 'tashkent-city',
+	},
+	{
+		id: 'migratsiya',
+		title: 'Migratsiya bo‘limi',
+		category: 'services',
+		subtitle: 'Davlat xizmatlari · Migratsiya',
+		lat: 41.3247,
+		lng: 69.2723,
+		rating: 3.9,
+		reviews: 420,
+		distanceKm: 1.6,
+		busy: 69,
+		address: 'Nukus ko‘chasi, 4',
+		phone: '+998 71 205 77 88',
+		tags: ['Ro‘yxatdan o‘tish', 'Viza'],
+		accent: 'from-teal-800 to-slate-950',
+		parkingId: 'amir-temur',
+	},
+	{
+		id: 'tuman-poliklinika',
+		title: 'Tuman poliklinikasi',
+		category: 'health',
+		subtitle: 'Poliklinika · Oilaviy shifokor',
+		lat: 41.3021,
+		lng: 69.2751,
+		rating: 4.0,
+		reviews: 1540,
+		distanceKm: 2.1,
+		busy: 80,
+		address: 'Mustaqillik ko‘chasi, 21',
+		phone: '+998 71 205 99 00',
+		tags: ['Oilaviy shifokor', 'Emlash', 'Ma’lumotnoma'],
+		accent: 'from-emerald-800 to-slate-950',
 		parkingId: 'next-mall',
 	},
 ]
@@ -365,11 +409,28 @@ export function getPlace(id: string) {
 }
 
 // Venues a table can be booked at, nearest first. The catalog's own
-// category decides — the generic «Stol bron qilish» used to skip the
+// category decides — the generic «Stol band qilish» used to skip the
 // question entirely and book Urban Food whoever the customer meant, and a
 // second hand-written restaurant list would only drift from this one.
 export function tableBookablePlaces() {
 	return PLACES.filter(place => place.category === 'food').sort(
 		(a, b) => a.distanceKm - b.distanceKm,
 	)
+}
+
+// Where a table can be — read off the venue's own tags, never invented per
+// restaurant. Every venue has a main hall; a tagged veranda or banquet room
+// adds its own. The first entry is the default.
+export const DEFAULT_SEATING_AREA = 'Asosiy zal'
+
+const SEATING_FROM_TAG: Record<string, string> = {
+	Veranda: 'Veranda',
+	Banket: 'Banket zali',
+}
+
+export function tableSeatingAreas(place: Pick<Place, 'tags'> | undefined) {
+	const extra = (place?.tags ?? []).flatMap(tag =>
+		SEATING_FROM_TAG[tag] ? [SEATING_FROM_TAG[tag]] : [],
+	)
+	return [DEFAULT_SEATING_AREA, ...extra]
 }

@@ -1,3 +1,4 @@
+import { makeRandom, seededOrder, seedFor } from '@/lib/seeded-random'
 import type { Parking } from '@/lib/types'
 
 // City Goo's bayMap(): a deterministic floor plan for one level of a lot.
@@ -10,7 +11,8 @@ import type { Parking } from '@/lib/types'
 // The reference reads its PRNG through Array.sort(), whose comparator is not
 // a shuffle and whose result depends on the engine's sort. Here the shuffle
 // is an explicit Fisher-Yates over the same cheap LCG, so the plan is stable
-// across engines as well as across renders.
+// across engines as well as across renders. The seed, the LCG and the
+// shuffle live in seeded-random, shared with the queue desk board.
 
 export type BayState = 'free' | 'busy' | 'ev' | 'accessible' | 'mine'
 
@@ -38,23 +40,6 @@ export const BAY_STATES: Record<
 const COLUMNS = 6
 const ROW_LETTERS = 'ABCDEFGH'
 
-function seedFor(parkingId: string, level: number, total: number) {
-	let hash = 2166136261 ^ (level * 31 + total)
-	for (let index = 0; index < parkingId.length; index += 1) {
-		hash ^= parkingId.charCodeAt(index)
-		hash = Math.imul(hash, 16777619)
-	}
-	return (hash >>> 0) % 99991
-}
-
-function makeRandom(seed: number) {
-	let state = seed || 1
-	return () => {
-		state = (state * 1103515245 + 12345) % 2147483648
-		return state / 2147483648
-	}
-}
-
 export function bayMap(
 	parking: Parking,
 	level: number,
@@ -80,11 +65,7 @@ export function bayMap(
 	}))
 
 	const random = makeRandom(seedFor(parking.id, level, total))
-	const order = bays.map((_, index) => index)
-	for (let index = order.length - 1; index > 0; index -= 1) {
-		const swap = Math.floor(random() * (index + 1))
-		;[order[index], order[swap]] = [order[swap], order[index]]
-	}
+	const order = seededOrder(bays.length, random)
 
 	// EV and accessible bays are drawn *from* the free ones, not added on top.
 	// The reference carves them out of the remainder, which leaves a lot with

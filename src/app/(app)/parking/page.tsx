@@ -97,7 +97,7 @@ export default function ParkingListPage() {
 
 	// Only ever a parking the filters actually left on screen. Reading it back
 	// out of `results` is what stops a pin selected before a filter changed
-	// from carrying a stale card — and from offering «Bron qilish» for a lot
+	// from carrying a stale card — and from offering «Band qilish» for a lot
 	// that is no longer among the results the customer is looking at.
 	const selectedParking = useMemo(
 		() => results.find(item => item.parking.id === selectedId)?.parking,
@@ -128,7 +128,7 @@ export default function ParkingListPage() {
 				<div className='px-4'>
 					<AppBar
 						title='Parkinglar'
-						subtitle='Joy toping va bron qiling'
+						subtitle='Joy toping va band qiling'
 						onBack={() => router.back()}
 						action={
 							<IconButton

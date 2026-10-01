@@ -349,6 +349,7 @@ export function CityMap({
 					coordinates: line.coordinates,
 					color: line.color,
 					width: 5,
+					...(line.zIndex === undefined ? {} : { zIndex: line.zIndex }),
 				}),
 			})
 		}

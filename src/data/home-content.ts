@@ -112,7 +112,7 @@ export const CATEGORIES: {
 export const SERVICES: ServiceItem[] = [
 	{
 		id: 'table',
-		label: 'Stol bron qilish',
+		label: 'Stol band qilish',
 		subtitle: 'Stol va parkingni birga rejalang',
 		icon: CalendarDays,
 		tone: 'text-warn',
@@ -127,13 +127,13 @@ export const SERVICES: ServiceItem[] = [
 	{
 		id: 'cinema',
 		label: 'Kino chiptasi',
-		subtitle: 'Joy tanlash va bron',
+		subtitle: 'Joy tanlash va chipta',
 		icon: Ticket,
 		tone: 'text-info',
 	},
 	{
 		id: 'clinic',
-		label: 'Klinikaga yozilish',
+		label: 'Shifokor qabuliga yozilish',
 		subtitle: 'Bugungi bo‘sh vaqtlar',
 		icon: Hospital,
 		tone: 'text-bad',
@@ -164,7 +164,7 @@ export const AI_TIPS = [
 	{
 		title: 'Magic City uchun yaxshi vaqt',
 		text: 'Hozir mavjud joylar yetarli, kechga yaqin yuklama oshadi.',
-		action: 'Bron qilish',
+		action: 'Band qilish',
 		parkingId: 'magic-city',
 	},
 	{

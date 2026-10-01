@@ -12,7 +12,7 @@ import { tableBookablePlaces } from '@/data/places'
 import { cn } from '@/lib/cn'
 import { formatDistance } from '@/lib/format'
 
-// The generic «Stol bron qilish» — the one reached from the Home services
+// The generic «Stol band qilish» — the one reached from the Home services
 // rail and from Bron → Yangi bron, where no restaurant is in context.
 //
 // Both used to pass a fixed 'urban-food', so a customer who meant Coffee Lab
@@ -37,7 +37,7 @@ export function RestaurantPickerSheet({
 	return (
 		<BottomSheet title='Restoran tanlang' onClose={onClose}>
 			<p className='mb-3 text-xs leading-5 text-ink-3'>
-				Stol bron qilish uchun restoranni tanlang.
+				Stol band qilish uchun restoranni tanlang.
 			</p>
 
 			<div className='space-y-2'>

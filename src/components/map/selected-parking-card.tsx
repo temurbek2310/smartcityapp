@@ -92,7 +92,7 @@ export function SelectedParkingCard({
 							disabled={full}
 							className='inline-flex h-9 items-center justify-center rounded-xl bg-ink px-3 text-[11px] font-black text-white disabled:opacity-45'
 						>
-							{full ? 'Joy yo‘q' : 'Bron qilish'}
+							{full ? 'Joy yo‘q' : 'Band qilish'}
 						</button>
 					</div>
 				</>

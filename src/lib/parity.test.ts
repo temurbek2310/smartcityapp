@@ -5,12 +5,13 @@ import { DEMO_DESTINATIONS } from '@/data/demo-transport'
 import { EVENTS } from '@/data/events'
 import { PARKINGS } from '@/data/parkings'
 import { PLACES } from '@/data/places'
+import { QUEUE_ORGS } from '@/data/queue-orgs'
 import { clearAccountStorage } from '@/lib/account-storage'
 import { bayMap, isBaySelectable } from '@/lib/bay-map'
 import { distanceKm, TASHKENT_CENTER } from '@/lib/geo'
 import { buildHomeMapObjects } from '@/lib/home-map'
 import { DEFAULT_LAYERS, type MapLayerState } from '@/lib/map-layers'
-import { buildMapObjects, mapObjectKey } from '@/lib/map-objects'
+import { buildMapObjects, inMapCategory, mapObjectKey } from '@/lib/map-objects'
 import { estimateMinutesForMode } from '@/lib/eta'
 import {
 	externalNavigationDestination,
@@ -36,8 +37,32 @@ describe('parity catalogs and map results', () => {
 		expect(new Set(all.map(mapObjectKey)).size).toBe(all.length)
 		for (const category of ['place', 'parking', 'queue', 'event'] as const) {
 			expect(buildMapObjects({ parkings: PARKINGS, category }))
-				.toEqual(all.filter(object => object.kind === category))
+				.toEqual(all.filter(object => inMapCategory(object, category)))
 		}
+	})
+
+	it('draws a queue desk as its place, never as a second pin', () => {
+		const all = buildMapObjects({ parkings: PARKINGS })
+		expect(all.some(object => object.kind === 'queue')).toBe(false)
+		const queues = buildMapObjects({ parkings: PARKINGS, category: 'queue' })
+		expect(queues.map(object => object.id).sort()).toEqual(
+			QUEUE_ORGS.map(org => org.placeId).sort(),
+		)
+		expect(queues.every(object => object.kind === 'place')).toBe(true)
+	})
+
+	it('keeps no two places on the same point', () => {
+		const points = PLACES.map(place => `${place.lat},${place.lng}`)
+		expect(new Set(points).size).toBe(points.length)
+	})
+
+	it('still routes an old queue link to the venue it belongs to', () => {
+		const point = resolveRouteEndpoint('queue:avto-servis', TASHKENT_CENTER)!
+		const place = PLACES.find(item => item.id === 'cto-master')!
+		expect(point.id).toBe('queue:avto-servis')
+		expect(point.placeId).toBe('cto-master')
+		expect([point.lat, point.lng]).toEqual([place.lat, place.lng])
+		expect(resolveRouteEndpoint('queue:closed-office', TASHKENT_CENTER)).toBeNull()
 	})
 
 	it('searches names and addresses and opens the selected event', () => {

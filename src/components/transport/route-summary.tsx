@@ -172,6 +172,8 @@ export function RouteSummary({
 							// Unlock + per-minute from lib/eta.ts: not a fare 2GIS or
 							// any operator quoted.
 							mode === 'scooter' && 'Ijara narxi shu vaqtga asoslangan B SPACE taxminiy hisobi, operator tarifi emas.',
+							// A flat single-ride fare from lib/eta.ts; 2GIS quotes none.
+							mode === 'metro' && 'Chipta narxi — bir martalik yo‘l uchun B SPACE taxminiy hisobi, 2GIS ma’lumoti emas.',
 							facts.length > 0 && 'Yo‘l holati bo‘yicha qatorlar — namunaviy ma’lumot.',
 						].filter(Boolean).join(' ')
 					: 'Yo‘l holati bo‘yicha qatorlar — namunaviy ma’lumot. Narx va vaqt real masofaga asoslangan taxminiy hisob.'}

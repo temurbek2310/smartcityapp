@@ -278,7 +278,7 @@ export default function FavoritesPage() {
 													onClick={() => setBookingParkingId(parking.id)}
 													className='flex h-[34px] min-w-0 flex-[1.15] items-center justify-center whitespace-nowrap rounded-[9px] bg-brand px-2.5 text-[12px] font-extrabold text-white shadow-[0_6px_16px_rgba(108,71,224,.28)] active:scale-[0.975]'
 												>
-													Bron qilish
+													Band qilish
 												</button>
 												<button
 													type='button'
@@ -296,7 +296,7 @@ export default function FavoritesPage() {
 								<EmptyState
 									icon={CircleParking}
 									title='Hozircha bo‘sh'
-									text='Parkingni bron qiling yoki yurak tugmasini bosing — u shu yerda paydo bo‘ladi.'
+									text='Parkingni band qiling yoki yurak tugmasini bosing — u shu yerda paydo bo‘ladi.'
 									href='/home'
 									action='Topish'
 								/>
@@ -313,7 +313,7 @@ export default function FavoritesPage() {
 										className='flex items-center gap-3 rounded-card-lg bg-card p-3 shadow-card'
 									>
 										<Link
-											href='/queues'
+											href={`/queues?org=${org.id}`}
 											className='flex min-w-0 flex-1 items-center gap-3'
 										>
 											<span className='grid size-12 shrink-0 place-items-center rounded-2xl bg-brand-50 text-brand'>
@@ -583,10 +583,9 @@ function PlaceFavoriteCard({
 	const km = useDistanceFromUser()(place)
 	return (
 		<article className='overflow-hidden rounded-[20px] bg-white shadow-[0_4px_14px_rgba(16,24,40,0.07)] ring-1 ring-line'>
-			<Link
-				href={place.parkingId ? `/parking/${place.parkingId}` : '/home'}
-				className='flex min-h-23'
-			>
+			{/* The venue's own profile, with its table and queue actions — not
+			    the car park beside it. Parking is one of that sheet's buttons. */}
+			<Link href={`/home?place=${place.id}`} className='flex min-h-23'>
 				<div
 					className={`grid w-23 shrink-0 place-items-center bg-linear-to-br ${place.accent} text-white/55`}
 				>

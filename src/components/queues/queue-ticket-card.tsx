@@ -1,17 +1,26 @@
 'use client'
 
-import { Check, QrCode, RefreshCw, X } from 'lucide-react'
+import { CalendarClock, Check, QrCode, RefreshCw, X } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 
+import {
+	scheduledDayLabel,
+	ticketDeskLabel,
+	ticketDeskNoun,
+} from '@/components/queues/desk-grid'
 import { Badge } from '@/components/ui/badge'
 import { BottomSheet } from '@/components/ui/bottom-sheet'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Meter } from '@/components/ui/meter'
 import { useApp } from '@/context/app-context'
+import { useClock } from '@/hooks/use-clock'
+import { QUEUE_CHECKIN_LEAD_MINUTES } from '@/lib/booking-lifecycle'
 import { queueTicketHref } from '@/lib/bookings'
 import { cn } from '@/lib/cn'
+import { formatTime } from '@/lib/format'
+import { deskNoun, queueActionLabel } from '@/lib/lexicon'
 import type { QueueOrg, QueueTicket } from '@/lib/types'
 
 // The live ticket, or the button that creates one. City Goo gives this the
@@ -31,6 +40,7 @@ export function QueueTicketCard({
 	const { advanceQueueTicket, arriveQueueTicket, cancelQueueTicket } = useApp()
 	const router = useRouter()
 	const [sheet, setSheet] = useState<'cancel' | null>(null)
+	const now = useClock(30_000)
 
 	if (!ticket) {
 		return (
@@ -39,19 +49,25 @@ export function QueueTicketCard({
 					<p className='text-[15px] font-extrabold text-ink'>
 						Elektron navbat
 					</p>
-					<Badge tone='gray'>{org.windows} ta oyna ishlamoqda</Badge>
+					<Badge tone='gray'>
+						{org.windows} ta {deskNoun(org.category, org.desks[0]?.kind).toLowerCase()}{' '}
+						ishlamoqda
+					</Badge>
 				</div>
 				<p className='mt-2 text-[12.5px] leading-5 text-ink-2'>
 					Navbatni oldindan oling — kelguningizcha o‘rningiz saqlanadi va
 					qachon chiqish kerakligini aytamiz.
 				</p>
 				<Button variant='primary' block className='mt-4' onClick={onTake}>
-					Navbat olish
+					{queueActionLabel(org.category)}
 				</Button>
 			</Card>
 		)
 	}
 
+	// Booked for a later slot: not in line yet, so there is no position to
+	// report and nothing for the demo feed to advance.
+	const scheduled = ticket.status === 'scheduled'
 	const called = ticket.status === 'called'
 	// «Men keldim» pressed: at the window, waiting to be served. Still live.
 	const arrived = ticket.status === 'arrived'
@@ -67,11 +83,13 @@ export function QueueTicketCard({
 			<Card className={cn('border-[1.5px]', atWindow ? 'border-ok' : 'border-brand')}>
 				<div className='flex items-center justify-between gap-3'>
 					<Badge tone={atWindow ? 'ok' : 'brand'}>
-						{arrived
-							? 'Keldingiz'
-							: called
-								? 'Sizni chaqirishmoqda'
-								: 'Siz navbatdasiz'}
+						{scheduled
+							? 'Band qilingan'
+							: arrived
+								? 'Keldingiz'
+								: called
+									? 'Sizni chaqirishmoqda'
+									: 'Siz navbatdasiz'}
 					</Badge>
 					<span className='truncate text-[11.5px] text-ink-3'>
 						{service?.title}
@@ -96,10 +114,28 @@ export function QueueTicketCard({
 					</div>
 
 					<div className='min-w-0 flex-1'>
-						{arrived ? (
+						{scheduled && ticket.scheduledAt ? (
 							<>
 								<p className='text-[15px] font-extrabold text-ink'>
-									{ticket.windowNumber}-oynada xizmat kutilmoqda
+									{scheduledDayLabel(ticket.scheduledAt, now)},{' '}
+									{formatTime(ticket.scheduledAt)}
+								</p>
+								<p className='mt-1 truncate text-[11.5px] text-ink-3'>
+									{ticketDeskNoun(org, ticket)}: {ticketDeskLabel(org, ticket)}
+								</p>
+								<p className='mt-2 flex items-center gap-1.5 text-[11.5px] font-semibold text-brand'>
+									<CalendarClock className='size-3.5 shrink-0' />
+									Navbat {QUEUE_CHECKIN_LEAD_MINUTES} daqiqa oldin boshlanadi
+								</p>
+							</>
+						) : scheduled ? (
+							<p className='text-[15px] font-extrabold text-ink'>
+								Oldindan band qilingan
+							</p>
+						) : arrived ? (
+							<>
+								<p className='text-[15px] font-extrabold text-ink'>
+									Xizmat kutilmoqda · {ticketDeskLabel(org, ticket)}
 								</p>
 								<p className='mt-1 text-[11.5px] leading-4 text-ink-3'>
 									Kelganingiz qayd etildi. Xizmat tugagach talon tarixga
@@ -109,10 +145,10 @@ export function QueueTicketCard({
 						) : called ? (
 							<>
 								<p className='text-[15px] font-extrabold text-ink'>
-									{ticket.windowNumber}-oynaga o‘ting
+									{ticketDeskLabel(org, ticket)} sizni kutmoqda
 								</p>
 								<p className='mt-1 text-[11.5px] leading-4 text-ink-3'>
-									Raqam chaqirilgandan keyin 5 daqiqa saqlanadi. Kechiksangiz
+									Talon chaqirilgandan keyin 5 daqiqa saqlanadi. Kechiksangiz
 									navbatga qayta turishingiz mumkin.
 								</p>
 							</>
@@ -135,21 +171,29 @@ export function QueueTicketCard({
 					</div>
 				</div>
 
-				<div className='mt-3 grid grid-cols-3 gap-2'>
-					<Button
-						size='sm'
-						variant='outline'
-						// Demo stand-in for the live feed. While called it waits on
-						// the customer; once they have checked in, the next move is
-						// the window finishing their service.
-						disabled={called}
-						onClick={() => {
-							advanceQueueTicket(ticket.id)
-							if (arrived) onNotify('Xizmat ko‘rsatildi')
-						}}
-					>
-						<RefreshCw className='size-3.5' /> Yangilash
-					</Button>
+				<div
+					className={cn(
+						'mt-3 grid gap-2',
+						scheduled ? 'grid-cols-2' : 'grid-cols-3',
+					)}
+				>
+					{/* Demo stand-in for the live feed. While called it waits on
+					    the customer; once they have checked in, the next move is
+					    the window finishing their service. A booked ticket is
+					    moved by the clock alone, so it has nothing to advance. */}
+					{!scheduled && (
+						<Button
+							size='sm'
+							variant='outline'
+							disabled={called}
+							onClick={() => {
+								advanceQueueTicket(ticket.id)
+								if (arrived) onNotify('Xizmat ko‘rsatildi')
+							}}
+						>
+							<RefreshCw className='size-3.5' /> Yangilash
+						</Button>
+					)}
 					{/* The ticket's own page draws its QR, number, position and
 					    window — this card used to keep a second copy in a sheet. */}
 					<Button

@@ -2,6 +2,7 @@ import type { LucideIcon } from 'lucide-react'
 
 import { DEMO_DESTINATIONS } from '@/data/demo-transport'
 import { getParking, PARKINGS } from '@/data/parkings'
+import { getQueueOrg } from '@/data/queue-orgs'
 import { distanceKm, type Coordinate } from '@/lib/geo'
 import { FALLBACK_CENTRE } from '@/lib/location'
 import { buildMapObjects, mapObjectKey, type MapCatalogKind } from '@/lib/map-objects'
@@ -30,6 +31,8 @@ export type RouteEndpoint = Coordinate & {
 	approximate: boolean
 }
 
+const QUEUE_PREFIX = 'queue:'
+
 export function nearestParking(point: Coordinate) {
 	return [...PARKINGS].sort((a, b) => distanceKm(point, a) - distanceKm(point, b))[0]
 }
@@ -48,6 +51,13 @@ export function resolveRouteEndpoint(id: string, position: Coordinate | null, gp
 		if (!point) return null
 		return { lat: point.lat, lng: point.lng, id, kind: 'saved', title: saved.title,
 			address: saved.address ?? '', parkingId: parking?.id ?? null, placeId: null, approximate: false }
+	}
+	// Queue desks lost their own pin to the place they belong to; a saved route
+	// or a link still written as 'queue:<org>' goes to that place.
+	if (id.startsWith(QUEUE_PREFIX)) {
+		const org = getQueueOrg(id.slice(QUEUE_PREFIX.length))
+		const place = org ? resolveRouteEndpoint(`place:${org.placeId}`, position, gpsLabel) : null
+		return place ? { ...place, id } : null
 	}
 	const object = buildMapObjects({ parkings: PARKINGS }).find(item => mapObjectKey(item) === id)
 	return object ? { lat: object.lat, lng: object.lng, id, kind: object.kind as MapCatalogKind,

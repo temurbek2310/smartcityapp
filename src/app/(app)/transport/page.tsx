@@ -1,7 +1,6 @@
 'use client'
 
 import {
-	BellRing,
 	Bookmark,
 	Clock3,
 	CircleParking,
@@ -25,7 +24,7 @@ import { DestinationParkingCard } from '@/components/transport/destination-parki
 import { DestinationSheet } from '@/components/transport/destination-sheet'
 import { DrivingRecommendationCard } from '@/components/transport/driving-recommendation-card'
 import { LocationCard } from '@/components/transport/location-card'
-import { PublicTransportSection, type PublicTransportTab } from '@/components/transport/public-transport-section'
+import { PublicTransportSection } from '@/components/transport/public-transport-section'
 import { RouteFiltersSheet, ROUTE_FILTERS, type RouteFilterId } from '@/components/transport/route-filters-sheet'
 import { RouteMap, type RouteProblem } from '@/components/transport/route-map'
 import { RouteNotices, type RouteNotice } from '@/components/transport/route-notices'
@@ -38,20 +37,17 @@ import { TransportModeSelector } from '@/components/transport/transport-mode-sel
 import { BottomSheet } from '@/components/ui/bottom-sheet'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { KeyValue, KeyValueList } from '@/components/ui/key-value'
 import { Toast } from '@/components/ui/toast'
 import { useApp } from '@/context/app-context'
 import { useRoute } from '@/hooks/use-route'
 import { destinationParkingFor } from '@/lib/destination-parking'
 import { reservationHref } from '@/lib/reservation'
+import { routeVariant } from '@/lib/routing'
 import { CITY_META } from '@/data/city-meta'
 import {
 	DEMO_ALTERNATIVE_ROUTES,
-	DEMO_BUSES,
-	type DemoBus,
 	DEMO_CURRENT_SITUATION,
 	DEMO_DRIVING_TIPS,
-	DEMO_METRO_LINES,
 	DEMO_MICRO_OPTIONS,
 	DEMO_ROADWORKS_NOTICE,
 	DEMO_ROUTE_FACTS,
@@ -61,7 +57,6 @@ import { getParking } from '@/data/parkings'
 import {
 	estimateFareUZS,
 	estimateMinutesForMode,
-	estimateOptimalSpeedRange,
 	fastestMode,
 } from '@/lib/eta'
 import { distanceKm } from '@/lib/geo'
@@ -93,6 +88,7 @@ import {
 	modeDurationLabels,
 	routeLineKind,
 	routeUnavailableMessage,
+	trafficCongestionMeters,
 	transportRecommendation,
 	transportRouteRequest,
 } from '@/lib/transport-route'
@@ -162,7 +158,9 @@ function TransportView({ onUrlSync }: { onUrlSync: (query: string) => void }) {
 			) as Record<RouteFilterId, boolean>,
 	)
 	const [selectedAltIndex, setSelectedAltIndex] = useState(0)
-	const [publicTab, setPublicTab] = useState<PublicTransportTab>('bus')
+	// Which of 2GIS's car routes is on screen, remembered only with the
+	// route it was picked from: a new answer starts again on its primary.
+	const [carVariant, setCarVariant] = useState<{ key: string; index: number } | null>(null)
 	// With nowhere to go, the picker is the screen: asking is the only honest
 	// alternative to inventing a destination.
 	const [destinationSheetOpen, setDestinationSheetOpen] = useState(
@@ -182,7 +180,6 @@ function TransportView({ onUrlSync }: { onUrlSync: (query: string) => void }) {
 	)
 	const [originSheetOpen, setOriginSheetOpen] = useState(false)
 	const [openProblem, setOpenProblem] = useState<RouteProblem | null>(null)
-	const [openBus, setOpenBus] = useState<DemoBus | null>(null)
 	const [navigating, setNavigating] = useState(false)
 
 	// The session's shared location. Opening this screen requests nothing: a
@@ -217,18 +214,29 @@ function TransportView({ onUrlSync }: { onUrlSync: (query: string) => void }) {
 		? destinationParkingFor({ destination: destinationPoint, mode, reservations })
 		: null, [destinationPoint, mode, reservations])
 
-	// The real route — car, walking or scooter, the selected one only, and
+	// The real route — car, walking, scooter or metro, the selected one only, and
 	// only between two real points: 'me' without a GPS fix is the approximate
 	// city centre and is never sent. useRoute keys on the request's identity
 	// (mode + rounded ends), so a re-render, a sheet opening or a toast is not
 	// a new request; a changed end, switching to a routed mode, or retry() is.
-	// Metro passes null and stays idle — nothing is fetched to fill a pill.
+	// Metro is public transport, routed by 2GIS's own transit API.
 	const routeRequest = transportRouteRequest({
 		mode,
 		origin: originPoint,
 		destination: destinationPoint,
 	})
 	const realRoute = useRoute(routeRequest)
+	const carVariantIndex =
+		mode === 'car' && realRoute.status === 'ok' && carVariant?.key === realRoute.key
+			? carVariant.index
+			: 0
+	// The route the screen shows: the primary, or the car alternative picked
+	// from the chips — whole, so its line, distance and time never mix with
+	// the primary's.
+	const shownRoute =
+		realRoute.status === 'ok'
+			? { ...realRoute, route: routeVariant(realRoute.route, carVariantIndex) }
+			: realRoute
 
 	// Toast. A recalculation only records that it happened — its duration is
 	// read from the live route further down, so the text can never drift
@@ -478,10 +486,9 @@ function TransportView({ onUrlSync }: { onUrlSync: (query: string) => void }) {
 		)
 	}
 
-	// The straight-line estimate (lib/eta.ts). Still what metro shows, what
-	// the unselected pills show, and what the demo sections are scaled from —
-	// never a car, walking or scooter route's distance or time: those are
-	// 2GIS's or nothing.
+	// The straight-line estimate (lib/eta.ts). Only what the unselected pills
+	// show — never the selected route's distance or time: those are 2GIS's or
+	// nothing, metro included.
 	const distanceValue = distanceKm(originPoint, destinationPoint)
 	const estimatedMinutes = estimateMinutesForMode(distanceValue, mode)
 	const modesOnly = TRANSPORT_MODES.map(item => item.id)
@@ -490,14 +497,13 @@ function TransportView({ onUrlSync }: { onUrlSync: (query: string) => void }) {
 		modesOnly.map(id => [id, estimateMinutesForMode(distanceValue, id)]),
 	) as Record<TransportMode, number>
 
-	// What the selected mode actually shows: the estimate for metro; for car,
-	// walking and scooter, 2GIS's distance and duration or nothing at all
-	// while there is no real answer (see lib/transport-route.ts).
+	// What the selected mode actually shows: 2GIS's distance and duration, or
+	// nothing at all while there is no real answer (see lib/transport-route.ts).
 	const activeRoute = activeTransportRoute({
 		mode,
 		estimate: { minutes: estimatedMinutes, distanceKm: distanceValue },
 		request: routeRequest,
-		state: realRoute,
+		state: shownRoute,
 	})
 	const figures = activeFigures(activeRoute)
 	const minutes = figures?.minutes ?? null
@@ -509,17 +515,13 @@ function TransportView({ onUrlSync }: { onUrlSync: (query: string) => void }) {
 	const cost = figures ? estimateFareUZS(figures.distanceKm, figures.minutes, mode) : null
 	const costLabel = MODE_COST_LABEL[mode]
 
-	// The optimal-speed tip is a demo figure derived from the estimate; it is
-	// not recomputed from the real route, which carries no speed advice.
+	// The tip is demo content, shown only for modes with no real route.
 	const drivingTip = DEMO_DRIVING_TIPS[mode]
-	const speedRange = estimateOptimalSpeedRange(distanceValue, estimatedMinutes)
-	const tipValue = mode === 'car' ? `${speedRange.low}–${speedRange.high}` : drivingTip.demoValue
-	const tipUnit = mode === 'car' ? 'km/soat' : drivingTip.demoUnit
 	const isReal = activeRoute.status === 'real'
 	// Which demo sections this mode keeps — walking and the scooter drop all
 	// of them around their real 2GIS route (the scooter's battery, bike-lane
-	// share, crossings, timeline, navigator and alternatives); the car keeps
-	// them as Phase 1 left them.
+	// share, crossings, timeline, navigator and alternatives), and so does
+	// the car, whose alternatives and maneuvers are now 2GIS's own.
 	const sections = modeCapabilities(mode)
 
 	const timelineSteps: TimelineStep[] = [
@@ -531,8 +533,7 @@ function TransportView({ onUrlSync }: { onUrlSync: (query: string) => void }) {
 			distanceLabel: '0 km',
 			distanceKm: 0,
 		},
-		// Demo steps placed at fractions of the route's length — of 2GIS's
-		// road distance for a real car route, said to be demo in the note.
+		// Demo steps placed at fractions of the estimated route's length.
 		...DEMO_ROUTE_TIMELINE[mode].map(step => ({
 			icon: step.icon,
 			tone: step.tone,
@@ -559,12 +560,10 @@ function TransportView({ onUrlSync }: { onUrlSync: (query: string) => void }) {
 		},
 	]
 
-	// Demo alternatives, scaled from the estimate as before. Next to the car
-	// — which is routed for real — they are marked as demo, cannot be picked
-	// and claim nothing is "Tezroq" than the real route. Walking and the
-	// scooter have none.
+	// Demo alternatives, scaled from the estimate, for the modes with no real
+	// route. The car's are 2GIS's (CarRouteStatus); walking and the scooter
+	// have none.
 	const altTemplates = DEMO_ALTERNATIVE_ROUTES[mode]
-	const alternativesAreDemo = sections.alternatives === 'demo-labelled'
 	const alternatives = altTemplates.map(template => ({
 		title: template.title,
 		distanceKm: distanceValue * template.distanceFactor,
@@ -572,7 +571,7 @@ function TransportView({ onUrlSync }: { onUrlSync: (query: string) => void }) {
 		trafficLabel: template.trafficLabel,
 		trafficTone: template.trafficTone,
 		note: template.note,
-		best: alternativesAreDemo ? false : template.best,
+		best: template.best,
 	}))
 
 	const cityMeta = CITY_META[arrivalParking.city] ?? CITY_META.Toshkent
@@ -597,12 +596,18 @@ function TransportView({ onUrlSync }: { onUrlSync: (query: string) => void }) {
 					},
 				]
 			: []),
-		{
-			icon: Construction,
-			tone: 'warn',
-			title: DEMO_ROADWORKS_NOTICE.title,
-			message: DEMO_ROADWORKS_NOTICE.message,
-		},
+		// Demo roadworks — only beside a mode that still shows demo road
+		// conditions, never next to a real 2GIS route.
+		...(!sections.roadProblems
+			? []
+			: [
+					{
+						icon: Construction,
+						tone: 'warn' as const,
+						title: DEMO_ROADWORKS_NOTICE.title,
+						message: DEMO_ROADWORKS_NOTICE.message,
+					},
+				]),
 		// Dropped entirely when there is no parking to offer, rather than
 		// kept as an empty claim about the destination.
 		...(suggestion
@@ -678,9 +683,8 @@ function TransportView({ onUrlSync }: { onUrlSync: (query: string) => void }) {
 			{(activeRoute.status === 'loading' ||
 				activeRoute.status === 'unavailable' ||
 				activeRoute.status === 'needs-location' ||
-				// A real route named as 2GIS's, for a mode with no in-app
-				// navigator (walking, scooter) — with the hand-off when the
-				// mode has one; the scooter has none.
+				// A real route named as 2GIS's (car, walking, scooter) — with
+				// the hand-off when the mode has one; the scooter has none.
 				(activeRoute.status === 'real' && !sections.demoTimeline)) && (
 				<RouteStatus
 					mode={mode}
@@ -690,6 +694,15 @@ function TransportView({ onUrlSync }: { onUrlSync: (query: string) => void }) {
 					locating={status === 'loading'}
 					onLocate={refreshOrigin}
 					onPickOrigin={() => setOriginSheetOpen(true)}
+					carRoutes={
+						realRoute.status === 'ok' && sections.alternatives === 'real'
+							? {
+									route: realRoute.route,
+									selectedIndex: carVariantIndex,
+									onSelect: index => setCarVariant({ key: realRoute.key, index }),
+								}
+							: undefined
+					}
 				/>
 			)}
 
@@ -697,6 +710,7 @@ function TransportView({ onUrlSync }: { onUrlSync: (query: string) => void }) {
 				key={`${mode}:${minutes ?? activeRoute.status}`}
 				currentMode={mode}
 				recommendation={transportRecommendation({ active: activeRoute, fastest })}
+				congestionMeters={activeRoute.status === 'real' ? trafficCongestionMeters(activeRoute.route) : null}
 				onSwitch={changeMode}
 			/>
 
@@ -737,7 +751,6 @@ function TransportView({ onUrlSync }: { onUrlSync: (query: string) => void }) {
 				<RouteTimeline
 					steps={timelineSteps}
 					onStartNavigation={figures ? () => setNavigating(true) : undefined}
-					note={isReal ? 'Umumiy masofa — 2GIS marshruti. Oraliq qadamlar namunaviy.' : undefined}
 				/>
 			)}
 
@@ -745,29 +758,20 @@ function TransportView({ onUrlSync }: { onUrlSync: (query: string) => void }) {
 				<DrivingRecommendationCard
 					title={drivingTip.title}
 					explain={drivingTip.explain}
-					value={tipValue}
-					unit={tipUnit}
-					note={mode === 'car' ? 'Namunaviy tavsiya — 2GIS marshrutidan olinmagan.' : undefined}
+					value={drivingTip.demoValue}
+					unit={drivingTip.demoUnit}
 				/>
 			)}
 
-			{sections.alternatives !== 'hidden' && (
+			{sections.alternatives === 'selectable' && (
 				<AlternativeRoutes
 					routes={alternatives}
 					selectedIndex={selectedAltIndex}
 					onSelect={setSelectedAltIndex}
-					demoNote={alternativesAreDemo ? 'Namunaviy variantlar — 2GIS muqobil marshrutlari hali ulanmagan.' : undefined}
 				/>
 			)}
 
-			<PublicTransportSection
-				activeTab={publicTab}
-				onChangeTab={setPublicTab}
-				buses={DEMO_BUSES}
-				onOpenBus={setOpenBus}
-				metroLines={DEMO_METRO_LINES}
-				microOptions={DEMO_MICRO_OPTIONS}
-			/>
+			<PublicTransportSection microOptions={DEMO_MICRO_OPTIONS} />
 
 			<CurrentSituation
 				rows={DEMO_CURRENT_SITUATION}
@@ -820,7 +824,6 @@ function TransportView({ onUrlSync }: { onUrlSync: (query: string) => void }) {
 					steps={timelineSteps.slice(1)}
 					minutes={minutes}
 					navigateHref={navigateHref}
-					stepsNote={isReal ? 'Vaqt — 2GIS marshrutidan. Qadamlar namunaviy; aniq navigatsiya uchun 2GISni oching.' : undefined}
 					onClose={() => {
 						setNavigating(false)
 						notifyBooking('Navigatsiya yopildi')
@@ -852,47 +855,6 @@ function TransportView({ onUrlSync }: { onUrlSync: (query: string) => void }) {
 						}}
 					>
 						Marshrutni qayta hisoblash
-					</Button>
-				</BottomSheet>
-			)}
-
-			{openBus && (
-				<BottomSheet
-					title={`Avtobus ${openBus.number}`}
-					onClose={() => setOpenBus(null)}
-				>
-					<Card>
-						<KeyValueList>
-							<KeyValue label='Yo‘nalish' value={openBus.route} />
-							<KeyValue
-								label='Kelish vaqti'
-								value={`${openBus.arrivalMin} daqiqa`}
-							/>
-							<KeyValue label='Bekatlar' value={`${openBus.stops} ta`} />
-							<KeyValue
-								label='Bandlik'
-								value={`${openBus.occupancyPct}% · ${openBus.passengers} yo‘lovchi`}
-							/>
-							<KeyValue
-								label='Joylar'
-								value={`${openBus.seated} o‘rindiqli / ${openBus.standing} tik`}
-							/>
-						</KeyValueList>
-					</Card>
-					<Button
-						variant='primary'
-						block
-						className='mt-4'
-						onClick={() => {
-							const number = openBus.number
-							const minutes = openBus.arrivalMin
-							setOpenBus(null)
-							notifyBooking(
-								`${number}-avtobus ${minutes} daqiqada kelganda xabar beramiz`,
-							)
-						}}
-					>
-						<BellRing className='size-4' /> Kelganda xabar berish
 					</Button>
 				</BottomSheet>
 			)}

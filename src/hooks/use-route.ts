@@ -11,8 +11,9 @@ import {
 } from '@/lib/route-client'
 import { routeRequestKey, type RouteRequest } from '@/lib/routing'
 
-// Real routes on /transport — used there for the car only (Phase 1; see
-// transportRouteRequest in lib/transport-route.ts).
+// Real routes on /transport — every mode is routed by 2GIS: the car,
+// walking and the scooter by its Routing API, metro by its Public Transport
+// API (see transportRouteRequest in lib/transport-route.ts).
 //
 // Pass a RouteRequest to fetch it, or null to stay idle (build it with
 // realRouteRequest(), which already returns null for the approximate centre).

@@ -121,7 +121,7 @@ export function ParkingCard({
 					<Navigation className='size-3.5' /> Yo‘nalish
 				</Button>
 				<Button size='sm' variant='primary' disabled={full} onClick={onBook}>
-					{full ? 'Joy yo‘q' : 'Bron qilish'}
+					{full ? 'Joy yo‘q' : 'Band qilish'}
 				</Button>
 			</div>
 		</Card>

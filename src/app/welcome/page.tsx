@@ -41,7 +41,7 @@ const slides = [
 	{
 		icon: QrCode,
 		title: 'Bron va QR',
-		text: 'Joyni oldindan bron qiling, QR orqali kirishni simulyatsiya qiling va sessiyani boshqaring.',
+		text: 'Joyni oldindan band qiling, QR orqali kirishni simulyatsiya qiling va sessiyani boshqaring.',
 	},
 	{
 		icon: ShieldCheck,

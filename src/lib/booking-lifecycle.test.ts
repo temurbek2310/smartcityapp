@@ -13,9 +13,18 @@ import {
 	expectedEndAt,
 	isQueueTicketLive,
 	isReservationLive,
+	isServiceBookingLive,
+	liveBookingCount,
+	QUEUE_CHECKIN_LEAD_MINUTES,
+	QUEUE_MINUTES_PER_PERSON,
+	QUEUE_NO_SHOW_MINUTES,
+	queueTicketStatusAt,
 	reconcileBookingLifecycles,
+	reconcileQueueTicket,
+	reconcileQueueTickets,
 	reconcileServiceBookings,
 	serveQueueTicket,
+	serviceBookingStatusAt,
 } from './booking-lifecycle'
 import { bookingRows, isOpen } from './bookings'
 import { initialState } from './initial-state'
@@ -301,6 +310,11 @@ describe('automatic completion', () => {
 		expect(twice).toBe(once)
 	})
 
+	it('a live booking with an unreadable end is left where it is', () => {
+		const input = [booking({ startAt: undefined, createdAt: 'garbage' })]
+		expect(reconcileServiceBookings(input, START_MS + 1_000 * MIN)).toBe(input)
+	})
+
 	it('a completed service booking offers no arrival or ticket action', () => {
 		const journey = serviceBookingJourney(
 			{ status: 'completed', startAt: START },
@@ -310,6 +324,72 @@ describe('automatic completion', () => {
 		expect(journey.primary).toBeNull()
 		expect(journey.secondary).not.toContain('present')
 		expect(journey.secondary).not.toContain('directions')
+	})
+})
+
+describe('upcoming → active → completed', () => {
+	// A 90-minute table at 18:00 Tashkent: 13:00Z–14:30Z.
+	const table = booking({ status: 'upcoming', durationMinutes: 90 })
+	const END_MS = START_MS + 90 * MIN
+
+	it('reads the stage off the start and the chosen duration', () => {
+		expect(serviceBookingStatusAt(table, START_MS - MIN)).toBe('upcoming')
+		expect(serviceBookingStatusAt(table, START_MS)).toBe('active')
+		expect(serviceBookingStatusAt(table, END_MS - 1)).toBe('active')
+		expect(serviceBookingStatusAt(table, END_MS)).toBe('completed')
+	})
+
+	it('the stored duration, not the 120-minute default, decides the end', () => {
+		const at100 = START_MS + 100 * MIN
+		expect(serviceBookingStatusAt(table, at100)).toBe('completed')
+		expect(serviceBookingStatusAt(booking({ status: 'upcoming' }), at100)).toBe('active')
+		expect(
+			serviceBookingStatusAt(booking({ durationMinutes: 180 }), START_MS + 150 * MIN),
+		).toBe('active')
+	})
+
+	it('walks the stages tick by tick, and the row follows', () => {
+		const before = reconcileServiceBookings([table], START_MS - MIN)
+		expect(before[0].status).toBe('upcoming')
+		expect(rowsFor({ serviceBookings: before })[0].statusLabel).toBe('Kutilmoqda')
+
+		const started = reconcileServiceBookings(before, START_MS)
+		expect(started[0].status).toBe('active')
+		expect(rowsFor({ serviceBookings: started })[0].statusLabel).toBe('Faol')
+
+		const over = reconcileServiceBookings(started, END_MS)
+		expect(over[0].status).toBe('completed')
+		expect(rowsFor({ serviceBookings: over })[0].statusLabel).toBe('Yakunlandi')
+	})
+
+	it('moves a blob that stored a future booking as active back to upcoming', () => {
+		const next = reconcileServiceBookings([booking({ status: 'active' })], START_MS - MIN)
+		expect(next[0].status).toBe('upcoming')
+	})
+
+	it('a legacy booking with no startAt reads as active until its bounded end', () => {
+		const legacy = booking({ startAt: undefined, createdAt: '2026-09-20T08:00:00.000Z' })
+		expect(serviceBookingStatusAt(legacy, Date.parse('2026-09-20T09:00:00.000Z'))).toBe(
+			'active',
+		)
+	})
+
+	it('upcoming is live: it counts toward liveBookingCount and can be cancelled', () => {
+		expect(isServiceBookingLive('upcoming')).toBe(true)
+		expect(
+			liveBookingCount({
+				reservations: [],
+				queueTickets: [],
+				serviceBookings: [table],
+			}),
+		).toBe(1)
+		expect(rowsFor({ serviceBookings: [table] })[0].cancellable).toBe(true)
+	})
+
+	it('cancelled and completed never move, whatever the clock says', () => {
+		for (const status of ['cancelled', 'completed'] as const) {
+			expect(serviceBookingStatusAt(booking({ status }), START_MS - MIN)).toBe(status)
+		}
 	})
 })
 
@@ -387,7 +467,12 @@ describe('reconcileBookingLifecycles', () => {
 
 	it('returns the same state when nothing is due, so an idle tick writes nothing', () => {
 		const state = hydrated({
-			serviceBookings: [booking({ startAt: slotInstant('2026-09-24', '18:00').toISOString() })],
+			serviceBookings: [
+				booking({
+					status: 'upcoming',
+					startAt: slotInstant('2026-09-24', '18:00').toISOString(),
+				}),
+			],
 		})
 		expect(reconcileBookingLifecycles(state, now)).toBe(state)
 		expect(reconcileBookingLifecycles(state, now + 60 * MIN)).toBe(state)
@@ -423,6 +508,18 @@ describe('the provider', () => {
 		expect(source).toMatch(/clearInterval\(timer\)/)
 	})
 
+	it('creates a service booking in the stage its start puts it', () => {
+		expect(source).toMatch(/status: serviceBookingStatusAt\(created, Date\.now\(\)\)/)
+	})
+
+	it('cancels an upcoming or started booking, and tells the customer', () => {
+		const cancel = source.slice(source.indexOf('const cancelServiceBooking'))
+		const body = cancel.slice(0, cancel.indexOf('}, []);'))
+		expect(body).toContain('isServiceBookingLive(target.status)')
+		expect(body).toMatch(/makeNotification\("Bron bekor qilindi", SERVICE_CANCEL_MESSAGE\[target\.kind\]/)
+		expect(source).toContain('table: "Stol bandligi bekor qilindi."')
+	})
+
 	it('wires Men keldim to the arrive transition, not to served', () => {
 		for (const file of [
 			'src/components/queues/queue-ticket-card.tsx',
@@ -432,5 +529,151 @@ describe('the provider', () => {
 			expect(ui).toContain('arriveQueueTicket(ticket.id)')
 			expect(ui).not.toContain('completeQueueTicket')
 		}
+	})
+})
+
+describe('scheduled queue tickets', () => {
+	// A passport slot at 11:00 Tashkent tomorrow, booked today.
+	const SLOT = slotInstant('2026-09-24', '11:00').toISOString()
+	const SLOT_MS = Date.parse(SLOT)
+	const scheduled = (patch: Partial<QueueTicket> = {}) =>
+		ticket({
+			status: 'scheduled',
+			position: 0,
+			initialPosition: 0,
+			etaMinutes: 0,
+			initialEtaMinutes: 0,
+			scheduledAt: SLOT,
+			deskId: 'd2',
+			...patch,
+		})
+
+	it('is live: it holds the line, counts at logout and can be cancelled', () => {
+		expect(isQueueTicketLive('scheduled')).toBe(true)
+		expect(
+			liveBookingCount({ reservations: [], queueTickets: [scheduled()], serviceBookings: [] }),
+		).toBe(1)
+		const cancelled = cancelQueueTicket(scheduled(), AT)
+		expect(cancelled.status).toBe('cancelled')
+		expect(cancelled.closedAt).toBe(AT.toISOString())
+	})
+
+	it('cannot be checked in or served before it joins the line', () => {
+		const held = scheduled()
+		expect(arriveQueueTicket(held)).toBe(held)
+		expect(serveQueueTicket(held, AT)).toBe(held)
+	})
+
+	it.each([
+		[-24 * 60, 'scheduled'],
+		[-QUEUE_CHECKIN_LEAD_MINUTES - 1, 'scheduled'],
+		[-QUEUE_CHECKIN_LEAD_MINUTES, 'waiting'],
+		[0, 'waiting'],
+		[QUEUE_NO_SHOW_MINUTES - 1, 'waiting'],
+		[QUEUE_NO_SHOW_MINUTES, 'cancelled'],
+		[24 * 60, 'cancelled'],
+	] as const)('%i minutes from its slot → %s', (offset, status) => {
+		expect(queueTicketStatusAt(scheduled(), SLOT_MS + offset * MIN)).toBe(status)
+	})
+
+	it('every other status is driven by events, never by the clock', () => {
+		for (const status of ['waiting', 'called', 'arrived', 'served', 'cancelled'] as const) {
+			expect(queueTicketStatusAt(scheduled({ status }), SLOT_MS + 10 * 24 * 60 * MIN)).toBe(
+				status,
+			)
+		}
+	})
+
+	it('a scheduled ticket with no readable time stays put rather than guessing', () => {
+		for (const scheduledAt of [undefined, 'not a date']) {
+			expect(queueTicketStatusAt(scheduled({ scheduledAt }), SLOT_MS + 999 * MIN)).toBe(
+				'scheduled',
+			)
+		}
+	})
+
+	it('joining the line starts a fresh estimate from the minutes left', () => {
+		const now = SLOT_MS - QUEUE_CHECKIN_LEAD_MINUTES * MIN
+		const joined = reconcileQueueTicket(scheduled(), now)
+		const position = QUEUE_CHECKIN_LEAD_MINUTES / QUEUE_MINUTES_PER_PERSON
+		expect(joined).toMatchObject({
+			status: 'waiting',
+			position,
+			initialPosition: position,
+			etaMinutes: position * QUEUE_MINUTES_PER_PERSON,
+			initialEtaMinutes: position * QUEUE_MINUTES_PER_PERSON,
+			scheduledAt: SLOT,
+			deskId: 'd2',
+		})
+		expect(joined.closedAt).toBeUndefined()
+	})
+
+	it('joining at or after the slot itself still leaves one person ahead', () => {
+		expect(reconcileQueueTicket(scheduled(), SLOT_MS + 2 * MIN).position).toBe(1)
+	})
+
+	it('a slot missed entirely while the app was closed is a no-show', () => {
+		const now = SLOT_MS + 3 * 60 * MIN
+		const missed = reconcileQueueTicket(scheduled(), now)
+		expect(missed.status).toBe('cancelled')
+		expect(missed.closedAt).toBe(new Date(now).toISOString())
+	})
+
+	it('returns the same ticket, and the same list, when nothing is due', () => {
+		const held = scheduled()
+		expect(reconcileQueueTicket(held, SLOT_MS - 60 * MIN)).toBe(held)
+		const list = [held, ticket({ id: 'live' })]
+		expect(reconcileQueueTickets(list, SLOT_MS - 60 * MIN)).toBe(list)
+	})
+
+	it('reconcileBookingLifecycles moves queue tickets alongside service bookings', () => {
+		const state = {
+			...initialState,
+			hydrated: true,
+			queueTickets: [scheduled(), ticket({ id: 'live' })],
+		}
+		const idle = reconcileBookingLifecycles(state, SLOT_MS - 60 * MIN)
+		expect(idle).toBe(state)
+
+		const due = reconcileBookingLifecycles(state, SLOT_MS - 5 * MIN)
+		expect(due).not.toBe(state)
+		expect(due.serviceBookings).toBe(state.serviceBookings)
+		expect(due.queueTickets.map(item => item.status)).toEqual(['waiting', 'waiting'])
+		expect(due.queueTickets[1]).toBe(state.queueTickets[1])
+		expect(due.notifications).toBe(state.notifications)
+	})
+
+	it('tolerates a blob with no queueTickets key at all', () => {
+		const state = { serviceBookings: [] as ServiceBooking[] }
+		expect(reconcileBookingLifecycles(state, SLOT_MS)).toBe(state)
+	})
+
+	it('a legacy live ticket with neither field reads exactly as before', () => {
+		const legacy = ticket()
+		expect('scheduledAt' in legacy).toBe(false)
+		expect(reconcileQueueTicket(legacy, SLOT_MS + 999 * MIN)).toBe(legacy)
+		expect(queueTicketJourney(legacy, { hasDestination: true })).toEqual(
+			queueTicketJourney(legacy, { hasDestination: true }, SLOT_MS),
+		)
+	})
+})
+
+describe('the provider takes a ticket for later', () => {
+	const source = readFileSync(join(process.cwd(), 'src/context/app-context.tsx'), 'utf8')
+	const take = source.slice(source.indexOf('const takeQueueTicket'))
+	const body = take.slice(0, take.indexOf('const advanceQueueTicket'))
+
+	it('refuses a slot that has already gone by', () => {
+		expect(body).toContain('start <= now) return { ok: false, reason: "past" }')
+	})
+
+	it('issues it scheduled and lets the lifecycle place it', () => {
+		expect(body).toContain('status: input.scheduledAt ? "scheduled" : "waiting"')
+		expect(body).toMatch(/reconcileQueueTicket\(\s*\{/)
+	})
+
+	it('tells the customer when, not how long', () => {
+		expect(body).toContain('"Talon band qilindi"')
+		expect(body).toContain('serviceWhenLabel(ticket.scheduledAt, now)')
 	})
 })

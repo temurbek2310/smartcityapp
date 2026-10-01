@@ -18,7 +18,13 @@ import type { MapLine } from '@/lib/home-map'
 import { routeFrame } from '@/lib/map-geometry'
 import type { RouteEndpoint } from '@/lib/route-endpoints'
 import type { RealRoute } from '@/lib/routing'
-import { routeMapLayers } from '@/lib/transport-route'
+import {
+	REAL_ROUTE_COLOR,
+	realRouteMapLines,
+	routeMapLayers,
+	transitMapLines,
+	type TransitLinePalette,
+} from '@/lib/transport-route'
 
 // What City Goo pins on the route: the things that will slow you down, each
 // tappable for the reason. They sit on the card rather than on the map itself
@@ -76,10 +82,28 @@ const LEGEND: { label: string; tone: string }[] = [
 	{ label: 'Tirband', tone: 'bg-bad' },
 ]
 
-// A real route is one plain line in the brand colour. 2GIS's geometry says
-// where the road goes, not how busy it is, so it is never painted in the
-// demo's green/orange/red — that would be a traffic claim nobody measured.
-const REAL_ROUTE_COLOR = '#6c47e0'
+// Stable, so a route with no traffic does not redraw the map every render.
+const NO_TRAFFIC: RealRoute['traffic'] = []
+
+// The map engine takes colour strings, so the brand tokens are read off the
+// document once; the fallbacks are the same tokens' values in globals.css.
+function cssToken(name: string, fallback: string) {
+	if (typeof window === 'undefined') return fallback
+	return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback
+}
+
+function transitPalette(): TransitLinePalette {
+	return {
+		walk: cssToken('--color-ink-3', '#8a91a6'),
+		ride: cssToken('--color-brand', REAL_ROUTE_COLOR),
+	}
+}
+
+// Public transport: which colour is walking and which is riding.
+const TRANSIT_LEGEND: { label: string; tone: string }[] = [
+	{ label: 'Piyoda', tone: 'bg-ink-3' },
+	{ label: 'Transport', tone: 'bg-brand' },
+]
 
 type RouteMapProps = {
 	origin: RouteEndpoint
@@ -91,11 +115,13 @@ type RouteMapProps = {
 	onToggleRoute: () => void
 	onOpenProblem: (problem: RouteProblem) => void
 	// A route 2GIS actually computed. Without it the map draws the demo route
-	// exactly as before. With it, the map draws that geometry as one neutral
-	// line, with no illustrative traffic colours, problem pins or legend —
-	// those describe the demo line, not this one. Typed as RealRoute so only
-	// a 2GIS answer can ever be drawn this way.
-	realRoute?: Pick<RealRoute, 'source' | 'geometry'>
+	// exactly as before. With it, the map draws that geometry in the brand
+	// colour with 2GIS's own slow and jammed stretches over it — no demo
+	// colours, problem pins or legend, which describe the demo line, not this
+	// one. Typed as RealRoute so only a 2GIS answer can ever be drawn this way.
+	// A public transport route (metro) is drawn leg by leg instead: walking
+	// and riding in their own colours.
+	realRoute?: Pick<RealRoute, 'source' | 'geometry' | 'traffic' | 'transitLegs'>
 	// Set while the selected mode is routed for real but has no route to
 	// draw: still being fetched, or unavailable (including waiting for a
 	// location fix). The map then draws no line at all — the demo line never
@@ -131,6 +157,9 @@ export function RouteMap({
 	const isGpsOrigin = origin.kind === 'me' && !origin.approximate
 	const realGeometry = realRoute?.source === '2gis' && realRoute.geometry.length >= 2
 		? realRoute.geometry : null
+	const realTraffic = (realGeometry && realRoute?.traffic) || NO_TRAFFIC
+	const transitLegs = (realGeometry && realRoute?.transitLegs) || null
+	const hasCongestion = realTraffic.some(segment => segment.speed === 'slow' || segment.speed === 'jam')
 	const layers = routeMapLayers({
 		showRoute,
 		lineKind: realGeometry ? 'real' : realRoutePending ? 'none' : 'demo',
@@ -154,8 +183,10 @@ export function RouteMap({
 			href: '', parkingId: null,
 		})) : []
 		const routeLines: MapLine[] = layers.line === 'none' ? []
+			: layers.line === 'real' && transitLegs
+				? transitMapLines(transitLegs, transitPalette())
 			: layers.line === 'real' && realGeometry
-				? [{ id: 'route-real', color: REAL_ROUTE_COLOR, coordinates: realGeometry }]
+				? realRouteMapLines({ geometry: realGeometry, traffic: realTraffic })
 			: ['#12b76a', '#f79009', '#f04438', '#12b76a'].map((color, index) => {
 				const from = pointAt(index / 4), to = pointAt((index + 1) / 4)
 				return { id: `route-${index}`, color,
@@ -179,7 +210,7 @@ export function RouteMap({
 			lines: realGeometry ? [{ coordinates: realGeometry }] : routeLines,
 		})
 		return { objects: [...problems, ...originPin, destinationPin], lines: routeLines, frame }
-	}, [origin, destination, isGpsOrigin, layers.line, layers.problemPins, realGeometry])
+	}, [origin, destination, isGpsOrigin, layers.line, layers.problemPins, realGeometry, realTraffic, transitLegs])
 
 	return (
 		<div className='overflow-hidden rounded-[2rem] bg-card shadow-card'>
@@ -230,6 +261,20 @@ export function RouteMap({
 					</div>
 				)}
 
+				{transitLegs && layers.line === 'real' && (
+					<div className='pointer-events-none absolute bottom-3 left-3 z-20 flex gap-2.5 rounded-[9px] bg-white/95 px-2.5 py-1.5 shadow-card'>
+						{TRANSIT_LEGEND.map(item => (
+							<span
+								key={item.label}
+								className='flex items-center gap-1.5 text-[10.5px] font-semibold text-ink-2'
+							>
+								<i className={cn('h-1 w-4 rounded-full', item.tone)} />
+								{item.label}
+							</span>
+						))}
+					</div>
+				)}
+
 				{layers.trafficLegend && (
 					<div className='pointer-events-none absolute bottom-3 left-3 z-20 flex gap-2.5 rounded-[9px] bg-white/95 px-2.5 py-1.5 shadow-card'>
 						{LEGEND.map(item => (
@@ -269,7 +314,7 @@ export function RouteMap({
 			)}
 			<p className={cn('px-3 pb-3 text-[10.5px] leading-4 text-ink-3', !showRoadProblems && 'pt-2.5')}>
 				{realGeometry
-					? `Marshrut chizig‘i va vaqti — 2GIS.${showRoadProblems ? ' Yo‘l holati — namunaviy.' : ''}${canOpenIn2Gis ? ' Yo‘l bo‘ylab navigatsiya uchun 2GISni oching.' : ''}`
+					? `Marshrut chizig‘i va vaqti${hasCongestion && layers.line === 'real' ? ', tirbandlik' : ''} — 2GIS.${showRoadProblems ? ' Yo‘l holati — namunaviy.' : ''}${canOpenIn2Gis ? ' Yo‘l bo‘ylab navigatsiya uchun 2GISni oching.' : ''}`
 					: realRoutePending
 						? 'Chiziq faqat 2GIS marshruti tayyor bo‘lganda chiziladi.'
 						: 'Namunaviy yo‘nalish va yo‘l holati. Yo‘l bo‘ylab navigatsiya uchun 2GISni oching.'}

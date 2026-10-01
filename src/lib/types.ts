@@ -113,8 +113,11 @@ export type BookingKind =
 
 // waiting → called → arrived → served, or cancelled from any live status.
 // «Men keldim» is called → arrived: the customer checked in, the service has
-// not happened yet. Meanings in full live with the rules in booking-lifecycle.
+// not happened yet. A ticket booked for later starts one step earlier, as
+// scheduled, and the clock alone moves it into the line (or out of it, as a
+// no-show). Meanings in full live with the rules in booking-lifecycle.
 export type QueueTicketStatus =
+  | "scheduled"
   | "waiting"
   | "called"
   | "arrived"
@@ -136,18 +139,27 @@ export type QueueTicket = {
   // the second, a finished ticket claims you waited no time at all.
   etaMinutes: number;
   initialEtaMinutes: number;
+  // The window, desk or specialist's number the ticket is served at.
   windowNumber: number;
   notify: boolean;
   status: QueueTicketStatus;
   createdAt: string;
   closedAt?: string;
+  // The moment booked in advance, as the ISO string of a Tashkent wall-clock
+  // instant. Absent on a live ticket — taken «Hozir» — and on every ticket
+  // persisted before advance booking existed; both read exactly as before.
+  scheduledAt?: string;
+  // The QueueDesk chosen in the sheet. Absent on a live ticket the
+  // organisation assigns a window to, and on legacy blobs.
+  deskId?: string;
 };
 
 export type ServiceBookingKind = Exclude<BookingKind, "parking" | "queue">;
 
-// active → completed once the booking's time is over (booking-lifecycle's
-// reconciliation writes it), or active → cancelled by the customer.
-export type ServiceBookingStatus = "active" | "completed" | "cancelled";
+// upcoming → active → completed on the clock alone: before its start, from
+// its start, and from start + duration (booking-lifecycle's reconciliation
+// writes each step). Either live status → cancelled by the customer.
+export type ServiceBookingStatus = "upcoming" | "active" | "completed" | "cancelled";
 
 // Tables, cinema seats, clinic slots and event tickets. Their lifecycle is
 // only live, then over or cancelled, so one shape covers all four and the
@@ -167,12 +179,16 @@ export type ServiceBooking = {
   // Optional because a blob persisted before this field existed has none —
   // those keep falling back to their stored label.
   startAt?: string;
-  // When the booking ends, and how long it lasts. No flow writes either yet —
-  // no catalog knows a film's running time or an appointment's length — but
-  // expectedEndAt() prefers them over its fallback durations the moment one
-  // does, in that order.
+  // When the booking ends. No flow writes it yet; expectedEndAt() prefers it
+  // over the duration below the moment one does.
   endAt?: string;
+  // How long the booking holds its venue. Every booking the sheet creates
+  // carries it — the table the customer's own choice, the other kinds their
+  // lifecycle default. Optional only because blobs persisted before it
+  // existed have none, and those fall back to the kind's default.
   durationMinutes?: number;
+  // Where in the venue: «Asosiy zal», «Veranda». Tables only.
+  seatingArea?: string;
   status: ServiceBookingStatus;
   createdAt: string;
 };
@@ -252,7 +268,8 @@ export type Place = {
   distanceKm: number;
   free?: number;
   total?: number;
-  queue?: number;
+  // No wait time here: a venue's wait is its queue desk's (QUEUE_ORGS), and
+  // a venue without one has no line to wait in.
   busy: number;
   address: string;
   phone: string;
@@ -290,6 +307,29 @@ export type QueueService = {
   // Letter the printed ticket number starts with, e.g. "V" -> "V-08".
   prefix: string;
   windows: number;
+  // How long one customer holds a desk — the length of a bookable slot.
+  // Not avgWaitMinutes: that is the wait in line, not the service itself.
+  serviceMinutes: number;
+  // Whether a ticket can be booked for later. Lines that only make sense
+  // live — takeaway, a free table — are false and keep «Hozir» only.
+  bookable: boolean;
+};
+
+// Where a ticket is served: a numbered window, a desk, or a named specialist.
+// The kind only decides the copy; availability treats all three alike.
+export type QueueDeskKind = "window" | "desk" | "specialist";
+
+export type QueueDesk = {
+  id: string;
+  // The printed number — what QueueTicket.windowNumber stores.
+  number: number;
+  // «3-oyna», «2-stol», «Dr. Karimova».
+  label: string;
+  kind: QueueDeskKind;
+  // The specialist's role, shown under the name: «Terapevt».
+  role?: string;
+  // The services this desk handles. One desk can serve several lines.
+  serviceIds: string[];
 };
 
 export type QueueForecastPoint = {
@@ -304,8 +344,10 @@ export type QueueOrg = {
   title: string;
   category: QueueCategory;
   address: string;
-  // Where this sits in the other catalogs, when it is the same venue.
-  placeId?: string;
+  // The venue this desk belongs to. Every organisation is a place first:
+  // title, address, position, rating, accent and parking are read from it,
+  // never stored a second time.
+  placeId: string;
   parkingId: string;
   // Approximate, like Place.lat/lng above — see the note there.
   lat: number;
@@ -314,6 +356,9 @@ export type QueueOrg = {
   rating: number;
   reviewCount: number;
   open: boolean;
+  // "HH:mm", Tashkent. The first and last moment the doors are open; the
+  // last bookable slot is the one that still ends by closeTime.
+  openTime: string;
   closeTime: string;
   // People in line right now, and the wait that implies.
   waiting: number;
@@ -324,6 +369,9 @@ export type QueueOrg = {
   // Load percentage at each QUEUE_HOURS slot; 0 means closed.
   hourlyLoad: number[];
   services: QueueService[];
+  // Every window, desk and specialist. Each service's desks are the ones
+  // whose serviceIds name it, and there are exactly service.windows of them.
+  desks: QueueDesk[];
   tip: string;
 };
 

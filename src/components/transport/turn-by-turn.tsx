@@ -28,8 +28,9 @@ export function TurnByTurn({
 	navigateHref: string | null
 	onClose: () => void
 	onComplete?: () => void
-	// Said under «Keyingi» when the minutes are a real route's but the steps
-	// are still the demo list — 2GIS manoeuvres are not connected yet.
+	// Said under «Keyingi» when the steps are the demo list. Real 2GIS
+	// maneuvers are connected (RealRoute.maneuvers) and shown for the car by
+	// CarRouteStatus; this navigator only runs for the estimated modes.
 	stepsNote?: string
 }) {
 	const [index, setIndex] = useState(0)
