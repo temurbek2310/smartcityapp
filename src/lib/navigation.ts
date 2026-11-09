@@ -8,7 +8,7 @@ import type { SavedRoute } from '@/lib/types'
 
 // One navigation system for the whole app.
 //
-// Every «Yo‘nalish» in B SPACE — a lot, a café, a queue desk, a table
+// Every «Yo‘nalish» in SmartCity — a lot, a café, a queue desk, a table
 // booking, a parking reservation — ends up here, turns whatever the customer
 // was looking at into a single destination id, and opens the one route
 // screen with it. Before this, each surface built its own link: a place

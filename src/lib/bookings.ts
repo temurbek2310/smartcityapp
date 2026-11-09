@@ -17,7 +17,7 @@ import { reservationHref } from '@/lib/reservation'
 import { durationLabel, serviceWhenLabel } from '@/lib/service-slots'
 import type {
 	BookingKind,
-	BSpaceState,
+	SmartCityState,
 	QueueTicket,
 	Reservation,
 	ServiceBooking,
@@ -259,7 +259,7 @@ function fromServiceBooking(booking: ServiceBooking): BookingRow {
 }
 
 export function bookingRows(
-	state: Pick<BSpaceState, 'reservations' | 'queueTickets' | 'serviceBookings'>,
+	state: Pick<SmartCityState, 'reservations' | 'queueTickets' | 'serviceBookings'>,
 ) {
 	const rows = [
 		...state.reservations.map(fromReservation),
@@ -287,7 +287,7 @@ export type BookingDetail =
 	| { source: 'queue'; row: BookingRow; ticket: QueueTicket }
 
 export function resolveBookingDetail(
-	state: Pick<BSpaceState, 'queueTickets' | 'serviceBookings'>,
+	state: Pick<SmartCityState, 'queueTickets' | 'serviceBookings'>,
 	source: BookingDetail['source'],
 	id: string | undefined,
 ): BookingDetail | null {

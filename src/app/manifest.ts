@@ -4,9 +4,9 @@ export default function manifest(): MetadataRoute.Manifest {
 	return {
 		id: '/',
 
-		name: 'B SPACE — Smart Parking Uzbekistan',
+		name: 'SmartCity — Smart Parking Uzbekistan',
 
-		short_name: 'B SPACE',
+		short_name: 'SmartCity',
 
 		description:
 			'O‘zbekistonda parking topish, bron qilish va parking sessiyasini boshqarish uchun smart platforma.',

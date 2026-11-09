@@ -114,7 +114,7 @@ export default function ReceiptPage() {
 						<div>
 							<p className='text-[11px] text-ink-3'>To‘lov usuli</p>
 							<p className='text-[13px] font-bold text-ink'>
-								B SPACE Demo •••• 4242
+								SmartCity Demo •••• 4242
 							</p>
 						</div>
 					</div>

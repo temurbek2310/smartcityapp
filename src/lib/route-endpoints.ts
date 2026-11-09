@@ -183,7 +183,7 @@ const TWO_GIS_ROUTE_BASE = 'https://2gis.ru/routeSearch/rsType'
 // Only the route types 2GIS documents: car, ctx (public transport),
 // pedestrian and taxi. It has no scooter type, and passing car or pedestrian
 // instead would open a route for a different vehicle under a scooter label,
-// so scooter has no hand-off and stays inside B SPACE.
+// so scooter has no hand-off and stays inside SmartCity.
 const TWO_GIS_ROUTE_TYPE: Record<TransportMode, string | null> = {
 	car: 'car',
 	metro: 'ctx',

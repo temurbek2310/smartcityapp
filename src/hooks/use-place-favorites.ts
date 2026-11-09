@@ -4,7 +4,7 @@ import { PLACES } from '@/data/places'
 import { useCallback, useEffect, useState } from 'react'
 
 // Saved *places* (City Goo's demo place catalog) — a separate concern from
-// B SPACE's real parking favorites, which live in app-context and stay the
+// SmartCity's real parking favorites, which live in app-context and stay the
 // authority for anything backed by real data.
 //
 // Home and Favorites each used to read and write this key themselves, with

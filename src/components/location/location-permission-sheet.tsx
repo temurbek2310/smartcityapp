@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { locationProblem, type LocationState } from '@/lib/location'
 
-// B SPACE's own explanation, shown before the browser's permission prompt
+// SmartCity's own explanation, shown before the browser's permission prompt
 // and instead of it when the browser will not show one.
 export function LocationPermissionSheet({
 	kind,

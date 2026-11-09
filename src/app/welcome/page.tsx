@@ -15,6 +15,7 @@ import {
 	Smartphone,
 } from 'lucide-react'
 import { resolveNextPath } from '@/lib/safe-next'
+import { SmartCityLogo } from '@/components/ui/smartcity-logo'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
 	Suspense,
@@ -36,7 +37,7 @@ const slides = [
 	{
 		icon: MapPinned,
 		title: 'Parkingni tez toping',
-		text: "Uzbekistan bo'ylab B SPACE parkinglari, narx va bo'sh joylarni bitta joyda ko'ring.",
+		text: "Uzbekistan bo'ylab SmartCity parkinglari, narx va bo'sh joylarni bitta joyda ko'ring.",
 	},
 	{
 		icon: QrCode,
@@ -123,10 +124,8 @@ function WelcomeView() {
 			<div className='min-h-dvh bg-ink px-6 py-8 text-white'>
 				<div className='mx-auto flex min-h-[calc(100dvh-4rem)] max-w-md flex-col'>
 					<div className='flex items-center gap-3'>
-						<span className='grid size-11 place-items-center rounded-card bg-white text-[17px] font-black text-ink'>
-							B
-						</span>
-						<strong>B SPACE</strong>
+						<SmartCityLogo className='size-11 border border-white/10' />
+						<strong>SmartCity</strong>
 					</div>
 					<div className='flex flex-1 flex-col justify-center'>
 						<div className='grid size-24 place-items-center rounded-card-xl bg-white/10'>
@@ -241,11 +240,9 @@ function WelcomeView() {
 		<div className='min-h-dvh bg-canvas px-5 py-8'>
 			<div className='mx-auto max-w-md'>
 				<div className='flex items-center gap-3'>
-					<span className='grid size-11 place-items-center rounded-card bg-brand text-[17px] font-black text-white'>
-						B
-					</span>
+					<SmartCityLogo className='size-11 border border-ink/10' />
 					<div>
-						<strong className='block'>B SPACE</strong>
+						<strong className='block'>SmartCity</strong>
 						<span className='text-[11.5px] text-ink-3'>Demo authentication</span>
 					</div>
 				</div>

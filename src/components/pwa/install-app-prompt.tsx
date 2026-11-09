@@ -55,7 +55,7 @@ export function InstallAppPrompt() {
 		}
 
 		const dismissed =
-			sessionStorage.getItem('bspace-install-dismissed') === 'true'
+			sessionStorage.getItem('smartcity-install-dismissed') === 'true'
 
 		if (dismissed) {
 			return
@@ -99,7 +99,7 @@ export function InstallAppPrompt() {
 	}, [isIOS])
 
 	function dismiss() {
-		sessionStorage.setItem('bspace-install-dismissed', 'true')
+		sessionStorage.setItem('smartcity-install-dismissed', 'true')
 
 		setVisible(false)
 	}
@@ -162,7 +162,7 @@ export function InstallAppPrompt() {
 						<div className='flex items-start justify-between gap-3'>
 							<div>
 								<p className='font-bold text-ink'>
-									B SPACE ilovasini o‘rnating
+									SmartCity ilovasini o‘rnating
 								</p>
 
 								<p className='mt-1 text-sm leading-5 text-ink-3'>
@@ -214,7 +214,7 @@ export function InstallAppPrompt() {
 									</>
 								) : (
 									<>
-										<Download size={17} />B SPACE’ni o‘rnatish
+										<Download size={17} />SmartCity’ni o‘rnatish
 									</>
 								)}
 							</button>

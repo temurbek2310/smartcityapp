@@ -61,7 +61,7 @@ const TWO_GIS_ROUTE = {
 	],
 }
 
-// What TWO_GIS_ROUTE carries beyond the primary line, as B SPACE speaks it.
+// What TWO_GIS_ROUTE carries beyond the primary line, as SmartCity speaks it.
 const CAR_EXTRAS = {
 	alternatives: [
 		{
@@ -136,7 +136,7 @@ afterEach(() => {
 })
 
 describe('POST /api/directions — success', () => {
-	it('normalizes a 2GIS route into a B SPACE RealRoute', async () => {
+	it('normalizes a 2GIS route into a SmartCity RealRoute', async () => {
 		upstreamJson(TWO_GIS_ROUTE)
 		const response = await call(valid)
 		await expectResult(response, 200, {
@@ -730,7 +730,7 @@ describe('POST /api/directions — refused before any upstream call', () => {
 	})
 
 	it('invalid: modes that are not routed yet — never mapped to another mode', async () => {
-		// Provider names are not B SPACE modes either: 'walking' and
+		// Provider names are not SmartCity modes either: 'walking' and
 		// 'driving' are refused, not passed through. Nor is 2GIS's
 		// 'bicycle' a stand-in for the scooter.
 		for (const mode of ['public_transport', 'bicycle', 'truck', 'pedestrian', 'walking', 'driving', null]) {

@@ -104,7 +104,7 @@ export function CurrentSituation({
 			</div>
 
 			<p className='mt-1.5 px-1 text-[10.5px] text-ink-3'>
-				Tirbandlik, HTH va yopiq yo‘llar — namunaviy ma’lumot. Ob-havo B SPACE
+				Tirbandlik, HTH va yopiq yo‘llar — namunaviy ma’lumot. Ob-havo SmartCity
 				ilovasining shahar bo‘yicha statik ma’lumotidan olindi.
 			</p>
 		</section>

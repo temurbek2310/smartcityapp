@@ -39,6 +39,7 @@ import { PAYMENT_METHODS, PREMIUM_PERKS, PREMIUM_PRICE_UZS } from '@/data/profil
 import { useToast } from '@/hooks/use-toast'
 import { cn } from '@/lib/cn'
 import { resetDemoData } from '@/lib/account-exit'
+import { MAIN_STATE_KEY } from '@/lib/account-storage'
 import { liveBookingCount } from '@/lib/booking-lifecycle'
 import { formatDate, formatUZS } from '@/lib/format'
 import { displayUzbekPlate, formatUzbekPlate, normalizeUzbekPlate } from '@/lib/plate'
@@ -203,7 +204,7 @@ export default function ProfilePage() {
 				>
 					<div className='flex items-center justify-between'>
 						<span className='rounded-[7px] bg-white/20 px-2 py-1 text-[10.5px] font-extrabold text-white'>
-							B SPACE Premium
+							SmartCity Premium
 						</span>
 						<ChevronRight className='size-4 text-white' />
 					</div>
@@ -287,10 +288,10 @@ export default function ProfilePage() {
 					label='Do‘stni taklif qilish'
 					onClick={async () => {
 						try {
-							await navigator.clipboard.writeText('https://b-space.uz/invite')
+							await navigator.clipboard.writeText('https://smartcity.uz/invite')
 							toast.show('Taklif havolasi nusxalandi')
 						} catch {
-							toast.show('Taklif havolasi: b-space.uz/invite')
+							toast.show('Taklif havolasi: smartcity.uz/invite')
 						}
 					}}
 					divided
@@ -333,11 +334,11 @@ export default function ProfilePage() {
 			</button>
 
 			<p className='pb-2 text-center text-[11px] text-ink-3'>
-				B SPACE · demo 1.0 · Toshkent
+				SmartCity · demo 1.0 · Toshkent
 			</p>
 
 			{sheet === 'premium' && (
-				<BottomSheet title='B SPACE Premium' onClose={() => setSheet(null)}>
+				<BottomSheet title='SmartCity Premium' onClose={() => setSheet(null)}>
 					<div className='rounded-card-lg bg-linear-[135deg,#6c47e0,#4a2fa8] p-4'>
 						<p className='text-[22px] font-black text-white'>
 							{formatUZS(PREMIUM_PRICE_UZS)}
@@ -605,13 +606,13 @@ export default function ProfilePage() {
 						className='mt-3'
 						onClick={() => {
 							const blob = new Blob(
-								[localStorage.getItem('b-space-mvp-v1') ?? '{}'],
+								[localStorage.getItem(MAIN_STATE_KEY) ?? '{}'],
 								{ type: 'application/json' },
 							)
 							const url = URL.createObjectURL(blob)
 							const link = document.createElement('a')
 							link.href = url
-							link.download = 'b-space-mening-malumotlarim.json'
+							link.download = 'smartcity-mening-malumotlarim.json'
 							link.click()
 							URL.revokeObjectURL(url)
 							toast.show('Ma’lumotlaringiz yuklab olindi')

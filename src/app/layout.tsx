@@ -33,17 +33,17 @@ export const metadata: Metadata = {
 	metadataBase: new URL(siteUrl),
 
 	title: {
-		default: 'B SPACE — Smart Parking in Uzbekistan',
-		template: '%s | B SPACE',
+		default: 'SmartCity — Smart Parking in Uzbekistan',
+		template: '%s | SmartCity',
 	},
 
 	description:
-		'B SPACE — O‘zbekistonda parking topish, bo‘sh joylarni ko‘rish, oldindan bron qilish va parking sessiyasini boshqarish uchun smart parking platformasi.',
+		'SmartCity — O‘zbekistonda parking topish, bo‘sh joylarni ko‘rish, oldindan bron qilish va parking sessiyasini boshqarish uchun smart parking platformasi.',
 
-	applicationName: 'B SPACE',
+	applicationName: 'SmartCity',
 
 	keywords: [
-		'B SPACE',
+		'SmartCity',
 		'parking Uzbekistan',
 		'parking Toshkent',
 		'Toshkent parking',
@@ -55,12 +55,12 @@ export const metadata: Metadata = {
 
 	authors: [
 		{
-			name: 'B SPACE',
+			name: 'SmartCity',
 		},
 	],
 
-	creator: 'B SPACE',
-	publisher: 'B SPACE',
+	creator: 'SmartCity',
+	publisher: 'SmartCity',
 
 	category: 'technology',
 
@@ -95,19 +95,19 @@ export const metadata: Metadata = {
 
 		url: '/',
 
-		siteName: 'B SPACE',
+		siteName: 'SmartCity',
 
-		title: 'B SPACE — Smart Parking in Uzbekistan',
+		title: 'SmartCity — Smart Parking in Uzbekistan',
 
 		description:
-			'Parking toping, bo‘sh joylarni tekshiring, bron qiling va parking sessiyangizni B SPACE orqali boshqaring.',
+			'Parking toping, bo‘sh joylarni tekshiring, bron qiling va parking sessiyangizni SmartCity orqali boshqaring.',
 
 		images: [
 			{
-				url: '/og/b-space-og.png',
+				url: '/og/smartcity-og.png',
 				width: 1200,
 				height: 630,
-				alt: 'B SPACE Smart Parking Uzbekistan',
+				alt: 'SmartCity Smart Parking Uzbekistan',
 			},
 		],
 	},
@@ -115,12 +115,12 @@ export const metadata: Metadata = {
 	twitter: {
 		card: 'summary_large_image',
 
-		title: 'B SPACE — Smart Parking in Uzbekistan',
+		title: 'SmartCity — Smart Parking in Uzbekistan',
 
 		description:
 			'O‘zbekistonda parking topish va bron qilish uchun smart platforma.',
 
-		images: ['/og/b-space-og.png'],
+		images: ['/og/smartcity-og.png'],
 	},
 
 	robots: {
@@ -139,7 +139,7 @@ export const metadata: Metadata = {
 
 	appleWebApp: {
 		capable: true,
-		title: 'B SPACE',
+		title: 'SmartCity',
 		statusBarStyle: 'default',
 	},
 

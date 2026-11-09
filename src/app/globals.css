@@ -164,7 +164,7 @@ button, a { touch-action: manipulation; }
    14px radius, 12/14 padding, 13.5px/600 text, 10px gap, --sh-lg shadow and
    the translateY(160%) .28s cubic-bezier(.32,.72,0,1) slide with the
    visibility delay that keeps it out of the a11y tree while hidden.
-   Two adaptations: City Goo's absolute 400px device frame becomes B SPACE's
+   Two adaptations: City Goo's absolute 400px device frame becomes SmartCity's
    centered app shell, and the home-indicator safe area is added to its
    calc(var(--nav-h) + 14px) offset so the toast clears the bottom nav. */
 .citygo-toast {

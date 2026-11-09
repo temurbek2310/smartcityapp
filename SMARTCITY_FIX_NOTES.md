@@ -1,4 +1,4 @@
-# B SPACE — Fix notes
+# SmartCity — Fix notes
 
 This package contains the corrected Home + map interaction requested during the MVP review.
 
@@ -9,7 +9,7 @@ This package contains the corrected Home + map interaction requested during the 
 - Smart Map is integrated on Home immediately after search.
 - Parking markers stay geographically anchored while panning and zooming.
 - Marker numbers show available spaces; teal = available, amber = low, red = full.
-- Clicking either a result card or a map marker opens the same B SPACE Focus state.
+- Clicking either a result card or a map marker opens the same SmartCity Focus state.
 - Focus state zooms to the parking and shows availability, distance, price, directions, reserve, details and a better-nearby suggestion when useful.
 - Favorites cards navigate correctly even outside Home.
 - `/map` is now a legacy redirect to `/home`.
@@ -23,7 +23,7 @@ This package contains the corrected Home + map interaction requested during the 
 3. Complete onboarding and log in with OTP `123456`.
 4. Confirm Home order is Search → Map → Nearby results.
 5. Drag and zoom the map repeatedly; markers should remain attached to the same map positions.
-6. Click a marker and a result card; both should open B SPACE Focus.
+6. Click a marker and a result card; both should open SmartCity Focus.
 7. Use Directions, Reserve and Details from Focus.
 8. Test Favorites, booking, QR entry, active session, extension, exit and receipt.
 9. For a production/PWA check run `pnpm build` then `pnpm start`.

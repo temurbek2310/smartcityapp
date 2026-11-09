@@ -1,24 +1,69 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
-  <title id="title">B SPACE maskable app icon</title>
-  <desc id="desc">Maskable B SPACE icon with a centered white B monogram and teal parking-space accent on dark navy.</desc>
+  <title id="title">SmartCity maskable app icon</title>
+  <desc id="desc">Maskable SmartCity icon featuring a luminous S monogram with urban smart skyline and beacon within the Android safe zone.</desc>
   <defs>
-    <linearGradient id="bg" x1="64" y1="64" x2="448" y2="448" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#0A1322"/>
-      <stop offset="1" stop-color="#172943"/>
+    <linearGradient id="mscBg" x1="32" y1="32" x2="480" y2="480" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#080E1C"/>
+      <stop offset="45%" stop-color="#0F172A"/>
+      <stop offset="100%" stop-color="#15223A"/>
     </linearGradient>
-    <linearGradient id="accent" x1="350" y1="118" x2="428" y2="196" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#85E7D8"/>
-      <stop offset="1" stop-color="#18B9A4"/>
+
+    <linearGradient id="mscIndigo" x1="120" y1="120" x2="380" y2="390" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#9065FA"/>
+      <stop offset="45%" stop-color="#6C47E0"/>
+      <stop offset="100%" stop-color="#472BB3"/>
+    </linearGradient>
+
+    <linearGradient id="mscTeal" x1="140" y1="120" x2="370" y2="380" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#38BDF8"/>
+      <stop offset="50%" stop-color="#06B6D4"/>
+      <stop offset="100%" stop-color="#10B981"/>
+    </linearGradient>
+
+    <linearGradient id="mscBeam" x1="330" y1="100" x2="400" y2="180" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#7DF8E8"/>
+      <stop offset="100%" stop-color="#06B6D4"/>
     </linearGradient>
   </defs>
 
-  <rect width="512" height="512" fill="url(#bg)"/>
-  <circle cx="386" cy="138" r="54" fill="url(#accent)"/>
-  <circle cx="386" cy="138" r="80" fill="#85E7D8" opacity="0.10"/>
+  <!-- Full-bleed background for maskable target -->
+  <rect width="512" height="512" fill="url(#mscBg)"/>
 
-  <!-- Main artwork stays inside the maskable safe zone. -->
-  <path d="M158 144h103c60 0 96 29 96 75 0 29-14 51-39 63 34 12 53 38 53 72 0 54-41 88-108 88H158V144Zm96 119c32 0 49-13 49-37 0-23-17-36-49-36h-42v73h42Zm7 132c36 0 55-15 55-42 0-27-19-41-55-41h-49v83h49Z" fill="#FFFFFF"/>
+  <!-- Safe-zone scaled emblem -->
+  <g transform="translate(256, 256) scale(0.82) translate(-256, -284)">
+    <!-- Ambient pulse behind emblem -->
+    <circle cx="366" cy="146" r="62" fill="url(#mscBeam)" opacity="0.12"/>
+    <circle cx="256" cy="256" r="140" fill="#6C47E0" opacity="0.10"/>
 
-  <path d="M323 354h72" stroke="#7DE4D5" stroke-width="16" stroke-linecap="round"/>
-  <path d="M344 327v54" stroke="#7DE4D5" stroke-width="16" stroke-linecap="round"/>
+    <!-- Architectural Smart Skyline Backdrop -->
+    <rect x="208" y="208" width="24" height="106" rx="6" fill="url(#mscTeal)" opacity="0.28"/>
+    <rect x="244" y="166" width="24" height="148" rx="6" fill="url(#mscTeal)" opacity="0.45"/>
+    <rect x="280" y="196" width="24" height="118" rx="6" fill="url(#mscTeal)" opacity="0.32"/>
+
+    <!-- Primary 'S' Monogram - Upper Curve -->
+    <path d="M352 168 C338 140, 302 124, 252 124 C184 124, 146 162, 146 208 C146 250, 180 274, 238 290 L274 300 C322 314, 348 334, 348 372 C348 418, 308 444, 248 444 C192 444, 154 416, 142 388" 
+          fill="none" 
+          stroke="url(#mscIndigo)" 
+          stroke-width="48" 
+          stroke-linecap="round" 
+          stroke-linejoin="round"/>
+
+    <!-- High-Tech Neon Flow Core -->
+    <path d="M346 172 C330 144, 298 132, 252 132 C190 132, 156 166, 156 208 C156 244, 186 266, 242 282 L278 292 C328 308, 356 332, 356 372 C356 422, 314 444, 248 444 C196 444, 160 418, 148 392" 
+          fill="none" 
+          stroke="url(#mscTeal)" 
+          stroke-width="16" 
+          stroke-linecap="round" 
+          stroke-linejoin="round"/>
+
+    <!-- Central Transit Waypoints (Flow dots) -->
+    <circle cx="252" cy="132" r="7" fill="#FFFFFF"/>
+    <circle cx="260" cy="287" r="7" fill="#FFFFFF"/>
+    <circle cx="248" cy="444" r="7" fill="#FFFFFF"/>
+
+    <!-- Smart Beacon / Location Node -->
+    <circle cx="366" cy="146" r="30" fill="url(#mscTeal)"/>
+    <circle cx="366" cy="146" r="14" fill="#FFFFFF"/>
+    <circle cx="366" cy="146" r="46" fill="none" stroke="#38BDF8" stroke-width="3" stroke-dasharray="7 5" opacity="0.75"/>
+  </g>
 </svg>

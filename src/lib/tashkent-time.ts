@@ -1,4 +1,4 @@
-// The one clock every B-Space booking is scheduled on.
+// The one clock every SmartCity booking is scheduled on.
 //
 // A parking bay, a table, a cinema seat and a clinic slot are all physical
 // places in Uzbekistan, so «14:00» on a booking means 14:00 in Tashkent —

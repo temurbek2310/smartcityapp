@@ -16,7 +16,7 @@ import {
 } from '@/lib/two-gis-transit'
 
 // Car, walking, scooter and public transport routes from 2GIS, normalized
-// into B SPACE's RouteResult. The road modes go to the Routing API; metro
+// into SmartCity's RouteResult. The road modes go to the Routing API; metro
 // goes to the Public Transport API through its own adapter — one key, two
 // products, never one payload read as the other.
 // Server-side only: the routing key lives in DGIS_ROUTING_API_KEY, which —

@@ -195,7 +195,7 @@ export function createLocationStore(env: LocationEnvironment) {
 }
 
 // What a tap on a location feature should do, given where things stand.
-// 'locate' goes straight to the browser; 'explain' shows B SPACE's own
+// 'locate' goes straight to the browser; 'explain' shows SmartCity's own
 // explanation first, so the browser's prompt never arrives unannounced.
 export type LocationGate = 'locate' | 'explain' | 'denied' | 'unsupported'
 
@@ -260,7 +260,7 @@ export function locationProblem(state: LocationState): { title: string; text: st
 		case 'outside-uzbekistan':
 			return {
 				title: 'Joylashuv O‘zbekistondan tashqarida',
-				text: 'B SPACE hozircha faqat O‘zbekiston bo‘ylab ishlaydi.',
+				text: 'SmartCity hozircha faqat O‘zbekiston bo‘ylab ishlaydi.',
 			}
 		default:
 			return null

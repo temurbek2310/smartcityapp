@@ -1,6 +1,6 @@
-import type { BSpaceState } from "@/lib/types";
+import type { SmartCityState } from "@/lib/types";
 
-// What a customer who has never used B SPACE has. Every collection here is
+// What a customer who has never used SmartCity has. Every collection here is
 // empty on purpose: a fresh install must not look as though someone else has
 // already been favouriting places, booking parking and taking queue tickets
 // in it. The catalogs (parkings, places, queue organisations, prices,
@@ -9,7 +9,7 @@ import type { BSpaceState } from "@/lib/types";
 //
 // It sits in lib rather than inside AppProvider so the emptiness is a fact a
 // test can assert, not a claim about a React file.
-export const initialState: BSpaceState = {
+export const initialState: SmartCityState = {
   hydrated: false,
   onboardingDone: false,
   user: null,
@@ -47,7 +47,7 @@ export const USER_ACTIVITY_KEYS = [
   "queueTickets",
   "serviceBookings",
   "notifications",
-] as const satisfies readonly (keyof BSpaceState)[];
+] as const satisfies readonly (keyof SmartCityState)[];
 
 // What signing out leaves behind. There is no account id to keep anything
 // under, so everything the signed-out person did — bookings and their
@@ -61,7 +61,7 @@ export const USER_ACTIVITY_KEYS = [
 //
 // Logout is only allowed with no live booking (liveBookingCount), so this
 // never discards a booking someone still needs.
-export function loggedOutState(current: BSpaceState): BSpaceState {
+export function loggedOutState(current: SmartCityState): SmartCityState {
   return {
     ...initialState,
     notificationPrefs: { ...initialState.notificationPrefs },

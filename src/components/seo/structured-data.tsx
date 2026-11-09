@@ -6,7 +6,7 @@ export function StructuredData() {
 
 		'@type': 'WebApplication',
 
-		name: 'B SPACE',
+		name: 'SmartCity',
 
 		url: siteUrl,
 

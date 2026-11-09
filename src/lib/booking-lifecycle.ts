@@ -1,11 +1,11 @@
 import type {
-	BSpaceState,
 	QueueTicket,
 	QueueTicketStatus,
 	ReservationStatus,
 	ServiceBooking,
 	ServiceBookingKind,
 	ServiceBookingStatus,
+	SmartCityState,
 } from '@/lib/types'
 
 // What each booking status means, and when a booking stops being live.
@@ -64,7 +64,7 @@ export function isServiceBookingLive(status: ServiceBookingStatus) {
 // Logout reads this: with no backend to restore them, a live booking signed
 // out of would be a parking QR, a queue ticket or a table gone for good.
 export function liveBookingCount(
-	state: Pick<BSpaceState, 'reservations' | 'queueTickets' | 'serviceBookings'>,
+	state: Pick<SmartCityState, 'reservations' | 'queueTickets' | 'serviceBookings'>,
 ) {
 	return (
 		state.reservations.filter(item => isReservationLive(item.status)).length +
@@ -291,8 +291,8 @@ export function reconcileQueueTickets(
 }
 
 export function reconcileBookingLifecycles<
-	S extends Pick<BSpaceState, 'serviceBookings'> &
-		Partial<Pick<BSpaceState, 'queueTickets'>>,
+	S extends Pick<SmartCityState, 'serviceBookings'> &
+		Partial<Pick<SmartCityState, 'queueTickets'>>,
 >(state: S, now: number): S {
 	// A blob from an older build may not have either key at all.
 	const serviceBookings = Array.isArray(state.serviceBookings)

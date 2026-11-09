@@ -264,11 +264,11 @@ describe('scooter demo sections', () => {
 		expect(html).toContain('36 daq')
 		expect(html).toContain('7.3 km')
 		expect(html).toContain('Vaqt va masofa — 2GIS marshruti.')
-		// B SPACE's unlock + per-minute estimate, fed with the 2GIS duration,
+		// SmartCity's unlock + per-minute estimate, fed with the 2GIS duration,
 		// said to be an estimate and not an operator's fare.
 		expect(cost).toBe(1_800 + 36 * 230)
 		expect(html).toContain('≈')
-		expect(html).toContain('Ijara narxi shu vaqtga asoslangan B SPACE taxminiy hisobi, operator tarifi emas.')
+		expect(html).toContain('Ijara narxi shu vaqtga asoslangan SmartCity taxminiy hisobi, operator tarifi emas.')
 		for (const fake of [...SCOOTER_DEMO_WORDS, 'Skuter zaryadi', '75%', '90%', 'namunaviy']) {
 			expect(html).not.toContain(fake)
 		}
@@ -286,7 +286,7 @@ describe('scooter demo sections', () => {
 				facts: [],
 			}),
 		)
-		expect(html).toContain('Yoqilg‘i narxi shu masofaga asoslangan B SPACE taxminiy hisobi.')
+		expect(html).toContain('Yoqilg‘i narxi shu masofaga asoslangan SmartCity taxminiy hisobi.')
 		expect(html).not.toContain('Ijara narxi')
 	})
 })

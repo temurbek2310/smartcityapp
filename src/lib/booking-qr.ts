@@ -4,7 +4,7 @@ import type { QueueTicket, Reservation, ServiceBooking } from '@/lib/types'
 // One machine format for every booking family, and the only place it is
 // spelled:
 //
-//   BSPACE:v1:<type>:<id>
+//   SMARTCITY:v1:<type>:<id>
 //
 // The QR is identity and nothing else. It names which booking object this
 // is by its stable stored id — never a display code, a bay, a title or an
@@ -21,7 +21,7 @@ import type { QueueTicket, Reservation, ServiceBooking } from '@/lib/types'
 // The human-facing code on screen (Bron kodi, Navbat raqami) is a separate
 // thing, below. The two are never derived from each other.
 
-export const BOOKING_QR_PREFIX = 'BSPACE'
+export const BOOKING_QR_PREFIX = 'SMARTCITY'
 export const BOOKING_QR_VERSION = 'v1'
 
 export type BookingQrType = 'reservation' | 'queue' | 'booking'
@@ -65,7 +65,7 @@ export function serviceBookingQrPayload(booking: Pick<ServiceBooking, 'id'>) {
 }
 
 // The contract a scanner will hold the app to. Anything that is not exactly
-// a v1 B-Space payload is null — a scan of someone else's QR is a normal
+// a v1 SmartCity payload is null — a scan of someone else's QR is a normal
 // event, not an error. An unknown version is refused rather than guessed at,
 // so v2 can change the layout without v1 readers misreading it.
 export function parseBookingQrPayload(payload: unknown): ParsedBookingQr | null {

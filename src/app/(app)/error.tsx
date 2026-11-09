@@ -17,7 +17,7 @@ export default function AppError({
 	reset: () => void
 }) {
 	useEffect(() => {
-		console.error('[b-space] screen error', error)
+		console.error('[smartcity] screen error', error)
 	}, [error])
 
 	return (

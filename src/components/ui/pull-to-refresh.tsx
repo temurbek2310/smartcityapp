@@ -15,7 +15,7 @@ import { cn } from '@/lib/cn'
 
 // City Goo's pull-to-refresh, with its numbers kept: rubber-band capped at
 // 70px, fires past 60, 900ms of spin. Two things differ. City Goo scrolls an
-// inner .viewport div, so it listens there; B SPACE scrolls the document, so
+// inner .viewport div, so it listens there; SmartCity scrolls the document, so
 // the gesture is gated on window.scrollY. And rather than mutating the
 // catalog the way the reference does, a refresh bumps a counter that derived
 // data reads — see lib/live-availability.ts. Mutating module state would make

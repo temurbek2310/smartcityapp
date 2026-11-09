@@ -509,7 +509,7 @@ function TransportView({ onUrlSync }: { onUrlSync: (query: string) => void }) {
 	const minutes = figures?.minutes ?? null
 	const routeDistance = figures?.distanceKm ?? null
 
-	// B SPACE's own formulas, fed with the figures above — for a real car
+	// SmartCity's own formulas, fed with the figures above — for a real car
 	// route that is the 2GIS road distance, for a real scooter the 2GIS
 	// duration. Still an estimate, never 2GIS's or an operator's fare.
 	const cost = figures ? estimateFareUZS(figures.distanceKm, figures.minutes, mode) : null
@@ -777,7 +777,7 @@ function TransportView({ onUrlSync }: { onUrlSync: (query: string) => void }) {
 				rows={DEMO_CURRENT_SITUATION}
 				weatherIcon={WeatherIcon}
 				weatherLabel={`+${cityMeta.temp}° ${cityMeta.sky}`}
-				weatherDetail={`${arrivalParking.city} uchun B SPACE’ning statik ob-havo ma’lumoti.`}
+				weatherDetail={`${arrivalParking.city} uchun SmartCity’ning statik ob-havo ma’lumoti.`}
 				// Renews an allowed fix; never raises a permission prompt.
 				onRefresh={() => {
 					if (location.permission === 'granted') requestLocation()

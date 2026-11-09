@@ -1,4 +1,4 @@
-# SMART CITY v1.0
+# SmartCity v1.0
 
 A mobile-first smart parking MVP for **Uzbekistan only**, built with Next.js 16, React 19, TypeScript, Tailwind CSS 4, Zod, MapLibre GL JS and QR generation.
 

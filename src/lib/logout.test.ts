@@ -1,18 +1,18 @@
 import { describe, expect, it } from 'vitest'
 
 import { deleteAccount, logOut, resetDemoData } from './account-exit'
-import { clearAccountStorage, clearUserOwnedStorage } from './account-storage'
+import { clearAccountStorage, clearUserOwnedStorage, MAIN_STATE_KEY } from './account-storage'
 import { liveBookingCount } from './booking-lifecycle'
 import { bookingRows } from './bookings'
 import { initialState, loggedOutState, USER_ACTIVITY_KEYS } from './initial-state'
 import type {
-	BSpaceState,
 	QueueTicket,
 	QueueTicketStatus,
 	Reservation,
 	ReservationStatus,
 	ServiceBooking,
 	ServiceBookingStatus,
+	SmartCityState,
 } from './types'
 
 const reservation = (status: ReservationStatus, id = `r-${status}`): Reservation => ({
@@ -56,7 +56,7 @@ const service = (status: ServiceBookingStatus, id = `s-${status}`): ServiceBooki
 	createdAt: '2026-09-23T08:00:00.000Z',
 })
 
-const bookings = (patch: Partial<Pick<BSpaceState, 'reservations' | 'queueTickets' | 'serviceBookings'>>) => ({
+const bookings = (patch: Partial<Pick<SmartCityState, 'reservations' | 'queueTickets' | 'serviceBookings'>>) => ({
 	reservations: [],
 	queueTickets: [],
 	serviceBookings: [],
@@ -64,7 +64,7 @@ const bookings = (patch: Partial<Pick<BSpaceState, 'reservations' | 'queueTicket
 })
 
 // User A, signed in, with a full history and nothing live.
-function userAState(): BSpaceState {
+function userAState(): SmartCityState {
 	return {
 		...initialState,
 		hydrated: true,
@@ -78,7 +78,7 @@ function userAState(): BSpaceState {
 		queueTickets: [ticket('served'), ticket('cancelled')],
 		serviceBookings: [service('completed'), service('cancelled')],
 		notifications: [{
-			id: 'n1', title: 'Xush kelibsiz', message: 'User A, B SPACE profilingiz tayyor.',
+			id: 'n1', title: 'Xush kelibsiz', message: 'User A, SmartCity profilingiz tayyor.',
 			createdAt: '2026-09-20T05:00:00.000Z', read: true, type: 'system',
 		}],
 		notificationPrefs: { ...initialState.notificationPrefs, bookingReminders: false, partnerOffers: true },
@@ -212,16 +212,16 @@ describe('logout storage cleanup', () => {
 	// The store rewrites the main blob with the signed-out state; removing it
 	// here would lose onboardingDone if the tab closed before that write.
 	it('leaves the main blob for the store to rewrite', () => {
-		const { data, storage } = memoryStorage([['b-space-mvp-v1', '{}'], ...USER_ENTRIES])
+		const { data, storage } = memoryStorage([[MAIN_STATE_KEY, '{}'], ...USER_ENTRIES])
 		clearUserOwnedStorage(storage)
-		expect([...data.keys()]).toEqual(['b-space-mvp-v1'])
+		expect([...data.keys()]).toEqual([MAIN_STATE_KEY])
 	})
 })
 
 describe('reset still means a fresh install', () => {
 	it('clears the main blob, user-owned keys, parking filters and map layers', () => {
 		const { data, storage } = memoryStorage([
-			['b-space-mvp-v1', '{}'], ...USER_ENTRIES, ...DEVICE_ENTRIES, ['another-app', 'keep'],
+			[MAIN_STATE_KEY, '{}'], ...USER_ENTRIES, ...DEVICE_ENTRIES, ['another-app', 'keep'],
 		])
 		clearAccountStorage(storage)
 		// The Favorites tab selection was never part of reset and still is not.
@@ -240,12 +240,12 @@ describe('User A signs out, User B signs in', () => {
 		const afterLogout = loggedOutState(a)
 		// login() in the store: spreads the current state, sets the profile and
 		// prepends its welcome.
-		const b: BSpaceState = {
+		const b: SmartCityState = {
 			...afterLogout,
 			onboardingDone: true,
 			user: { name: 'User B', phone: '+998902222222' },
 			notifications: [{
-				id: 'n-b', title: 'Xush kelibsiz', message: 'User B, B SPACE profilingiz tayyor.',
+				id: 'n-b', title: 'Xush kelibsiz', message: 'User B, SmartCity profilingiz tayyor.',
 				createdAt: '2026-09-24T05:00:00.000Z', read: false, type: 'system',
 			}, ...afterLogout.notifications],
 		}
@@ -257,7 +257,7 @@ describe('User A signs out, User B signs in', () => {
 		expect(b.queueTickets).toEqual([])
 		expect(b.serviceBookings).toEqual([])
 		expect(bookingRows(b)).toEqual([])
-		expect(b.notifications.map(item => item.message)).toEqual(['User B, B SPACE profilingiz tayyor.'])
+		expect(b.notifications.map(item => item.message)).toEqual(['User B, SmartCity profilingiz tayyor.'])
 		expect(JSON.stringify(b)).not.toContain('User A')
 		expect(JSON.stringify(b)).not.toContain('+998901111111')
 		expect(b.notificationPrefs).toEqual(initialState.notificationPrefs)
@@ -274,7 +274,7 @@ describe('User A signs out, User B signs in', () => {
 })
 
 // The same guard, applied the way the store applies it.
-const LIVE_CASES: [string, Partial<BSpaceState>][] = [
+const LIVE_CASES: [string, Partial<SmartCityState>][] = [
 	['parking reserved', { reservations: [reservation('reserved')] }],
 	['parking active', { reservations: [reservation('active')] }],
 	['queue waiting', { queueTickets: [ticket('waiting')] }],

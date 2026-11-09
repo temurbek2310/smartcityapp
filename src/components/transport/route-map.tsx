@@ -136,7 +136,7 @@ type RouteMapProps = {
 	canOpenIn2Gis?: boolean
 }
 
-// Reproduces City Goo's map card for the Transport screen using B SPACE's
+// Reproduces City Goo's map card for the Transport screen using SmartCity's
 // real 2GIS-powered map (see components/map/city-map.tsx) — no second map
 // provider. CityMap disables 2GIS's default zoom buttons consistently with
 // the other maps in the app.

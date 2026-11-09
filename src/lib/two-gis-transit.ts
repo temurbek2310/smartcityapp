@@ -19,7 +19,7 @@ import { joinLineSegments, parseWktLineString } from '@/lib/wkt'
 
 export const TWO_GIS_TRANSIT_ENDPOINT = 'https://routing.api.2gis.com/public_transport/2.0'
 
-// What B SPACE's metro mode may ride. Metro first; the city's surface lines
+// What SmartCity's metro mode may ride. Metro first; the city's surface lines
 // are part of the same journey planner, since a metro trip rarely starts at
 // a station. 'pedestrian' lets 2GIS walk the ends.
 const TWO_GIS_TRANSIT_TYPES = [
@@ -75,7 +75,7 @@ function nonEmptyString(value: unknown): string | null {
 	return typeof value === 'string' && value.trim() ? value.trim() : null
 }
 
-// --- 2GIS subtype → B SPACE vehicle ------------------------------------------
+// --- 2GIS subtype → SmartCity vehicle ------------------------------------------
 const TWO_GIS_VEHICLE: Record<string, TransitVehicle> = {
 	metro: 'metro',
 	light_metro: 'metro',
@@ -216,7 +216,7 @@ export function normalizeTwoGisTransitResponse(data: unknown, request: RouteRequ
 	if (data.length === 0) return routeUnavailable('no_route')
 
 	// The first journey that actually rides something, in 2GIS's order. A
-	// walking-only answer is a walking route — B SPACE has a real one of those
+	// walking-only answer is a walking route — SmartCity has a real one of those
 	// under «Piyoda» — and is not presented as public transport.
 	let sawTransit = false
 	for (const item of data) {

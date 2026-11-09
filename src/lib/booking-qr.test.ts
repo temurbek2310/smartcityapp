@@ -59,9 +59,9 @@ const service = (patch: Partial<ServiceBooking> = {}): ServiceBooking => ({
 
 describe('bookingQrPayload', () => {
 	it.each([
-		['reservation', reservationQrPayload(reservation()), 'BSPACE:v1:reservation:res-123'],
-		['queue', queueTicketQrPayload(ticket()), 'BSPACE:v1:queue:queue-456'],
-		['booking', serviceBookingQrPayload(service()), 'BSPACE:v1:booking:booking-789'],
+		['reservation', reservationQrPayload(reservation()), 'SMARTCITY:v1:reservation:res-123'],
+		['queue', queueTicketQrPayload(ticket()), 'SMARTCITY:v1:queue:queue-456'],
+		['booking', serviceBookingQrPayload(service()), 'SMARTCITY:v1:booking:booking-789'],
 	])('encodes a %s by its stable id', (_, payload, expected) => {
 		expect(payload).toBe(expected)
 	})
@@ -108,7 +108,7 @@ describe('bookingQrPayload', () => {
 	it('encodes one ServiceBooking type whatever the kind', () => {
 		for (const kind of ['table', 'cinema', 'clinic', 'event'] as const) {
 			expect(serviceBookingQrPayload(service({ kind }))).toBe(
-				'BSPACE:v1:booking:booking-789',
+				'SMARTCITY:v1:booking:booking-789',
 			)
 		}
 	})
@@ -116,12 +116,12 @@ describe('bookingQrPayload', () => {
 
 describe('parseBookingQrPayload', () => {
 	it.each([
-		['BSPACE:v1:reservation:res-123', 'reservation', 'res-123'],
-		['BSPACE:v1:queue:queue-456', 'queue', 'queue-456'],
-		['BSPACE:v1:booking:booking-789', 'booking', 'booking-789'],
+		['SMARTCITY:v1:reservation:res-123', 'reservation', 'res-123'],
+		['SMARTCITY:v1:queue:queue-456', 'queue', 'queue-456'],
+		['SMARTCITY:v1:booking:booking-789', 'booking', 'booking-789'],
 		// uid()'s real shape.
 		[
-			'BSPACE:v1:booking:booking-3f2a8c1e-9b7d-4e2f-a1c3-5d6e7f8a9b0c',
+			'SMARTCITY:v1:booking:booking-3f2a8c1e-9b7d-4e2f-a1c3-5d6e7f8a9b0c',
 			'booking',
 			'booking-3f2a8c1e-9b7d-4e2f-a1c3-5d6e7f8a9b0c',
 		],
@@ -141,7 +141,7 @@ describe('parseBookingQrPayload', () => {
 	})
 
 	it('tolerates the trailing newline scanners add', () => {
-		expect(parseBookingQrPayload('BSPACE:v1:queue:queue-456\n')?.id).toBe(
+		expect(parseBookingQrPayload('SMARTCITY:v1:queue:queue-456\n')?.id).toBe(
 			'queue-456',
 		)
 	})
@@ -151,19 +151,19 @@ describe('parseBookingQrPayload', () => {
 		['random text', 'hello world'],
 		['a URL', 'https://example.com/booking/1'],
 		['wrong prefix', 'CITYGO:v1:booking:booking-789'],
-		['lower-case prefix', 'bspace:v1:booking:booking-789'],
-		['missing id', 'BSPACE:v1:booking:'],
-		['missing id segment', 'BSPACE:v1:booking'],
-		['unknown type', 'BSPACE:v1:table:booking-789'],
-		['unknown version', 'BSPACE:v2:booking:booking-789'],
-		['unversioned', 'BSPACE:booking:booking-789'],
-		['extra segment', 'BSPACE:v1:booking:booking-789:extra'],
-		['doubled separator', 'BSPACE::v1:booking:booking-789'],
-		['wrong separator', 'BSPACE/v1/booking/booking-789'],
-		['legacy parking', 'BSPACE:res-123'],
-		['legacy queue', 'BSPACE:QUEUE:queue-456'],
-		['legacy exit', 'BSPACE:EXIT:res-123'],
-		['legacy service', 'BSPACE:TABLE:TB-1234'],
+		['lower-case prefix', 'smartcity:v1:booking:booking-789'],
+		['missing id', 'SMARTCITY:v1:booking:'],
+		['missing id segment', 'SMARTCITY:v1:booking'],
+		['unknown type', 'SMARTCITY:v1:table:booking-789'],
+		['unknown version', 'SMARTCITY:v2:booking:booking-789'],
+		['unversioned', 'SMARTCITY:booking:booking-789'],
+		['extra segment', 'SMARTCITY:v1:booking:booking-789:extra'],
+		['doubled separator', 'SMARTCITY::v1:booking:booking-789'],
+		['wrong separator', 'SMARTCITY/v1/booking/booking-789'],
+		['legacy parking', 'SMARTCITY:res-123'],
+		['legacy queue', 'SMARTCITY:QUEUE:queue-456'],
+		['legacy exit', 'SMARTCITY:EXIT:res-123'],
+		['legacy service', 'SMARTCITY:TABLE:TB-1234'],
 	])('refuses %s without throwing', (_, payload) => {
 		expect(parseBookingQrPayload(payload)).toBeNull()
 	})
@@ -205,7 +205,7 @@ describe('display-code independence', () => {
 
 	it('identifies a parking booking by reservation, not by lot or bay', () => {
 		const parked = reservation({ id: 'A', parkingId: 'magic-city' })
-		expect(reservationQrPayload(parked)).toBe('BSPACE:v1:reservation:A')
+		expect(reservationQrPayload(parked)).toBe('SMARTCITY:v1:reservation:A')
 		expect(
 			reservationQrPayload(reservation({ id: 'A', parkingId: 'amir-temur' })),
 		).toBe(reservationQrPayload(parked))
@@ -228,9 +228,9 @@ describe('booking rows', () => {
 
 	it('carries the shared payload and the human reference separately', () => {
 		const rows = Object.fromEntries(bookingRows(state).map(row => [row.id, row]))
-		expect(rows['queue-456'].qrValue).toBe('BSPACE:v1:queue:queue-456')
+		expect(rows['queue-456'].qrValue).toBe('SMARTCITY:v1:queue:queue-456')
 		expect(rows['queue-456']).toMatchObject({ code: '42', codeLabel: 'Navbat raqami' })
-		expect(rows['booking-789'].qrValue).toBe('BSPACE:v1:booking:booking-789')
+		expect(rows['booking-789'].qrValue).toBe('SMARTCITY:v1:booking:booking-789')
 		expect(rows['booking-789']).toMatchObject({
 			code: 'TB-1234',
 			codeLabel: 'Bron kodi',

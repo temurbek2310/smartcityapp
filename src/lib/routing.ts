@@ -2,7 +2,7 @@ import { isInsideUzbekistan, type Coordinate } from '@/lib/geo'
 import type { RouteEndpoint } from '@/lib/route-endpoints'
 import type { TransportMode } from '@/lib/transport'
 
-// The one route contract B SPACE speaks. Whatever answers a route request —
+// The one route contract SmartCity speaks. Whatever answers a route request —
 // today 2GIS's Routing API behind /api/directions — is normalized into this
 // shape on the server, so no screen ever reads a provider's raw payload.
 //
@@ -10,7 +10,7 @@ import type { TransportMode } from '@/lib/transport'
 // primary route: its other routes, its turn-by-turn maneuvers and its
 // per-segment traffic — and, for public transport, the journey's legs.
 
-// The modes /api/directions routes for real — every mode B SPACE offers.
+// The modes /api/directions routes for real — every mode SmartCity offers.
 // Car, walking and the scooter go through 2GIS's Routing API
 // (lib/two-gis-routing.ts); metro is public transport and goes through its
 // own Public Transport API (lib/two-gis-transit.ts). Nothing is estimated.
@@ -87,7 +87,7 @@ export type RealRoute = {
 export const TRANSIT_LEG_TYPES = ['walk', 'ride', 'transfer'] as const
 export type TransitLegType = (typeof TRANSIT_LEG_TYPES)[number]
 
-// B SPACE's own vehicle vocabulary; 2GIS's subtypes are mapped into it on
+// SmartCity's own vehicle vocabulary; 2GIS's subtypes are mapped into it on
 // the server (lib/two-gis-transit.ts). 'other' is a vehicle 2GIS named that
 // this app has no word for — kept, never guessed.
 export const TRANSIT_VEHICLES = ['metro', 'bus', 'trolleybus', 'tram', 'shuttle', 'other'] as const
@@ -135,7 +135,7 @@ export type RouteAlternative = {
 	geometry: RouteCoordinate[]
 }
 
-// B SPACE's own maneuver vocabulary. The provider's icon names are mapped
+// SmartCity's own maneuver vocabulary. The provider's icon names are mapped
 // into it on the server (lib/two-gis-routing.ts); its own comment text is
 // English and never shown.
 export const MANEUVER_TYPES = [
@@ -368,7 +368,7 @@ function readAlternative(item: Record<string, unknown>): RouteAlternative | null
 }
 
 // The instruction is re-derived from the type rather than trusted off the
-// wire, so the screen only ever prints B SPACE's own Uzbek sentences.
+// wire, so the screen only ever prints SmartCity's own Uzbek sentences.
 function readManeuver(item: Record<string, unknown>): RouteManeuver | null {
 	if (!MANEUVER_TYPES.includes(item.type as ManeuverType)) return null
 	if (!isNonNegativeNumber(item.distanceMeters)) return null

@@ -256,7 +256,7 @@ describe('parseRouteResult — alternatives, maneuvers and traffic', () => {
 		expect(result.traffic).toEqual([{ speed: 'slow', distanceMeters: 80, geometry: ALT.geometry }])
 	})
 
-	it('prints B SPACE’s own instruction, never the one on the wire', () => {
+	it('prints SmartCity’s own instruction, never the one on the wire', () => {
 		const result = parseRouteResult({
 			...REAL,
 			maneuvers: [{ type: 'left', instruction: 'Left turn onto somewhere', distanceMeters: 10 }],

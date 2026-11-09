@@ -68,7 +68,7 @@ export function RouteFiltersSheet({
 				})}
 			</div>
 			<p className='mt-4 text-[11.5px] leading-5 text-ink-3'>
-				B SPACE MVPda hali real yo‘l grafigi yo‘q, shu sababli filtrlar
+				SmartCity MVPda hali real yo‘l grafigi yo‘q, shu sababli filtrlar
 				muqobil marshrutlar ro‘yxatini qayta tartiblaydi — yangi marshrut
 				hisoblanmaydi.
 			</p>

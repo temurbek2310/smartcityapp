@@ -30,9 +30,9 @@ export const TWO_GIS_ROUTING_ENDPOINT = 'https://routing.api.2gis.com/routing/7.
 // provider does not hold a customer's screen on a spinner.
 export const ROUTING_TIMEOUT_MS = 8000
 
-// --- B SPACE mode → 2GIS transport ---------------------------------------
-// The one place a B SPACE mode name meets a 2GIS one. Components, the hook
-// and the wire format all speak B SPACE ('car', 'walk', 'scooter'); only the
+// --- SmartCity mode → 2GIS transport ---------------------------------------
+// The one place a SmartCity mode name meets a 2GIS one. Components, the hook
+// and the wire format all speak SmartCity ('car', 'walk', 'scooter'); only the
 // body sent upstream says 'driving', 'walking' or 'scooter'. Unrelated to
 // the consumer-app deep link in lib/route-endpoints.ts, whose walking type
 // is 'pedestrian' and which has no scooter type at all — a different
@@ -190,7 +190,7 @@ function isNonNegativeNumber(value: unknown): value is number {
 // --- Maneuvers ----------------------------------------------------------------
 // 2GIS names each maneuver with an icon ('start', 'crossroad_slightly_left',
 // 'ringroad_right', 'finish', …). Its `comment` is English prose and is
-// never passed on; the instruction is B SPACE's own sentence for the type.
+// never passed on; the instruction is SmartCity's own sentence for the type.
 // Order matters: the qualified turns are matched before the plain ones.
 const MANEUVER_ICON_RULES: readonly [RegExp, ManeuverType][] = [
 	[/^start$/, 'start'],

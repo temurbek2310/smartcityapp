@@ -16,7 +16,7 @@ import { resolveRouteEndpoint } from '@/lib/route-endpoints'
 import { TRANSPORT_MODES } from '@/lib/transport'
 import type { QueueTicket, Reservation, ServiceBooking } from '@/lib/types'
 
-const BASE = 'https://b-space.local'
+const BASE = 'https://smartcity.local'
 
 function parse(href: string) {
 	return new URL(href, BASE)

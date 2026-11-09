@@ -18,7 +18,7 @@ type DestinationParkingCardProps = {
 	onReserve: () => void
 }
 
-// The one section of the Transport screen backed entirely by real B SPACE
+// The one section of the Transport screen backed entirely by real SmartCity
 // data — real availability, and a Reserve button that opens the shared
 // City Goo booking sheet for this parking, not a City Goo-style toast.
 //

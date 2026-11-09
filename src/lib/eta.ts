@@ -1,6 +1,6 @@
 import type { TransportMode } from '@/lib/transport'
 
-// B SPACE has no live traffic/transit backend. Every number here is a
+// SmartCity has no live traffic/transit backend. Every number here is a
 // formula derived from a REAL straight-line distance (see lib/geo.ts), not a
 // fabricated constant — but it is still an approximation, not a routing
 // engine, and callers should present it as such.

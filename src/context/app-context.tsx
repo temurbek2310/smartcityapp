@@ -12,7 +12,7 @@ import {
 } from "react";
 import type {
   AppNotification,
-  BSpaceState,
+  SmartCityState,
   NotificationPrefId,
   QueueTicket,
   Reservation,
@@ -95,7 +95,7 @@ type TakeQueueTicketInput = {
 // stops sending cannot quietly go missing from the row that reads it.
 type CreateServiceBookingInput = ServiceBookingDraft;
 
-type AppContextValue = BSpaceState & {
+type AppContextValue = SmartCityState & {
   completeOnboarding: () => void;
   login: (profile: UserProfile) => void;
   updateProfile: (patch: Partial<UserProfile>) => void;
@@ -169,7 +169,7 @@ function isSameSavedRoute(
 }
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<BSpaceState>(initialState);
+  const [state, setState] = useState<SmartCityState>(initialState);
 
   // What the creating mutations check duplicates against. Rendered state is
   // one tap behind: two taps can both run before React re-renders, and the
@@ -191,7 +191,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       try {
         const saved = localStorage.getItem(STORAGE_KEY);
         if (saved) {
-          const parsed = JSON.parse(saved) as Partial<Omit<BSpaceState, "hydrated">>;
+          const parsed = JSON.parse(saved) as Partial<Omit<SmartCityState, "hydrated">>;
           // A blob written before the booking registry existed simply has no
           // key for these, and the spread leaves the empty defaults in place.
           // Bookings whose time ran out while the app was closed move to
@@ -224,7 +224,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!state.hydrated) return;
-    const persisted: Omit<BSpaceState, "hydrated"> = {
+    const persisted: Omit<SmartCityState, "hydrated"> = {
       onboardingDone: state.onboardingDone,
       user: state.user,
       favorites: state.favorites,
@@ -320,7 +320,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       onboardingDone: true,
       user: { joinedAt: new Date().toISOString(), premium: false, ...profile },
       notifications: [
-        makeNotification("Xush kelibsiz", `${profile.name}, B SPACE profilingiz tayyor.`, "system"),
+        makeNotification("Xush kelibsiz", `${profile.name}, SmartCity profilingiz tayyor.`, "system"),
         ...current.notifications,
       ],
     }));

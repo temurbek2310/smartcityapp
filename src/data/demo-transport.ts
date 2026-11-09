@@ -23,10 +23,10 @@ import type { TransportMode } from '@/lib/transport'
 // ---------------------------------------------------------------------
 // Demo / reference-only content for the /transport screen.
 //
-// B SPACE has no live traffic-camera, road-hazard, GTFS or weather feed —
+// SmartCity has no live traffic-camera, road-hazard, GTFS or weather feed —
 // City Goo's Transport screen assumes one. Everything exported from this
 // file is illustrative content that reproduces that screen's layout only;
-// it is never wired up as if it came from a real backend. Anything B SPACE
+// it is never wired up as if it came from a real backend. Anything SmartCity
 // actually has (parking availability, the selected city's weather
 // snapshot, computed distance/ETA) is read from real data in
 // src/app/(app)/transport/page.tsx instead of living here.
@@ -518,7 +518,7 @@ export const DEMO_METRO_LINES: DemoMetroLine[] = [
 	},
 ]
 
-// Micromobility is browsed here, not booked: B SPACE has no scooter or
+// Micromobility is browsed here, not booked: SmartCity has no scooter or
 // bike-share operator connected, so nothing may read as a live vehicle —
 // no charge level, no distance to the nearest scooter, no free docks — and
 // no source for bike-lane share, shade or path condition either. Those
@@ -602,7 +602,7 @@ export type DemoDestination = {
 	// status the page already computes.
 	address?: string
 	// Which real parking from src/data/parkings.ts a route to this place
-	// targets. B SPACE has no place database or geocoder, so the link is
+	// targets. SmartCity has no place database or geocoder, so the link is
 	// declared here instead of derived from coordinates. Without one the
 	// page keeps its existing behaviour and routes to the closest parking.
 	parkingId?: string
@@ -610,7 +610,7 @@ export type DemoDestination = {
 }
 
 // Public destinations for the /transport picker. Place names and street
-// addresses are kept verbatim — B SPACE has no address catalog of its own
+// addresses are kept verbatim — SmartCity has no address catalog of its own
 // and translating them would invent data. None of this is mixed into
 // PARKINGS: each entry only points at a real parking that already exists
 // there, so picking one moves real transport state (distance, ETA, map,

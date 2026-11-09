@@ -202,7 +202,7 @@ export type AppNotification = {
   type: "booking" | "timer" | "parking" | "payment" | "system" | "queue";
 };
 
-export type BSpaceState = {
+export type SmartCityState = {
   hydrated: boolean;
   onboardingDone: boolean;
   user: UserProfile | null;
@@ -279,7 +279,7 @@ export type Place = {
 };
 
 // A dated thing happening in the city. Demo content, but every event
-// points at a real parking so the only action it offers is one B SPACE
+// points at a real parking so the only action it offers is one SmartCity
 // can actually fulfil.
 export type CityEvent = {
   id: string

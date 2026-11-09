@@ -601,7 +601,7 @@ function HomeView() {
 					</div>
 				</div>
 
-				<h1 className='sr-only'>B SPACE · {selectedCity}</h1>
+				<h1 className='sr-only'>SmartCity · {selectedCity}</h1>
 
 				<div className='flex h-14 w-full items-center gap-2 rounded-2xl bg-white px-3 shadow-card'>
 					<button
@@ -747,7 +747,7 @@ function HomeView() {
 
 			<LocationNotice />
 
-			{/* Existing B SPACE active-session capability preserved */}
+			{/* Existing SmartCity active-session capability preserved */}
 			{activeReservation && (
 				<Link
 					href={`/reservation/${activeReservation.id}`}
@@ -1072,7 +1072,7 @@ function HomeView() {
 				<div className='flex items-start justify-between gap-3'>
 					<div>
 						<p className='text-lg font-black'>
-							Siz uchun, {user?.name ?? 'B SPACE'}
+							Siz uchun, {user?.name ?? 'SmartCity'}
 						</p>
 						<p className='mt-1 text-xs leading-5 text-brand-100'>
 							Safarlaringiz va parking odatlaringiz asosida

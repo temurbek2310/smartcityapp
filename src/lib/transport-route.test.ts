@@ -193,7 +193,7 @@ describe('a successful car route', () => {
 		})
 	})
 
-	it('feeds the road distance into B SPACE’s fuel formula', () => {
+	it('feeds the road distance into SmartCity’s fuel formula', () => {
 		const figures = activeFigures(REAL_CAR)!
 		expect(estimateFareUZS(figures.distanceKm, figures.minutes, 'car')).toBe(estimateFuelCostUZS(8.35))
 	})

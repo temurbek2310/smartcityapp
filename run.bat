@@ -4,7 +4,7 @@ cd /d "%~dp0"
 
 echo.
 echo ==============================
-echo        B SPACE MVP v1.0
+echo        SmartCity MVP v1.0
 echo ==============================
 echo.
 
@@ -37,7 +37,7 @@ if not exist node_modules (
 )
 
 echo.
-echo Starting B SPACE at http://localhost:3000
+echo Starting SmartCity at http://localhost:3000
 echo Keep this window open while using the app.
 echo.
 call pnpm dev

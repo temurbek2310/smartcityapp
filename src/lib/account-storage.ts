@@ -7,12 +7,12 @@
 // Device preferences: how this device is set up to look. Logout keeps them;
 // only a full demo reset (a fresh install) removes them.
 //
-// Not listed on purpose: `bspace-install-dismissed` lives in sessionStorage
+// Not listed on purpose: `smartcity-install-dismissed` lives in sessionStorage
 // and belongs to the browser session, not to anyone's account.
 
 // AppProvider's own blob. Logout does not remove it — the store rewrites it
 // with the signed-out state, which is how onboardingDone survives.
-export const MAIN_STATE_KEY = 'b-space-mvp-v1'
+export const MAIN_STATE_KEY = 'smartcity-mvp-v1'
 
 const USER_OWNED_KEYS = new Set(['citygoo-place-favorites'])
 // One key per parking reservation (booking-meta.ts). Removed by prefix, not

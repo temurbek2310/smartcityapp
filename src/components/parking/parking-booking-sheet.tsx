@@ -36,7 +36,7 @@ import {
 // every "Band qilish" entry point (Home cards, Home AI tip, Home services,
 // Favorites, Transport destination card and notice, parking detail) opens
 // this sheet. The UI layer only — reservations are still created by
-// B SPACE's own createReservation().
+// SmartCity's own createReservation().
 
 export type ParkingBookingDraft = {
 	parkingId: string

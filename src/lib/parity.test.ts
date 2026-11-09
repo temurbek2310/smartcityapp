@@ -190,7 +190,7 @@ describe('parking floor totals', () => {
 describe('account deletion', () => {
 	it('clears booking metadata and saved places without clearing unrelated storage', () => {
 		const data = new Map([
-			['b-space-mvp-v1', '{}'], ['citygoo-place-favorites', '["coffee-lab"]'],
+			['smartcity-mvp-v1', '{}'], ['citygoo-place-favorites', '["coffee-lab"]'],
 			['citygoo-parking-meta-r1', '{"bay":"A-01"}'], ['citygoo-map-layers', '{}'],
 			['another-app', 'keep'],
 		])
